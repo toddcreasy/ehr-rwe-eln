@@ -201,14 +201,14 @@ Tools in this phase:
 - **Alembic**: versioned database schema migrations for Python. Why: schema changes become reviewable files that replay identically in every environment.
 - **VPC**: your private network inside AWS. Why: the database gets no public address; only your services can reach it.
 
-- [ ] `DataStack`: VPC (2 AZs, no NAT gateway if avoidable; use isolated subnets + endpoints), Aurora Serverless v2 PostgreSQL
-- [ ] Serverless v2 scaling: min capacity 0 ACU (auto-pause) for dev, max 1
-- [ ] DB credentials generated into Secrets Manager by CDK
-- [ ] `pgvector` extension enabled (`CREATE EXTENSION vector`)
-- [ ] S3 bucket for documents (versioned, private, lifecycle rule to Infrequent Access at 30 days)
-- [ ] Alembic initialized; migration 001 creates a schema-version table only
-- [ ] `scripts/db_check.py`: connects via the secret, runs a vector insert + cosine similarity query
-- [ ] `.env.example` updated: `DATABASE_SECRET_ARN`, `AWS_REGION`
+- [x] `DataStack`: VPC (2 AZs, no NAT gateway if avoidable; use isolated subnets + endpoints), Aurora Serverless v2 PostgreSQL
+- [x] Serverless v2 scaling: min capacity 0 ACU (auto-pause) for dev, max 1
+- [x] DB credentials generated into Secrets Manager by CDK
+- [x] `pgvector` extension enabled (`CREATE EXTENSION vector`)
+- [x] S3 bucket for documents (versioned, private, lifecycle rule to Infrequent Access at 30 days)
+- [x] Alembic initialized; migration 001 creates a schema-version table only
+- [x] `scripts/db_check.py`: connects via the secret, runs a vector insert + cosine similarity query
+- [x] `.env.example` updated: `DATABASE_SECRET_ARN`, `AWS_REGION`
 
 STOP gate 2: run `uv run python scripts/db_check.py`; show the round-trip output including a similarity score. Confirm the cluster pauses to 0 ACU after idle (console check).
 

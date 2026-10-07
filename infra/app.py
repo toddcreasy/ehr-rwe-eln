@@ -1,6 +1,7 @@
 import os
 
 import aws_cdk as cdk
+from stacks.data_stack import DataStack
 from stacks.ops_stack import OpsStack
 
 app = cdk.App()
@@ -16,5 +17,6 @@ env = cdk.Environment(account=os.environ.get("CDK_DEFAULT_ACCOUNT"), region="us-
 
 # Prefixed stack names: other projects in this account already own the bare names.
 OpsStack(app, "OpsStack", stack_name=f"{project}-OpsStack", env=env)
+DataStack(app, "DataStack", stack_name=f"{project}-DataStack", env=env)
 
 app.synth()

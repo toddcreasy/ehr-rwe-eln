@@ -73,8 +73,9 @@ The platform is built in phases from the [project-template AWS build plan](https
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Repo scaffold | Done |
-| 1 | AWS guardrails: budget, alerts, GitHub OIDC role | Deployed, awaiting review |
-| 2 to 9 | AWS platform: data, API, agent, MCP, observability, frontend, CI/CD, hardening | Not started |
+| 1 | AWS guardrails: budget, alerts, GitHub OIDC role | Done |
+| 2 | Data layer: Aurora Serverless v2 + pgvector, S3, Alembic | Deployed, awaiting review |
+| 3 to 9 | AWS platform: API, agent, MCP, observability, frontend, CI/CD, hardening | Not started |
 | 10 | Archive the build plan to `docs/SETUP.md` | Not started |
 | Modules | 1, 7, 4, 2 | Not started |
 
@@ -93,6 +94,17 @@ uv run pytest
 
 Copy `.env.example` to `.env` and fill in values as phases add them.
 
+### Database access
+
+Aurora sits in isolated subnets with no public address. Local scripts reach it through the RDS Data API using `DATABASE_SECRET_ARN` and your AWS credentials, so no bastion or VPN is needed.
+
+```bash
+uv run python scripts/migrate.py    # apply pending Alembic migrations
+uv run python scripts/db_check.py   # pgvector round trip, leaves nothing behind
+```
+
+`migrate.py` renders migrations with Alembic offline mode and runs the SQL in one Data API transaction. The cluster auto-pauses to 0 ACU after 5 minutes idle; the first call after a pause takes about 15 seconds while it resumes.
+
 ## Teardown
 
 CDK app lives in `infra/`. Deployed stacks are named `ehr-rwe-eln-<Stack>`; other projects in the same account own the bare names. CDK commands take the short ID (`OpsStack`).
@@ -109,6 +121,8 @@ cdk destroy OpsStack
 ```
 
 Skip any stack not deployed yet (`cdk list` shows what the app defines). Run `cdk diff <Stack>` first to confirm what will go. Left in place on purpose: the `CDKToolkit` bootstrap stack and the GitHub OIDC provider, both shared with other projects in the account.
+
+`DataStack` leaves two things behind after destroy: a final Aurora snapshot (the cluster default) and the documents bucket (S3 default is retain). Delete both by hand once you are sure nothing in them is needed.
 
 ## Data and licensing
 
