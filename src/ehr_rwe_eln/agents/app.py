@@ -37,9 +37,14 @@ def invoke(payload: dict) -> dict:
         raise HTTPException(status_code=400, detail=exc.errors(include_url=False)) from exc
     model_id = settings.model_large if request.tier == "large" else settings.model_small
 
-    result = build_agent(model_id, settings.aws_region)(
-        request.prompt, structured_output_model=HelloReply
-    )
+    agent = build_agent(model_id, settings.aws_region, settings.gateway_url)
+    result = agent(request.prompt, structured_output_model=HelloReply)
+    tools_called = [
+        block["toolUse"]["name"]
+        for message in agent.messages
+        for block in message["content"]
+        if "toolUse" in block
+    ]
 
     usage = result.metrics.accumulated_usage
     fields = {
@@ -49,6 +54,7 @@ def invoke(payload: dict) -> dict:
         "cache_read": usage.get("cacheReadInputTokens", 0),
         "cache_write": usage.get("cacheWriteInputTokens", 0),
         "model_calls": result.metrics.cycle_count,
+        "tools_called": tools_called,
     }
     log.info("agent run", extra={"fields": fields})
     return {"output": result.structured_output.model_dump(), "usage": fields}

@@ -76,8 +76,9 @@ The platform is built in phases from the [project-template AWS build plan](https
 | 1 | AWS guardrails: budget, alerts, GitHub OIDC role | Done |
 | 2 | Data layer: Aurora Serverless v2 + pgvector, S3, Alembic | Done |
 | 3 | Backend API: FastAPI on ECS Express Mode | Done |
-| 4 | Agent: Strands on Bedrock, AgentCore Runtime | Deployed, awaiting review |
-| 5 to 9 | AWS platform: MCP, observability, frontend, CI/CD, hardening | Not started |
+| 4 | Agent: Strands on Bedrock, AgentCore Runtime | Done |
+| 5 | MCP tools: AgentCore Gateway over the backend | Deployed, awaiting review |
+| 6 to 9 | AWS platform: observability, frontend, CI/CD, hardening | Not started |
 | 10 | Archive the build plan to `docs/SETUP.md` | Not started |
 | Modules | 1, 7, 4, 2 | Not started |
 
@@ -127,6 +128,8 @@ curl -X POST localhost:8080/invocations -H 'Content-Type: application/json' \
   -d '{"prompt": "What time is it in UTC?"}'
 uv run python scripts/agent_smoke.py           # calls the deployed runtime (needs AGENT_RUNTIME_ARN)
 ```
+
+The agent reaches the backend through AgentCore Gateway, which publishes `GET /health/db` as the MCP tool `backend___checkDatabaseHealth`. To use the Gateway tool locally without deploying the agent, set `GATEWAY_URL` in `.env` (AgentStack output `GatewayUrl`). The local agent signs MCP requests with your own AWS credentials, which need `bedrock-agentcore:InvokeGateway`. The backend must be running (`backend_tasks=1`). Leave `GATEWAY_URL` unset to run with local tools only.
 
 ### Pause the backend when idle
 

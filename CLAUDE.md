@@ -290,10 +290,10 @@ Tools in this phase:
 - **MCP (Model Context Protocol)**: the open standard for connecting agents to tools and data, adopted by every major AI provider. A tool exposed over MCP works with any compliant agent. Why: tool integrations written once stay portable across frameworks and models.
 - **AgentCore Gateway**: takes an existing API or Lambda function and publishes it as MCP tools, with IAM auth and per-tool permissions. Why: the backend stays a plain FastAPI app; the Gateway does the MCP plumbing and enforces who may call what.
 
-- [ ] Expose one backend endpoint (start with `GET /health/db`) as a Gateway MCP tool
-- [ ] Gateway auth wired to IAM; least-privilege policy for the agent identity
-- [ ] Agent updated: the MCP tool is in its toolset; system prompt mentions when to use it
-- [ ] Local dev path documented: how to run the agent against the tool without deploying
+- [x] Expose one backend endpoint (start with `GET /health/db`) as a Gateway MCP tool
+- [x] Gateway auth wired to IAM; least-privilege policy for the agent identity
+- [x] Agent updated: the MCP tool is in its toolset; system prompt mentions when to use it
+- [x] Local dev path documented: how to run the agent against the tool without deploying
 
 STOP gate 5: smoke script shows the agent calling the Gateway tool and returning its result. Show the trace of the tool call.
 

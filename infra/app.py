@@ -20,7 +20,7 @@ env = cdk.Environment(account=os.environ.get("CDK_DEFAULT_ACCOUNT"), region="us-
 # Prefixed stack names: other projects in this account already own the bare names.
 OpsStack(app, "OpsStack", stack_name=f"{project}-OpsStack", env=env)
 data = DataStack(app, "DataStack", stack_name=f"{project}-DataStack", env=env)
-BackendStack(
+backend = BackendStack(
     app,
     "BackendStack",
     stack_name=f"{project}-BackendStack",
@@ -28,6 +28,12 @@ BackendStack(
     database=data.cluster,
     env=env,
 )
-AgentStack(app, "AgentStack", stack_name=f"{project}-AgentStack", env=env)
+AgentStack(
+    app,
+    "AgentStack",
+    stack_name=f"{project}-AgentStack",
+    api_endpoint=backend.api_endpoint,
+    env=env,
+)
 
 app.synth()

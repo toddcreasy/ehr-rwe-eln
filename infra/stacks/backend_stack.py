@@ -133,5 +133,8 @@ class BackendStack(cdk.Stack):
         # Roles (with their policies) and Fargate capacity must exist before Express uses them.
         service.node.add_dependency(execution_role, infrastructure_role, cluster)
 
+        # Hostname only (no scheme); AgentStack builds the Gateway target URL from it.
+        self.api_endpoint = service.attr_endpoint
+
         cdk.CfnOutput(self, "ApiEndpoint", value=service.attr_endpoint)
         cdk.CfnOutput(self, "ApiLogGroup", value=log_group.log_group_name)

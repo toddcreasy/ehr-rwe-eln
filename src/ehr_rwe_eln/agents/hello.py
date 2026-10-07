@@ -1,14 +1,17 @@
 from datetime import UTC, datetime
 
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
 from pydantic import BaseModel, Field
 from strands import Agent, tool
 from strands.models import BedrockModel
 from strands.models.bedrock import CacheConfig
+from strands.tools.mcp import MCPClient
 
 SYSTEM_PROMPT = (
     "You are the platform check agent for ehr-rwe-eln, a research project on synthetic data. "
     "Answer in one or two sentences. If the user asks about the date or time, call the "
-    "current_time tool and use its result; never guess the time."
+    "current_time tool and use its result; never guess the time. If the user asks whether the "
+    "database is reachable or healthy, call the checkDatabaseHealth tool and report its result."
 )
 
 
@@ -25,7 +28,7 @@ def current_time() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def build_agent(model_id: str, region: str) -> Agent:
+def build_agent(model_id: str, region: str, gateway_url: str | None = None) -> Agent:
     model = BedrockModel(
         model_id=model_id,
         region_name=region,
@@ -35,7 +38,16 @@ def build_agent(model_id: str, region: str) -> Agent:
         # (4,096 tokens for Haiku 4.5). Below that Bedrock ignores it, so expect cache_read 0 here.
         cache_config=CacheConfig(strategy="auto"),
     )
+    tools = [current_time]
+    if gateway_url:
+        # Gateway tools over MCP. Requests are SigV4-signed with whatever AWS credentials are
+        # active: the runtime's execution role when deployed, your own credentials locally.
+        tools.append(
+            MCPClient(
+                lambda: aws_iam_streamablehttp_client(
+                    endpoint=gateway_url, aws_service="bedrock-agentcore", aws_region=region
+                )
+            )
+        )
     # callback_handler=None stops Strands printing the streamed reply to stdout.
-    return Agent(
-        model=model, system_prompt=SYSTEM_PROMPT, tools=[current_time], callback_handler=None
-    )
+    return Agent(model=model, system_prompt=SYSTEM_PROMPT, tools=tools, callback_handler=None)
