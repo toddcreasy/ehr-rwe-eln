@@ -73,7 +73,8 @@ The platform is built in phases from the [project-template AWS build plan](https
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Repo scaffold | Done |
-| 1 to 9 | AWS platform: guardrails, data, API, agent, MCP, observability, frontend, CI/CD, hardening | Not started |
+| 1 | AWS guardrails: budget, alerts, GitHub OIDC role | Deployed, awaiting review |
+| 2 to 9 | AWS platform: data, API, agent, MCP, observability, frontend, CI/CD, hardening | Not started |
 | 10 | Archive the build plan to `docs/SETUP.md` | Not started |
 | Modules | 1, 7, 4, 2 | Not started |
 
@@ -94,7 +95,20 @@ Copy `.env.example` to `.env` and fill in values as phases add them.
 
 ## Teardown
 
-AWS teardown order is added in Phase 1.
+CDK app lives in `infra/`. Deployed stacks are named `ehr-rwe-eln-<Stack>`; other projects in the same account own the bare names. CDK commands take the short ID (`OpsStack`).
+
+Destroy in reverse dependency order, `OpsStack` last so budget alerts stay live until everything else is gone:
+
+```bash
+cd infra
+cdk destroy FrontendStack
+cdk destroy AgentStack
+cdk destroy BackendStack
+cdk destroy DataStack
+cdk destroy OpsStack
+```
+
+Skip any stack not deployed yet (`cdk list` shows what the app defines). Run `cdk diff <Stack>` first to confirm what will go. Left in place on purpose: the `CDKToolkit` bootstrap stack and the GitHub OIDC provider, both shared with other projects in the account.
 
 ## Data and licensing
 

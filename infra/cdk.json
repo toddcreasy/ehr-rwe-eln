@@ -1,0 +1,16 @@
+{
+  "app": "uv run --group infra python app.py",
+  "watch": {
+    "include": ["**"],
+    "exclude": ["cdk.out", "**/__pycache__"]
+  },
+  "context": {
+    "project": "ehr-rwe-eln",
+    "env": "dev",
+    "alert_email": "alerts@example.com",
+    "monthly_budget_usd": 50,
+    "github_repo": "toddcreasy/ehr-rwe-eln",
+    "github_owner_id": "5910177",
+    "github_repo_id": "1408893556"
+  }
+}

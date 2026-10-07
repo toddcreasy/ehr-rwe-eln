@@ -179,13 +179,13 @@ Tools in this phase:
 - **IAM with GitHub OIDC**: IAM is AWS's permission system. OIDC lets GitHub Actions prove its identity to AWS and assume a role for minutes. Why: no long-lived AWS keys stored anywhere, so nothing can leak.
 - **Cost allocation tags**: labels on every resource that Cost Explorer can group by. Why: when the bill surprises you, tags tell you which part did it.
 
-- [ ] Confirm AWS account ID and `us-east-1` with maintainer
-- [ ] `infra/` CDK app skeleton (`app.py`, `cdk.json`, stacks package)
-- [ ] `cdk bootstrap` the account/region
-- [ ] `OpsStack`: AWS Budget with monthly limit (ask maintainer for the number, suggest $30) + SNS email alert at 50/80/100%
-- [ ] Cost allocation tags activated for `project` and `env`. Blocked until Cost Explorer has ingested a day of data and the keys have appeared in a bill, so this lands late even though it belongs here
-- [ ] IAM role for GitHub Actions OIDC (trust policy scoped to this repo), no access keys created
-- [ ] Document teardown: `cdk destroy` order in README
+- [x] Confirm AWS account ID and `us-east-1` with maintainer
+- [x] `infra/` CDK app skeleton (`app.py`, `cdk.json`, stacks package)
+- [x] `cdk bootstrap` the account/region
+- [x] `OpsStack`: AWS Budget with monthly limit (ask maintainer for the number, suggest $30) + SNS email alert at 50/80/100%
+- [x] Cost allocation tags activated for `project` and `env`. Blocked until Cost Explorer has ingested a day of data and the keys have appeared in a bill, so this lands late even though it belongs here
+- [x] IAM role for GitHub Actions OIDC (trust policy scoped to this repo), no access keys created
+- [x] Document teardown: `cdk destroy` order in README
 
 STOP gate 1: budget visible in console, maintainer confirms the SNS subscription email arrived, `cdk deploy OpsStack` output shown.
 
