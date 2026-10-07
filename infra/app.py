@@ -18,7 +18,7 @@ cdk.Tags.of(app).add("managed-by", "cdk")
 env = cdk.Environment(account=os.environ.get("CDK_DEFAULT_ACCOUNT"), region="us-east-1")
 
 # Prefixed stack names: other projects in this account already own the bare names.
-OpsStack(app, "OpsStack", stack_name=f"{project}-OpsStack", env=env)
+ops = OpsStack(app, "OpsStack", stack_name=f"{project}-OpsStack", env=env)
 data = DataStack(app, "DataStack", stack_name=f"{project}-DataStack", env=env)
 backend = BackendStack(
     app,
@@ -33,6 +33,7 @@ AgentStack(
     "AgentStack",
     stack_name=f"{project}-AgentStack",
     api_endpoint=backend.api_endpoint,
+    alerts_topic=ops.alerts_topic,
     env=env,
 )
 

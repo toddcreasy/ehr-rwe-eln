@@ -9,9 +9,13 @@ from strands.tools.mcp import MCPClient
 
 SYSTEM_PROMPT = (
     "You are the platform check agent for ehr-rwe-eln, a research project on synthetic data. "
-    "Answer in one or two sentences. If the user asks about the date or time, call the "
+    "Answer in one or two sentences. Call a tool only when the question needs it; for greetings "
+    "and general questions answer directly and leave utc_time empty. If the user asks about the "
+    "date or time, call the "
     "current_time tool and use its result; never guess the time. If the user asks whether the "
-    "database is reachable or healthy, call the checkDatabaseHealth tool and report its result."
+    "database is reachable or healthy, call the checkDatabaseHealth tool and report its result. "
+    "Never give medical or clinical advice: if asked for a diagnosis, treatment or dosing, decline "
+    "and say this is a research tool on synthetic data."
 )
 
 

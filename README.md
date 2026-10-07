@@ -77,8 +77,9 @@ The platform is built in phases from the [project-template AWS build plan](https
 | 2 | Data layer: Aurora Serverless v2 + pgvector, S3, Alembic | Done |
 | 3 | Backend API: FastAPI on ECS Express Mode | Done |
 | 4 | Agent: Strands on Bedrock, AgentCore Runtime | Done |
-| 5 | MCP tools: AgentCore Gateway over the backend | Deployed, awaiting review |
-| 6 to 9 | AWS platform: observability, frontend, CI/CD, hardening | Not started |
+| 5 | MCP tools: AgentCore Gateway over the backend | Done |
+| 6 | Observability and evals | Deployed, awaiting review |
+| 7 to 9 | AWS platform: frontend, CI/CD, hardening | Not started |
 | 10 | Archive the build plan to `docs/SETUP.md` | Not started |
 | Modules | 1, 7, 4, 2 | Not started |
 
@@ -131,6 +132,16 @@ uv run python scripts/agent_smoke.py           # calls the deployed runtime (nee
 
 The agent reaches the backend through AgentCore Gateway, which publishes `GET /health/db` as the MCP tool `backend___checkDatabaseHealth`. To use the Gateway tool locally without deploying the agent, set `GATEWAY_URL` in `.env` (AgentStack output `GatewayUrl`). The local agent signs MCP requests with your own AWS credentials, which need `bedrock-agentcore:InvokeGateway`. The backend must be running (`backend_tasks=1`). Leave `GATEWAY_URL` unset to run with local tools only.
 
+### Evals and observability
+
+```bash
+uv run pytest evals    # 12 golden cases against real Bedrock models, about 20 s and a few cents
+```
+
+Plain `uv run pytest` never collects `evals/`. The three Gateway cases skip unless `GATEWAY_URL` is set and the backend is running.
+
+Deployed runs are traced end to end (model calls, tool calls, the Gateway hop) with ADOT and CloudWatch Transaction Search: CloudWatch console, **GenAI Observability**, agent `ehr_rwe_eln_hello`. The `ehr-rwe-eln-agent` dashboard shows invocations, errors, latency, Gateway tool time, and daily tokens. Alarms on error rate and daily tokens email the Phase 1 alerts topic. AgentCore Evaluations scores every live run for helpfulness and tool selection.
+
 ### Pause the backend when idle
 
 The API runs on ECS Express Mode (Fargate). A running task costs about $13 a month; the load balancer costs about $24 a month whether or not a task runs. Scale to zero tasks when you stop working:
@@ -156,7 +167,7 @@ cdk destroy DataStack
 cdk destroy OpsStack
 ```
 
-Skip any stack not deployed yet (`cdk list` shows what the app defines). Run `cdk diff <Stack>` first to confirm what will go. Left in place on purpose: the `CDKToolkit` bootstrap stack and the GitHub OIDC provider, both shared with other projects in the account.
+Skip any stack not deployed yet (`cdk list` shows what the app defines). Run `cdk diff <Stack>` first to confirm what will go. Left in place on purpose: the `CDKToolkit` bootstrap stack and the GitHub OIDC provider, both shared with other projects in the account. CloudWatch Transaction Search, which agent tracing needs, is an account-wide setting owned by the glia-nav project; if that project disables it, traces from this one stop.
 
 `DataStack` leaves two things behind after destroy: a final Aurora snapshot (the cluster default) and the documents bucket (S3 default is retain). Delete both by hand once you are sure nothing in them is needed.
 

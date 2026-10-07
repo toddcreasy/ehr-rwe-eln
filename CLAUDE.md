@@ -307,14 +307,14 @@ Tools in this phase:
 - **pydantic-evals**: local eval framework from the Pydantic team. A golden set of inputs with expected typed outputs, scored in seconds under pytest. Why: before any change deploys, you know whether agent quality moved.
 - **AgentCore Evaluations**: managed evaluators (response quality, safety, tool usage) that score real production traces continuously. Why: local evals catch regressions before deploy; this catches drift after.
 
-- [ ] AgentCore Observability enabled on the runtime: `aws-opentelemetry-distro` in the image, `opentelemetry-instrument` in front of the entrypoint, and `tracingEnabled` on the runtime
-- [ ] CloudWatch Transaction Search enabled. It needs a CloudWatch Logs resource policy letting `xray.amazonaws.com` write to `aws/spans`, which the CFN resource does not create for itself, and the runtime's traces delivery must depend on it explicitly or CloudFormation builds them in parallel and the delivery loses the race
-- [ ] CloudWatch dashboard: agent invocations, errors, latency, daily token totals
-- [ ] CloudWatch alarms: error rate and a daily token-spend threshold, both to the Phase 1 SNS topic
-- [ ] `evals/`: 10 to 15 golden cases with `pydantic-evals`; assertions on typed output fields
-- [ ] Evals run via `uv run pytest evals` and are marked so they can be skipped in fast unit runs
-- [ ] AgentCore Evaluations configured with at least response-quality and tool-usage evaluators on production traces. Set `executionStatus` to ENABLED and raise `samplingPercentage`: the defaults are DISABLED and 10%, so it deploys clean and scores nothing
-- [ ] Token metrics: AgentCore does not publish them. Derive them from a metric filter over your own structured run log, and know that the filter only sees the deployed runtime, not local or CI runs
+- [x] AgentCore Observability enabled on the runtime: `aws-opentelemetry-distro` in the image, `opentelemetry-instrument` in front of the entrypoint, and `tracingEnabled` on the runtime
+- [x] CloudWatch Transaction Search enabled. It needs a CloudWatch Logs resource policy letting `xray.amazonaws.com` write to `aws/spans`, which the CFN resource does not create for itself, and the runtime's traces delivery must depend on it explicitly or CloudFormation builds them in parallel and the delivery loses the race
+- [x] CloudWatch dashboard: agent invocations, errors, latency, daily token totals
+- [x] CloudWatch alarms: error rate and a daily token-spend threshold, both to the Phase 1 SNS topic
+- [x] `evals/`: 10 to 15 golden cases with `pydantic-evals`; assertions on typed output fields
+- [x] Evals run via `uv run pytest evals` and are marked so they can be skipped in fast unit runs
+- [x] AgentCore Evaluations configured with at least response-quality and tool-usage evaluators on production traces. Set `executionStatus` to ENABLED and raise `samplingPercentage`: the defaults are DISABLED and 10%, so it deploys clean and scores nothing
+- [x] Token metrics: AgentCore does not publish them. Derive them from a metric filter over your own structured run log, and know that the filter only sees the deployed runtime, not local or CI runs
 
 STOP gate 6: show one full trace for an agent run (spans for model calls and tool calls). Show `uv run pytest evals` passing. Show the dashboard.
 

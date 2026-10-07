@@ -23,4 +23,6 @@ COPY --from=build --chown=app:app /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 DOCKER_CONTAINER=1
 USER app
 EXPOSE 8080
-CMD ["python", "-m", "ehr_rwe_eln.agents.app"]
+# opentelemetry-instrument (ADOT) ships Strands' model and tool spans to CloudWatch; AgentCore sets
+# the OTEL_* environment variables.
+CMD ["opentelemetry-instrument", "python", "-m", "ehr_rwe_eln.agents.app"]
