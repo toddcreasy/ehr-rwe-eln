@@ -34,30 +34,60 @@ Domain stack (additions to the platform stack below):
 
 OHDSI reference implementations (ETL-Synthea, DataQualityDashboard, CohortMethod) are R. This repo reimplements the needed subset in Python and uses the R tools as the correctness reference, not as dependencies.
 
+## Explain before you act
+
+The maintainer is learning ML development on this project and does not have a solid ML background.
+Before doing anything, explain what you are about to do and why.
+
+1. Before any change that edits files, adds a dependency, or runs training, say in plain language what the step is and why it comes next.
+2. Define ML terms the first time they come up (backbone, embedding, linear probe, epoch, loss, optimizer). One or two sentences each, no stacked jargon.
+3. Point to the code: file and function, e.g. `infra/stacks/data_stack.py:24`, so the maintainer can read along.
+4. For every tool or library, say what job it does and why it was picked over the obvious alternative.
+5. After a training or evaluation run, explain what the numbers mean and whether they are good.
+6. This section overrides "skip preamble" and "no trailing summaries" below for ML concepts and decisions. Routine steps (installs, lint fixes, commits) stay terse.
+7. Define acronyms always
+
 ## How Claude Code must use this file
 
 1. Work through the phases in order. Never skip ahead.
 2. Complete every checklist item in a phase, then run the STOP gate verification.
-3. At each STOP gate: show the evidence (command output, URL, screenshot instruction), mark the checkboxes done by editing this file, then wait for maintainer approval before starting the next phase.
-4. If a phase fails, diagnose before retrying. Read the error, check assumptions, try a focused fix. Ask the maintainer only when genuinely stuck after investigation.
-5. Every changed line must trace to a checklist item. No extra features, no speculative abstractions.
+3. At each STOP gate: show the evidence (command output, URL, screenshot
+instruction), mark the checkboxes done by editing this file, then wait for
+maintainer approval before starting the next phase.
+4. If a phase fails, diagnose before retrying. Read the error, check assumptions,
+try a focused fix. Ask the maintainer only when genuinely stuck after
+investigation.
+5. Every changed line must trace to a checklist item. No extra features, no
+speculative abstractions.
 
 ## Operating rules
 
 Direct. Evidence-first. Skip preamble.
 
 ### Writing style
-- Never use em dashes or en dashes in any written output. Use commas, periods, semicolons, or restructure.
-- Write in the maintainer's voice for all prose output. The voice profile is `~/.claude/rules/writing-voice.md`. Read it; do not edit it. No generic LLM prose.
-- Keep all prose short and direct. State the point; skip "actually matters" style framing.
+- Never use em dashes or en dashes in any written output. Use commas, periods,
+semicolons, or restructure.
+- Write in the maintainer's voice for all prose output. The voice profile is
+`~/.claude/rules/writing-voice.md`. Read it; do not edit it. No generic LLM
+prose.
+- Keep all prose short and direct. State the point; skip "actually matters" style
+framing.
 
 ### Core protocol
-- Evidence: read files before stating facts about them. Verify data claims against source.
-- Action: default to implementation. Explain architecture decisions; act on details.
-- Output: no trailing summaries after actions. The maintainer reads diffs directly.
-- Safety: no force push. No `rm -rf`; use `trash`. Ask before bulk operations. Never commit secrets, API keys, or credentials.
-- Comms: never send email, messages, or any external communication without showing a draft and getting explicit approval.
-- Parallel: launch independent subagents in a single message when tasks are independent. Delegate mechanical exploration; preserve main context for decisions.
+- Evidence: read files before stating facts about them. Verify data claims
+against source.
+- Action: default to implementation. Explain architecture decisions; act on
+details.
+- Output: no trailing summaries after actions. The maintainer reads diffs
+directly.
+- Safety: no force push. No `rm -rf`; use `trash`. Ask before bulk operations.
+Never commit secrets, API keys, or credentials.
+- Comms: never send email, messages, or any external communication without
+showing a draft and getting explicit approval.
+- Parallel: launch independent subagents in a single message when tasks are
+independent. Delegate mechanical exploration; preserve main context for
+decisions.
+
 
 ### Python
 - Use `uv` for everything: `uv sync`, `uv run <cmd>`, `uv add <pkg>`. Never activate a venv manually; `uv run` handles it. Never use pip with `--break-system-packages`.
@@ -89,7 +119,7 @@ AWS-first. Anything not AWS is listed with the reason AWS cannot fill the slot.
 | Object storage | S3 | Yes | |
 | Secrets | AWS Secrets Manager | Yes | |
 | Auth | Amazon Cognito | Yes | |
-| Backend hosting | AWS App Runner (alt: Lambda + API Gateway) | Yes | |
+| Backend hosting | Amazon ECS Express Mode on Fargate (alt: Lambda + API Gateway) | Yes | |
 | Frontend hosting | AWS Amplify Hosting | Yes | |
 | Cost control | AWS Budgets + cost allocation tags | Yes | |
 | Backend framework | FastAPI + Pydantic | No | Language-level tooling. AWS makes no Python web framework. |
@@ -219,19 +249,19 @@ Goal: a deployed FastAPI service that reaches the database.
 Tools in this phase:
 - **FastAPI**: the standard modern Python web framework. Type hints define request and response shapes; docs generate themselves. Why: it shares Pydantic models with the agent layer, so one set of types flows through the whole system.
 - **Pydantic / pydantic-settings**: data validation from type hints, plus typed config loaded from env vars or Secrets Manager. Why: bad data fails loudly at the boundary instead of deep in a handler.
-- **Docker**: packages the app and its dependencies into an image that runs the same everywhere. Why: "works on my machine" becomes "works in App Runner".
-- **Amazon ECR**: AWS's private registry that stores those images. Why: App Runner deploys straight from it.
-- **AWS App Runner**: give it a container image; it runs it with HTTPS, scaling, and health checks, no servers to manage. Why: the least-effort way to run one small always-on service. (Alternative: Lambda + API Gateway if traffic is rare and cold starts are acceptable.)
-- **Amazon CloudWatch**: AWS's built-in logs, metrics, dashboards, and alarms. Why: it is already there; every log line from App Runner lands in it with no setup.
+- **Docker**: packages the app and its dependencies into an image that runs the same everywhere. Why: "works on my machine" becomes "works on Fargate".
+- **Amazon ECR**: AWS's private registry that stores those images. Why: ECS pulls images straight from it..
+- **Amazon ECS Express Mode**: give it a container image and two IAM roles; it builds the load balancer, HTTPS certificate, security groups and autoscaling in your account and runs the container on Fargate. Why: AWS closed App Runner to new customers and points here; every piece it creates is a normal AWS resource you can inspect. Scale to 0 tasks when idle with `cdk deploy BackendStack -c backend_tasks=0`.
+- **Amazon CloudWatch**: AWS's built-in logs, metrics, dashboards, and alarms. Why: it is already there; every log line from the container lands in it with no setup.
 
-- [ ] `src/ehr_rwe_eln/api/`: FastAPI app with `GET /health` (static) and `GET /health/db` (runs `SELECT 1`)
-- [ ] `pydantic-settings` config module; secrets resolved from Secrets Manager when deployed, `.env` locally
-- [ ] Dockerfile (multi-stage, uv-based, non-root user)
-- [ ] `BackendStack`: App Runner service from the container image (ECR), VPC connector to Aurora, secret injected as env
-- [ ] Structured JSON logging to CloudWatch, retention 30 days
-- [ ] Local run documented: `uv run fastapi dev`
+- [x] `src/ehr_rwe_eln/api/`: FastAPI app with `GET /health` (static) and `GET /health/db` (runs `SELECT 1`)
+- [x] `pydantic-settings` config module; secrets resolved from Secrets Manager when deployed, `.env` locally
+- [x] Dockerfile (multi-stage, uv-based, non-root user)
+- [x] `BackendStack`: ECS Express Mode service from the container image (ECR), public subnets for the load balancer, task security group to Aurora, DB secret injected as env
+- [x] Structured JSON logging to CloudWatch, retention 30 days
+- [x] Local run documented: `uv run fastapi dev`
 
-STOP gate 3: `curl` both health endpoints on the deployed App Runner URL; show responses. Show one structured log line in CloudWatch.
+STOP gate 3: `curl` both health endpoints on the deployed Express Mode endpoint; show responses. Show one structured log line in CloudWatch.
 
 ## Phase 4: Agent layer
 
@@ -363,13 +393,13 @@ STOP gate 10: show CLAUDE.md under roughly 100 lines, `docs/SETUP.md` containing
 | Item | Expected |
 |---|---|
 | Aurora Serverless v2 (auto-pause) | ~$0 compute idle + ~$0.10/GB storage |
-| App Runner (1 small instance) | $5 to $15 |
+| ECS Express Mode (load balancer + 1 Fargate task) | about $24 paused, about $36 running all month |
 | Amplify Hosting | $0 to $5 |
 | Cognito | $0 at personal scale |
 | CloudWatch + alarms | $1 to $5 |
 | AgentCore (consumption) | Low single digits at dev usage |
 | Bedrock tokens | Usage-driven; controlled by tiering, caching, batch |
 | Budgets, IAM, OIDC, tags | $0 |
-| Target total (excluding tokens) | Under $30 |
+| Target total (excluding tokens) | About $26 to $42, against a $50 budget |
 
 If actuals exceed the budget alarm, stop feature work and find the line item first.
