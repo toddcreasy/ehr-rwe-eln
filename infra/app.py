@@ -1,6 +1,7 @@
 import os
 
 import aws_cdk as cdk
+from stacks.backend_stack import BackendStack
 from stacks.data_stack import DataStack
 from stacks.ops_stack import OpsStack
 
@@ -17,6 +18,14 @@ env = cdk.Environment(account=os.environ.get("CDK_DEFAULT_ACCOUNT"), region="us-
 
 # Prefixed stack names: other projects in this account already own the bare names.
 OpsStack(app, "OpsStack", stack_name=f"{project}-OpsStack", env=env)
-DataStack(app, "DataStack", stack_name=f"{project}-DataStack", env=env)
+data = DataStack(app, "DataStack", stack_name=f"{project}-DataStack", env=env)
+BackendStack(
+    app,
+    "BackendStack",
+    stack_name=f"{project}-BackendStack",
+    vpc=data.vpc,
+    database=data.cluster,
+    env=env,
+)
 
 app.synth()

@@ -9,7 +9,9 @@ class DataStack(cdk.Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # Isolated subnets only: no NAT, no internet route. Local access goes through the Data API.
+        # Isolated subnets hold Aurora: no NAT, no internet route. Local access goes through the
+        # Data API. Public subnets hold the ECS Express load balancer and tasks (BackendStack).
+        # Public is listed second so CDK keeps the isolated subnets' existing address ranges.
         self.vpc = ec2.Vpc(
             self,
             "Vpc",
@@ -18,7 +20,10 @@ class DataStack(cdk.Stack):
             subnet_configuration=[
                 ec2.SubnetConfiguration(
                     name="isolated", subnet_type=ec2.SubnetType.PRIVATE_ISOLATED, cidr_mask=24
-                )
+                ),
+                ec2.SubnetConfiguration(
+                    name="public", subnet_type=ec2.SubnetType.PUBLIC, cidr_mask=24
+                ),
             ],
         )
 

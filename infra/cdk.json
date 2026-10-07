@@ -9,6 +9,7 @@
     "env": "dev",
     "alert_email": "alerts@example.com",
     "monthly_budget_usd": 50,
+    "backend_tasks": 1,
     "github_repo": "toddcreasy/ehr-rwe-eln",
     "github_owner_id": "5910177",
     "github_repo_id": "1408893556"

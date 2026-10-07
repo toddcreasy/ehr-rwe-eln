@@ -74,8 +74,9 @@ The platform is built in phases from the [project-template AWS build plan](https
 |---|---|---|
 | 0 | Repo scaffold | Done |
 | 1 | AWS guardrails: budget, alerts, GitHub OIDC role | Done |
-| 2 | Data layer: Aurora Serverless v2 + pgvector, S3, Alembic | Deployed, awaiting review |
-| 3 to 9 | AWS platform: API, agent, MCP, observability, frontend, CI/CD, hardening | Not started |
+| 2 | Data layer: Aurora Serverless v2 + pgvector, S3, Alembic | Done |
+| 3 | Backend API: FastAPI on ECS Express Mode | Deployed, awaiting review |
+| 4 to 9 | AWS platform: agent, MCP, observability, frontend, CI/CD, hardening | Not started |
 | 10 | Archive the build plan to `docs/SETUP.md` | Not started |
 | Modules | 1, 7, 4, 2 | Not started |
 
@@ -104,6 +105,26 @@ uv run python scripts/db_check.py   # pgvector round trip, leaves nothing behind
 ```
 
 `migrate.py` renders migrations with Alembic offline mode and runs the SQL in one Data API transaction. The cluster auto-pauses to 0 ACU after 5 minutes idle; the first call after a pause takes about 15 seconds while it resumes.
+
+### Run the API locally
+
+The deployed API talks to Aurora; locally it talks to Postgres in Docker. `.env` needs `DB_HOST=localhost` and `DB_PASSWORD=localdev` (see `.env.example`).
+
+```bash
+docker run -d --name ehr-rwe-eln-pg -e POSTGRES_PASSWORD=localdev -e POSTGRES_DB=ehr_rwe_eln \
+  -p 5432:5432 pgvector/pgvector:pg17   # first time; afterwards: docker start ehr-rwe-eln-pg
+uv run fastapi dev                      # http://localhost:8000/health and /health/db, reloads on save
+```
+
+### Pause the backend when idle
+
+The API runs on ECS Express Mode (Fargate). A running task costs about $13 a month; the load balancer costs about $24 a month whether or not a task runs. Scale to zero tasks when you stop working:
+
+```bash
+cd infra
+cdk deploy BackendStack -c backend_tasks=0   # pause
+cdk deploy BackendStack                      # resume (backend_tasks=1 in cdk.json)
+```
 
 ## Teardown
 
