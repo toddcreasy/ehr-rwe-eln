@@ -164,7 +164,7 @@ Tools in this phase:
 - [x] `.gitignore` (Python, node, `.env`, CDK out, IDE)
 - [x] `.env.example` created (empty vars added as phases introduce them)
 - [x] README stub: project name, one-line purpose, setup commands
-- [ ] Initial commit pushed
+- [x] Initial commit pushed
 
 STOP gate 0: `uv run ruff check .` is clean and `uv run pytest` passes. Show both outputs.
 
