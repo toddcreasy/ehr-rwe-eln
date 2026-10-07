@@ -10,6 +10,8 @@
     "alert_email": "alerts@example.com",
     "monthly_budget_usd": 50,
     "backend_tasks": 1,
+    "model_small": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "model_large": "us.anthropic.claude-sonnet-5-5",
     "github_repo": "toddcreasy/ehr-rwe-eln",
     "github_owner_id": "5910177",
     "github_repo_id": "1408893556"

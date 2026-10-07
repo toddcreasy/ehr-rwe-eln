@@ -1,6 +1,7 @@
 import os
 
 import aws_cdk as cdk
+from stacks.agent_stack import AgentStack
 from stacks.backend_stack import BackendStack
 from stacks.data_stack import DataStack
 from stacks.ops_stack import OpsStack
@@ -27,5 +28,6 @@ BackendStack(
     database=data.cluster,
     env=env,
 )
+AgentStack(app, "AgentStack", stack_name=f"{project}-AgentStack", env=env)
 
 app.synth()

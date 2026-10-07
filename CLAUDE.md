@@ -273,12 +273,12 @@ Tools in this phase:
 - **Bedrock AgentCore Runtime**: a managed place to run agent code, with per-session isolation and support for long-running work. Why: the agent runs server-side with its own identity and scaling, not inside the web backend.
 - **Prompt caching**: Bedrock reuses a repeated prompt prefix (system prompt, tool definitions) across calls at a fraction of the token price. Why: agents resend the same prefix constantly; caching is the single cheapest cost fix.
 
-- [ ] Enable Bedrock model access for the chosen Claude models in `us-east-1` (maintainer action; provide exact console steps)
-- [ ] `src/ehr_rwe_eln/agents/`: one Strands agent, typed output model, one local tool (echo/time), prompt caching enabled
-- [ ] Model tiering config: `MODEL_SMALL`, `MODEL_LARGE` env vars; agent defaults to small
-- [ ] Token/cost logging per run (structured log fields: input_tokens, output_tokens, cache_read, model)
-- [ ] `AgentStack`: deploy the agent to AgentCore Runtime via CDK/CLI
-- [ ] `scripts/agent_smoke.py`: invokes the deployed agent, prints typed output + usage
+- [x] Enable Bedrock model access for the chosen Claude models in `us-east-1` (maintainer action; provide exact console steps)
+- [x] `src/ehr_rwe_eln/agents/`: one Strands agent, typed output model, one local tool (echo/time), prompt caching enabled
+- [x] Model tiering config: `MODEL_SMALL`, `MODEL_LARGE` env vars; agent defaults to small
+- [x] Token/cost logging per run (structured log fields: input_tokens, output_tokens, cache_read, model)
+- [x] `AgentStack`: deploy the agent to AgentCore Runtime via CDK/CLI
+- [x] `scripts/agent_smoke.py`: invokes the deployed agent, prints typed output + usage
 
 STOP gate 4: run the smoke script; show the typed response and the token usage log line from the deployed runtime.
 

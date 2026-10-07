@@ -75,8 +75,9 @@ The platform is built in phases from the [project-template AWS build plan](https
 | 0 | Repo scaffold | Done |
 | 1 | AWS guardrails: budget, alerts, GitHub OIDC role | Done |
 | 2 | Data layer: Aurora Serverless v2 + pgvector, S3, Alembic | Done |
-| 3 | Backend API: FastAPI on ECS Express Mode | Deployed, awaiting review |
-| 4 to 9 | AWS platform: agent, MCP, observability, frontend, CI/CD, hardening | Not started |
+| 3 | Backend API: FastAPI on ECS Express Mode | Done |
+| 4 | Agent: Strands on Bedrock, AgentCore Runtime | Deployed, awaiting review |
+| 5 to 9 | AWS platform: MCP, observability, frontend, CI/CD, hardening | Not started |
 | 10 | Archive the build plan to `docs/SETUP.md` | Not started |
 | Modules | 1, 7, 4, 2 | Not started |
 
@@ -114,6 +115,17 @@ The deployed API talks to Aurora; locally it talks to Postgres in Docker. `.env`
 docker run -d --name ehr-rwe-eln-pg -e POSTGRES_PASSWORD=localdev -e POSTGRES_DB=ehr_rwe_eln \
   -p 5432:5432 pgvector/pgvector:pg17   # first time; afterwards: docker start ehr-rwe-eln-pg
 uv run fastapi dev                      # http://localhost:8000/health and /health/db, reloads on save
+```
+
+### Run the agent locally
+
+The agent (`src/ehr_rwe_eln/agents/`) is a Strands agent on Bedrock, deployed to AgentCore Runtime. Locally it uses your AWS credentials to call Claude, so each call costs a fraction of a cent.
+
+```bash
+uv run python -m ehr_rwe_eln.agents.app        # serves /ping and /invocations on :8080
+curl -X POST localhost:8080/invocations -H 'Content-Type: application/json' \
+  -d '{"prompt": "What time is it in UTC?"}'
+uv run python scripts/agent_smoke.py           # calls the deployed runtime (needs AGENT_RUNTIME_ARN)
 ```
 
 ### Pause the backend when idle
