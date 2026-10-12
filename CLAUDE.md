@@ -346,12 +346,12 @@ Tools in this phase:
 - **Branch protection**: a GitHub setting that blocks direct pushes to main and requires passing checks. Why: the pipeline is only a guarantee if it cannot be bypassed.
 - **cdk diff in CI**: prints the infrastructure changes a PR would cause. Why: you review infrastructure changes the same way you review code changes, before they happen.
 
-- [ ] Workflow `ci.yml`: on PR run ruff, pytest (unit), and `cdk diff` via the OIDC role
-- [ ] Workflow `deploy.yml`: on main run tests, evals, `cdk deploy --all`, then build the frontend and upload it. Amplify only auto-builds on push if the app is Git-connected, which needs a stored token; otherwise CI does the upload
-- [ ] `docker/setup-qemu-action` and `setup-buildx-action` if any image is arm64. Runners are amd64, and emulated builds are slow enough to dominate the deploy
-- [ ] Branch protection on main: PR + passing checks required. Needs GitHub Pro on a private repo; both the protection and rulesets APIs return 403 on the free plan. Set `enforce_admins` or it will not stop the repo owner, which on a solo project means it stops nobody
-- [ ] OIDC trust policy: GitHub now issues subjects with numeric owner and repo ids embedded (`repo:owner@123/repo@456:ref:...`). A policy matching only `repo:owner/repo:*` is denied, and the action retries so the job hangs rather than failing. CloudTrail is the only place the reason appears
-- [ ] Concurrency guard so two deploys cannot overlap
+- [x] Workflow `ci.yml`: on PR run ruff, pytest (unit), and `cdk diff` via the OIDC role
+- [x] Workflow `deploy.yml`: on main run tests, evals, `cdk deploy --all`, then build the frontend and upload it. Amplify only auto-builds on push if the app is Git-connected, which needs a stored token; otherwise CI does the upload
+- [x] `docker/setup-qemu-action` and `setup-buildx-action` if any image is arm64. Runners are amd64, and emulated builds are slow enough to dominate the deploy
+- [x] Branch protection on main: PR + passing checks required. Needs GitHub Pro on a private repo; both the protection and rulesets APIs return 403 on the free plan. Set `enforce_admins` or it will not stop the repo owner, which on a solo project means it stops nobody
+- [x] OIDC trust policy: GitHub now issues subjects with numeric owner and repo ids embedded (`repo:owner@123/repo@456:ref:...`). A policy matching only `repo:owner/repo:*` is denied, and the action retries so the job hangs rather than failing. CloudTrail is the only place the reason appears
+- [x] Concurrency guard so two deploys cannot overlap
 
 STOP gate 8: merge a trivial change (README typo). Show the green pipeline and the change live.
 

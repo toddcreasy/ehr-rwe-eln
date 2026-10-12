@@ -63,7 +63,7 @@ Build order: 1, then 7, then 4, then 2. Every module reads the OMOP tables modul
 - **Analysis**: scikit-learn, statsmodels, lifelines
 - **Interoperability**: FHIR R4 via `fhir.resources`
 - **LLM**: Amazon Bedrock (Claude), Strands Agents, AgentCore Runtime and Gateway (MCP)
-- **App**: FastAPI on App Runner, Next.js on Amplify, Cognito auth
+- **App**: FastAPI on ECS Express Mode, Next.js on Amplify, Cognito auth
 - **Infra**: AWS CDK (Python), GitHub Actions with OIDC, CloudWatch, AWS Budgets
 
 The platform is built in phases from the [project-template AWS build plan](https://github.com/toddcreasy/project-template/tree/main/aws). See `CLAUDE.md` for the plan and its STOP gates.
@@ -78,8 +78,10 @@ The platform is built in phases from the [project-template AWS build plan](https
 | 3 | Backend API: FastAPI on ECS Express Mode | Done |
 | 4 | Agent: Strands on Bedrock, AgentCore Runtime | Done |
 | 5 | MCP tools: AgentCore Gateway over the backend | Done |
-| 6 | Observability and evals | Deployed, awaiting review |
-| 7 to 9 | AWS platform: frontend, CI/CD, hardening | Not started |
+| 6 | Observability and evals | Done |
+| 7 | Frontend: Next.js on Amplify, Cognito sign-in | Done |
+| 8 | CI/CD: GitHub Actions, deploy on merge to main | Done |
+| 9 | Hardening and cost review | Not started |
 | 10 | Archive the build plan to `docs/SETUP.md` | Not started |
 | Modules | 1, 7, 4, 2 | Not started |
 
