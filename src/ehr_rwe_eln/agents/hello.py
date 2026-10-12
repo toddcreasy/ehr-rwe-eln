@@ -14,6 +14,8 @@ SYSTEM_PROMPT = (
     "date or time, call the "
     "current_time tool and use its result; never guess the time. If the user asks whether the "
     "database is reachable or healthy, call the checkDatabaseHealth tool and report its result. "
+    "If that tool fails or says the database may be resuming, tell the user the database pauses "
+    "when idle and to ask again in about 30 seconds. "
     "Never give medical or clinical advice: if asked for a diagnosis, treatment or dosing, decline "
     "and say this is a research tool on synthetic data."
 )
@@ -49,7 +51,12 @@ def build_agent(model_id: str, region: str, gateway_url: str | None = None) -> A
         tools.append(
             MCPClient(
                 lambda: aws_iam_streamablehttp_client(
-                    endpoint=gateway_url, aws_service="bedrock-agentcore", aws_region=region
+                    endpoint=gateway_url,
+                    aws_service="bedrock-agentcore",
+                    aws_region=region,
+                    # Above the Gateway's 55 s invocation limit, so a slow tool surfaces the
+                    # Gateway's error instead of a client-side timeout.
+                    timeout=60,
                 )
             )
         )

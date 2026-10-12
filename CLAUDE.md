@@ -366,6 +366,7 @@ Tools in this phase:
 
 - [ ] Bedrock Guardrails: a basic policy (PII masking, denied topics placeholder) attached to agent calls. Three traps: guardrail versions are immutable and the CFN version resource does not cut a new one when the policy changes, so pin a hash of the config into its logical id or the runtime silently keeps the old policy; a topic definition is capped at 200 characters; and streaming must run in `sync` mode, because `async` delivers chunks before the guardrail sees them and never masks PII
 - [ ] Handle the block path: a guardrail intervention ends the agent loop before the model can produce structured output, so a naive handler returns None and the runtime answers 500. A working safety control should not look like a server error
+- [ ] Cold database path: Aurora takes about 15 s to resume from 0 ACU, and the MCP client gives up at 30 s by default. Order the timeouts so each inner one is shorter than the one outside it (DB connect under the Gateway's 55 s, under the agent's MCP client), and have the backend answer a clear "may be resuming, retry" 503 that the agent passes on
 - [ ] Verify log retention on every log group is 30 days. Services create their own groups and default to never expiring; so do CDK custom-resource providers, whose Lambda names are generated, so build the group name from the handler's ref
 - [ ] Review IAM: agent, backend, and CI roles are least-privilege; no wildcards on resources where avoidable
 - [ ] Cost Explorer review with maintainer: line-item actuals vs the table below

@@ -71,7 +71,8 @@ def me(claims: Annotated[dict, Depends(current_user)]) -> dict[str, str]:
 @app.get("/health/db")
 def health_db() -> dict[str, str]:
     # A fresh connection per call, no pool: idle pooled connections would stop Aurora pausing.
-    # connect_timeout covers the ~15 s Aurora takes to resume from 0 ACU.
+    # connect_timeout covers the ~15 s Aurora takes to resume from 0 ACU and stays under the
+    # Gateway's 55 s limit, so a slow resume returns this 503 rather than a Gateway timeout.
     try:
         with psycopg.connect(
             host=settings.db_host,
@@ -79,10 +80,13 @@ def health_db() -> dict[str, str]:
             dbname=settings.db_name,
             user=settings.db_user,
             password=settings.db_password.get_secret_value(),
-            connect_timeout=30,
+            connect_timeout=20,
         ) as conn:
             conn.execute("SELECT 1").fetchone()
     except psycopg.OperationalError as exc:
         log.error("database check failed", extra={"fields": {"error": str(exc)}})
-        raise HTTPException(status_code=503, detail="database unreachable") from exc
+        raise HTTPException(
+            status_code=503,
+            detail="database unreachable; it may be resuming from pause, retry in about 30 seconds",
+        ) from exc
     return {"status": "ok", "database": "reachable"}
