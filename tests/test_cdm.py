@@ -45,6 +45,21 @@ def test_create_cdm_builds_all_v54_tables(con):
     assert {"person", "condition_occurrence", "measurement", "cohort", "concept"} <= tables
 
 
+def test_numeric_columns_keep_small_and_large_values(con):
+    con.execute(
+        "INSERT INTO cdm.drug_strength (drug_concept_id, ingredient_concept_id, "
+        "numerator_value, valid_start_date, valid_end_date) "
+        "VALUES (1, 2, 2340000000000000, DATE '1970-01-01', DATE '2099-12-31')"
+    )
+    con.execute(
+        "INSERT INTO cdm.measurement (measurement_id, person_id, measurement_concept_id, "
+        "measurement_date, measurement_type_concept_id, value_as_number) "
+        "VALUES (1, 1, 1, DATE '2020-01-01', 1, 0.0045)"
+    )
+    assert con.execute("SELECT numerator_value FROM cdm.drug_strength").fetchone()[0] == 2.34e15
+    assert con.execute("SELECT value_as_number FROM cdm.measurement").fetchone()[0] == 0.0045
+
+
 def test_load_vocabulary_parses_athena_format(con, tmp_path):
     for table in VOCABULARY_TABLES:
         lines = FAKE_ATHENA.get(table.upper())
@@ -76,3 +91,34 @@ def test_load_vocabulary_parses_athena_format(con, tmp_path):
         "WHERE concept_id_1 = 900000002 AND relationship_id = 'Maps to'"
     ).fetchone()[0]
     assert mapped == 900000001
+
+
+def test_later_downloads_only_add_missing_rows(con, tmp_path):
+    first, second = tmp_path / "first", tmp_path / "second"
+    for folder, rows in (
+        (first, ["900000001\tKept from the first download"]),
+        (second, ["900000001\tDuplicate, skipped", "900000003\tNew in the second download"]),
+    ):
+        folder.mkdir()
+        for table in VOCABULARY_TABLES:
+            header = [
+                row[0]
+                for row in con.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = 'cdm' AND table_name = ? ORDER BY ordinal_position",
+                    [table],
+                ).fetchall()
+            ]
+            lines = ["\t".join(header)]
+            if table == "concept":
+                lines += [f"{r}\tCondition\tFAKE\tx\tS\tc\t19700101\t20991231\t" for r in rows]
+            (folder / f"{table.upper()}.csv").write_text("\n".join(lines) + "\n")
+
+    load_vocabulary(con, first, second)
+
+    assert con.execute(
+        "SELECT concept_id, concept_name FROM cdm.concept ORDER BY 1"
+    ).fetchall() == [
+        (900000001, "Kept from the first download"),
+        (900000003, "New in the second download"),
+    ]

@@ -51,6 +51,8 @@ ignore = []
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
 "evals/**" = ["S101"]
+# The OMOP ETL builds SQL from table and column names defined in code; values are bound.
+"src/ehr_rwe_eln/cohort/**" = ["S608"]
 
 [tool.ruff.format]
 quote-style = "double"
