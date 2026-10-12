@@ -1,5 +1,6 @@
 import aws_cdk as cdk
 from aws_cdk import aws_amplify as amplify
+from aws_cdk import aws_iam as iam
 from constructs import Construct
 
 
@@ -24,6 +25,23 @@ class FrontendStack(cdk.Stack):
             ],
         )
         branch = amplify.CfnBranch(self, "MainBranch", app_id=app.attr_app_id, branch_name="main")
+
+        # Lets the deploy workflow upload builds (scripts/deploy_frontend.py) to this branch only.
+        branch_arn = (
+            f"arn:aws:amplify:{self.region}:{self.account}:apps/{app.attr_app_id}/branches/main"
+        )
+        iam.Policy(
+            self,
+            "CiDeployPolicy",
+            roles=[iam.Role.from_role_name(self, "CiRole", f"{project}-github-actions")],
+            statements=[
+                iam.PolicyStatement(
+                    actions=["amplify:CreateDeployment", "amplify:StartDeployment"],
+                    resources=[branch_arn],
+                ),
+                iam.PolicyStatement(actions=["amplify:GetJob"], resources=[f"{branch_arn}/jobs/*"]),
+            ],
+        )
 
         cdk.CfnOutput(self, "AmplifyAppId", value=app.attr_app_id)
         cdk.CfnOutput(

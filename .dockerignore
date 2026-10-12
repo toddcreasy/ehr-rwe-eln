@@ -13,3 +13,7 @@ tests
 scripts
 migrations
 docs
+.github
+*.md
+.pre-commit-config.yaml
+.gitignore

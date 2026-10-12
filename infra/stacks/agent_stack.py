@@ -196,6 +196,24 @@ class AgentStack(cdk.Stack):
             )
         )
 
+        # The deploy workflow runs evals with the CI role: same models, same Gateway.
+        # Looked up by name so OpsStack never references this stack (that would be a cycle).
+        iam.Policy(
+            self,
+            "CiEvalsPolicy",
+            roles=[iam.Role.from_role_name(self, "CiRole", f"{project}-github-actions")],
+            statements=[
+                iam.PolicyStatement(
+                    actions=["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+                    resources=model_arns,
+                ),
+                iam.PolicyStatement(
+                    actions=["bedrock-agentcore:InvokeGateway"],
+                    resources=[gateway.attr_gateway_arn],
+                ),
+            ],
+        )
+
         runtime = agentcore.CfnRuntime(
             self,
             "HelloRuntime",

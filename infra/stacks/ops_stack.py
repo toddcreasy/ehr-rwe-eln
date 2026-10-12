@@ -88,6 +88,15 @@ class OpsStack(cdk.Stack):
                 ],
             )
         )
+        # scripts/deploy_frontend.py reads stack outputs (pool IDs, Amplify app ID).
+        github_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["cloudformation:DescribeStacks"],
+                resources=[
+                    f"arn:aws:cloudformation:{self.region}:{self.account}:stack/{project}-*/*"
+                ],
+            )
+        )
 
         cdk.CfnOutput(self, "AlertsTopicArn", value=self.alerts_topic.topic_arn)
         cdk.CfnOutput(self, "GitHubActionsRoleArn", value=github_role.role_arn)
