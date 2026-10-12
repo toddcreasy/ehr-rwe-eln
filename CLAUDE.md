@@ -21,6 +21,14 @@ Real world evidence from synthetic EHR data, linked to lab notebook records. Fou
 
 Build order after the platform: 1, then 7, then 4, then 2. Each module depends on the OMOP tables from module 1.
 
+### TODO before module 7: run locally, no AWS
+
+Goal: anyone can clone the repo, install it, and run every module on their own machine without an AWS account. This comes before module 7 and changes the platform the remaining modules build on.
+
+- [ ] Plan the move: for each AWS row in "Stack decisions", pick a local replacement or drop it. Agree the plan with the maintainer before changing code
+- [ ] Rewrite "Stack decisions", "Conventions", and the README install steps for the local stack
+- [ ] Decide what happens to the deployed AWS stacks: tear down with the README runbook, or keep them running for a while
+
 Data rules:
 - Synthetic or openly licensed de-identified data only: Synthea output, the MIMIC-IV demo, and synthetic ELN entries generated in this repo. No real patient data, ever.
 - OMOP vocabularies come from OHDSI Athena under their own licenses. Never commit vocabulary files or patient-level data; `data/` is gitignored.
