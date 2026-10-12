@@ -1,6 +1,9 @@
+import hashlib
+import json
 from pathlib import Path
 
 import aws_cdk as cdk
+from aws_cdk import aws_bedrock as bedrock
 from aws_cdk import aws_bedrockagentcore as agentcore
 from aws_cdk import aws_cloudwatch as cw
 from aws_cdk import aws_cloudwatch_actions as cw_actions
@@ -73,6 +76,61 @@ class AgentStack(cdk.Stack):
             iam.PolicyStatement(
                 actions=["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
                 resources=model_arns,
+            )
+        )
+
+        guardrail_config = {
+            "pii": ["NAME", "EMAIL", "PHONE", "ADDRESS", "US_SOCIAL_SECURITY_NUMBER"],
+            "topic": {
+                "name": "ClinicalAdvice",
+                # Bedrock caps a topic definition at 200 characters.
+                "definition": (
+                    "Requests for diagnosis, treatment, medication dosing, or other medical advice "
+                    "about a real or hypothetical patient."
+                ),
+                "examples": [
+                    "What dose of metformin should I give my patient?",
+                    "Do I have diabetes?",
+                ],
+            },
+            "blocked": (
+                "This is a research tool on synthetic data and cannot help with that request. "
+                "It does not give medical or clinical advice."
+            ),
+        }
+        guardrail = bedrock.CfnGuardrail(
+            self,
+            "AgentGuardrail",
+            name=f"{project}-agent",
+            blocked_input_messaging=guardrail_config["blocked"],
+            blocked_outputs_messaging=guardrail_config["blocked"],
+            sensitive_information_policy_config=bedrock.CfnGuardrail.SensitiveInformationPolicyConfigProperty(
+                pii_entities_config=[
+                    bedrock.CfnGuardrail.PiiEntityConfigProperty(type=pii, action="ANONYMIZE")
+                    for pii in guardrail_config["pii"]
+                ]
+            ),
+            topic_policy_config=bedrock.CfnGuardrail.TopicPolicyConfigProperty(
+                topics_config=[
+                    bedrock.CfnGuardrail.TopicConfigProperty(
+                        type="DENY", **guardrail_config["topic"]
+                    )
+                ]
+            ),
+        )
+        # Versions are immutable and CloudFormation never cuts a new one on a policy change.
+        # Hashing the config into the logical id replaces the version whenever the policy moves.
+        config_hash = hashlib.sha256(
+            json.dumps(guardrail_config, sort_keys=True).encode()
+        ).hexdigest()[:8]
+        guardrail_version = bedrock.CfnGuardrailVersion(
+            self,
+            f"AgentGuardrailVersion{config_hash}",
+            guardrail_identifier=guardrail.attr_guardrail_id,
+        )
+        role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["bedrock:ApplyGuardrail"], resources=[guardrail.attr_guardrail_arn]
             )
         )
 
@@ -211,6 +269,9 @@ class AgentStack(cdk.Stack):
                     actions=["bedrock-agentcore:InvokeGateway"],
                     resources=[gateway.attr_gateway_arn],
                 ),
+                iam.PolicyStatement(
+                    actions=["bedrock:ApplyGuardrail"], resources=[guardrail.attr_guardrail_arn]
+                ),
             ],
         )
 
@@ -234,6 +295,8 @@ class AgentStack(cdk.Stack):
             environment_variables={
                 **models,
                 "GATEWAY_URL": gateway.attr_gateway_url,
+                "GUARDRAIL_ID": guardrail.attr_guardrail_id,
+                "GUARDRAIL_VERSION": guardrail_version.attr_version,
                 "LOG_LEVEL": "INFO",
             },
         )
@@ -575,5 +638,7 @@ class AgentStack(cdk.Stack):
         cdk.CfnOutput(self, "AgentRuntimeArn", value=runtime.attr_agent_runtime_arn)
         cdk.CfnOutput(self, "AgentLogGroup", value=log_group_name)
         cdk.CfnOutput(self, "GatewayUrl", value=gateway.attr_gateway_url)
+        cdk.CfnOutput(self, "GuardrailId", value=guardrail.attr_guardrail_id)
+        cdk.CfnOutput(self, "GuardrailVersion", value=guardrail_version.attr_version)
         cdk.CfnOutput(self, "EvaluationResultsLogGroup", value=eval_results_log_group)
         cdk.CfnOutput(self, "DashboardName", value=dashboard.dashboard_name)

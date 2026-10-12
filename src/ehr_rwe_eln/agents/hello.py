@@ -34,7 +34,21 @@ def current_time() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def build_agent(model_id: str, region: str, gateway_url: str | None = None) -> Agent:
+def build_agent(
+    model_id: str,
+    region: str,
+    gateway_url: str | None = None,
+    guardrail_id: str | None = None,
+    guardrail_version: str | None = None,
+) -> Agent:
+    guardrail = {}
+    if guardrail_id:
+        guardrail = {
+            "guardrail_id": guardrail_id,
+            "guardrail_version": guardrail_version,
+            # sync: the guardrail sees each chunk before it is released; async skips PII masking.
+            "guardrail_stream_processing_mode": "sync",
+        }
     model = BedrockModel(
         model_id=model_id,
         region_name=region,
@@ -43,6 +57,7 @@ def build_agent(model_id: str, region: str, gateway_url: str | None = None) -> A
         # Caches the system prompt and tool definitions once they exceed the model's minimum
         # (4,096 tokens for Haiku 4.5). Below that Bedrock ignores it, so expect cache_read 0 here.
         cache_config=CacheConfig(strategy="auto"),
+        **guardrail,
     )
     tools = [current_time]
     if gateway_url:

@@ -12,4 +12,7 @@ class AgentSettings(BaseSettings):
     aws_region: str = "us-east-1"
     # AgentCore Gateway MCP endpoint. Unset: the agent runs with local tools only.
     gateway_url: str | None = None
+    # Bedrock Guardrail applied to every model call. Unset: no guardrail (local dev).
+    guardrail_id: str | None = None
+    guardrail_version: str | None = None
     log_level: str = "INFO"

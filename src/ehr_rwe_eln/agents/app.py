@@ -37,8 +37,20 @@ def invoke(payload: dict) -> dict:
         raise HTTPException(status_code=400, detail=exc.errors(include_url=False)) from exc
     model_id = settings.model_large if request.tier == "large" else settings.model_small
 
-    agent = build_agent(model_id, settings.aws_region, settings.gateway_url)
+    agent = build_agent(
+        model_id,
+        settings.aws_region,
+        settings.gateway_url,
+        settings.guardrail_id,
+        settings.guardrail_version,
+    )
     result = agent(request.prompt, structured_output_model=HelloReply)
+    output = result.structured_output
+    # A guardrail intervention ends the loop before structured output exists. That is the
+    # safety control working, so answer with the guardrail's message rather than a 500.
+    guardrail_intervened = output is None and result.stop_reason == "guardrail_intervened"
+    if guardrail_intervened:
+        output = HelloReply(reply=str(result).strip() or "This request was blocked by policy.")
     tools_called = [
         block["toolUse"]["name"]
         for message in agent.messages
@@ -55,9 +67,10 @@ def invoke(payload: dict) -> dict:
         "cache_write": usage.get("cacheWriteInputTokens", 0),
         "model_calls": result.metrics.cycle_count,
         "tools_called": tools_called,
+        "guardrail_intervened": guardrail_intervened,
     }
     log.info("agent run", extra={"fields": fields})
-    return {"output": result.structured_output.model_dump(), "usage": fields}
+    return {"output": output.model_dump(), "usage": fields}
 
 
 if __name__ == "__main__":

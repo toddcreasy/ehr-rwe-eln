@@ -44,10 +44,16 @@ jobs:
           curl -sSf --max-time 60 --retry 3 --retry-all-errors "https://$API/health/db"
       - name: Evals
         run: |
-          GATEWAY_URL=$(aws cloudformation describe-stacks --stack-name ehr-rwe-eln-AgentStack \
-            --query "Stacks[0].Outputs[?OutputKey=='GatewayUrl'].OutputValue" --output text)
+          output() {
+            aws cloudformation describe-stacks --stack-name ehr-rwe-eln-AgentStack \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
+          }
+          # Evals run against the guardrail already deployed; a missing output prints "None".
+          export GATEWAY_URL=$(output GatewayUrl)
+          export GUARDRAIL_ID=$(output GuardrailId | sed 's/^None$//')
+          export GUARDRAIL_VERSION=$(output GuardrailVersion | sed 's/^None$//')
           # -rP prints captured logs for passing tests too, so a retried case still shows why.
-          GATEWAY_URL=$GATEWAY_URL uv run pytest evals -rP
+          uv run pytest evals -rP
       # The agent image is arm64 and runners are amd64: emulate arm64 for that build.
       # No setup-buildx-action: its container builder keeps images out of the local daemon,
       # and CDK pushes from the daemon. The default builder plus QEMU handles one platform.
