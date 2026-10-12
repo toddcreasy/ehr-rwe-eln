@@ -35,11 +35,16 @@ class FrontendStack(cdk.Stack):
             "CiDeployPolicy",
             roles=[iam.Role.from_role_name(self, "CiRole", f"{project}-github-actions")],
             statements=[
+                # The service authorization reference lists the branch ARN for these, but
+                # CreateDeployment is checked against branches/main/deployments/* in practice.
                 iam.PolicyStatement(
-                    actions=["amplify:CreateDeployment", "amplify:StartDeployment"],
-                    resources=[branch_arn],
+                    actions=[
+                        "amplify:CreateDeployment",
+                        "amplify:StartDeployment",
+                        "amplify:GetJob",
+                    ],
+                    resources=[branch_arn, f"{branch_arn}/*"],
                 ),
-                iam.PolicyStatement(actions=["amplify:GetJob"], resources=[f"{branch_arn}/jobs/*"]),
             ],
         )
 
