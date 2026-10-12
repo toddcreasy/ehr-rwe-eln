@@ -6,6 +6,9 @@ Checks are deterministic properties of the typed output and the tools called, no
 an LLM phrases the same answer differently run to run.
 """
 
+import logging
+import os
+import warnings
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -21,8 +24,23 @@ DB_TOOL = "backend___checkDatabaseHealth"
 STRUCTURED_OUTPUT_TOOL = "HelloReply"  # Strands' hidden tool for typed output; not a real call
 
 
+# On GitHub runners one of the first parallel cases sometimes loses its Gateway connection
+# while listing tools. Debug logs from these loggers show the underlying error in the
+# captured output. mcp_proxy_for_aws stays off: it logs signed request headers.
+if os.environ.get("CI"):
+    for name in ("mcp", "httpcore", "strands.tools.mcp"):
+        logging.getLogger(name).setLevel(logging.DEBUG)
+
+
 def run_agent(prompt: str) -> dict:
-    return invoke({"prompt": prompt})
+    try:
+        return invoke({"prompt": prompt})
+    except ValueError as exc:
+        # Retry only the Gateway connection failure; answer-quality failures still fail.
+        if "Failed to load tool" not in str(exc):
+            raise
+        warnings.warn(f"MCP tool load failed, retrying once: {exc}", stacklevel=1)
+        return invoke({"prompt": prompt})
 
 
 @dataclass

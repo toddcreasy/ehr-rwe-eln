@@ -39,7 +39,8 @@ jobs:
         run: |
           GATEWAY_URL=$(aws cloudformation describe-stacks --stack-name ehr-rwe-eln-AgentStack \
             --query "Stacks[0].Outputs[?OutputKey=='GatewayUrl'].OutputValue" --output text)
-          GATEWAY_URL=$GATEWAY_URL uv run pytest evals
+          # -rP prints captured logs for passing tests too, so a retried case still shows why.
+          GATEWAY_URL=$GATEWAY_URL uv run pytest evals -rP
       # The agent image is arm64 and runners are amd64: emulate arm64 for that build.
       # No setup-buildx-action: its container builder keeps images out of the local daemon,
       # and CDK pushes from the daemon. The default builder plus QEMU handles one platform.
