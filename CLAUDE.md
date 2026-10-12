@@ -25,6 +25,11 @@ Build order after the platform: 1, then 7, then 4, then 2. Each module depends o
 
 Goal: anyone can clone the repo, install it, and run every module on their own machine without an AWS account. This comes before module 7 and changes the platform the remaining modules build on.
 
+Decided 2026-10-12: PostgreSQL 17 with pgvector replaces both DuckDB and Aurora. The app will have concurrent writers and large vector search (RAG), which DuckDB's single-writer file does not fit. It runs locally from `docker-compose.yml`, and tests run against that database.
+
+- [x] `docker-compose.yml` with the database service
+- [ ] Port module 1 from DuckDB to Postgres (`cohort/cdm.py`, `etl.py`, `spec.py`, the build scripts, the tests). The 1,325,353-row reconciliation and the counts in `docs/etl_synthea_comparison.md` must reproduce
+- [ ] CI runs the tests against a Postgres service container
 - [ ] Plan the move: for each AWS row in "Stack decisions", pick a local replacement or drop it. Agree the plan with the maintainer before changing code
 - [ ] Rewrite "Stack decisions", "Conventions", and the README install steps for the local stack
 - [ ] Decide what happens to the deployed AWS stacks: tear down with the README runbook, or keep them running for a while
@@ -40,8 +45,7 @@ Domain stack (additions to the platform stack below):
 | Slot | Tool | AWS? | If not AWS, why |
 |---|---|---|---|
 | Synthetic EHR source | Synthea (CSV output) | No | Open standard synthetic patient generator. AWS has no equivalent. |
-| Common data model | OMOP CDM v5.4 on Aurora Postgres | Yes (host) | The model is an OHDSI standard; Aurora hosts it. |
-| Local and CI analytics engine | DuckDB | No | In-process OMOP for tests and dev with no network. Aurora is the deployed copy. |
+| Common data model | OMOP CDM v5.4 on PostgreSQL 17 + pgvector | No | The model is an OHDSI standard; Postgres hosts it, locally in Docker Compose. |
 | Interoperability format | FHIR R4 via `fhir.resources` | No | Language-level library. AWS HealthLake costs too much at personal scale. |
 | Causal inference and survival | scikit-learn, statsmodels, lifelines | No | Language-level libraries. |
 | ELN source | Synthetic entries; eLabFTW API optional | No | Open-source ELN with a REST API. AWS makes no ELN. |
@@ -116,7 +120,7 @@ AWS-first. Anything not AWS is listed with the reason AWS cannot fill the slot.
 | Tool access (MCP) | AgentCore Gateway | Yes | |
 | Agent observability | AgentCore Observability + CloudWatch | Yes | |
 | Production evals | AgentCore Evaluations | Yes | |
-| Relational + vector DB | Aurora Serverless v2 PostgreSQL + pgvector | Yes | |
+| Relational + vector DB | PostgreSQL 17 + pgvector, in Docker Compose | No | Runs anywhere Docker does, so people can install the project without AWS. Concurrent writes and pgvector for RAG. Replaces Aurora Serverless v2 (see the TODO under Project scope). |
 | Object storage | S3 | Yes | |
 | Secrets | AWS Secrets Manager | Yes | |
 | Auth | Amazon Cognito | Yes | |
@@ -147,7 +151,7 @@ How each piece was built, verified, and what it costs: see `docs/SETUP.md`.
 │   ├── eln/               # module 2: ELN extraction to OMOP and FHIR
 │   ├── tte/               # module 4: target trial emulation
 │   └── dq/                # module 7: data quality checks
-├── tests/                 # fast tests, no network
+├── tests/                 # fast tests; local services only (the Compose Postgres), nothing off the machine
 ├── infra/                 # CDK app: app.py + stacks/
 ├── migrations/            # Alembic versioned schema changes
 ├── frontend/              # Next.js app (Phase 7)
@@ -183,6 +187,7 @@ Do not re-ask. Rationale and history in `docs/SETUP.md`.
 |---|---|
 | Monthly budget | $50, filtered to `project=ehr-rwe-eln`, alerts to the address in `infra/cdk.json`. Bedrock token spend is untagged and not counted (open item) |
 | Python | 3.14, pinned in `.python-version` |
+| Database | PostgreSQL 17 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg17-trixie`, defined in `docker-compose.yml` |
 | `MODEL_SMALL` | `us.anthropic.claude-haiku-4-5-20251001-v1:0`. Probed 2026-10-12: works |
 | `MODEL_LARGE` | `us.anthropic.claude-sonnet-5-5` is configured but not available for this account (probed 2026-10-12, `AccessDeniedException`). Pick and probe a replacement before any code uses the large tier |
 | Guardrail | `ehr-rwe-eln-agent`: PII masked, clinical advice denied. Policy changes cut a new version via the config hash in `infra/stacks/agent_stack.py` |

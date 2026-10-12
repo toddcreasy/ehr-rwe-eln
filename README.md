@@ -113,12 +113,11 @@ uv run python scripts/db_check.py   # pgvector round trip, leaves nothing behind
 
 ### Run the API locally
 
-The deployed API talks to Aurora; locally it talks to Postgres in Docker. `.env` needs `DB_HOST=localhost` and `DB_PASSWORD=localdev` (see `.env.example`).
+The deployed API talks to Aurora; locally it talks to Postgres 17 with pgvector from `docker-compose.yml`. `.env` needs `DB_HOST=localhost` and a `DB_PASSWORD` of your choice (see `.env.example`).
 
 ```bash
-docker run -d --name ehr-rwe-eln-pg -e POSTGRES_PASSWORD=localdev -e POSTGRES_DB=ehr_rwe_eln \
-  -p 5432:5432 pgvector/pgvector:pg17   # first time; afterwards: docker start ehr-rwe-eln-pg
-uv run fastapi dev                      # http://localhost:8000/health and /health/db, reloads on save
+docker compose up -d --wait   # Postgres on 127.0.0.1:5432; data persists in the ehr-rwe-eln-db volume
+uv run fastapi dev            # http://localhost:8000/health and /health/db, reloads on save
 ```
 
 ### Run the agent locally

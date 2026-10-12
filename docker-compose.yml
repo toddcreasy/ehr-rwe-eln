@@ -1,0 +1,26 @@
+# Local stack. Today: the database only.
+#   docker compose up -d       start it (reads DB_PASSWORD, DB_PORT from .env)
+#   docker compose down        stop it; data stays in the ehr-rwe-eln-db volume
+#   docker compose down -v     stop it and delete the data
+services:
+  db:
+    # PostgreSQL 17 with pgvector 0.8.7. Pinned exactly; bump deliberately.
+    image: pgvector/pgvector:0.8.7-pg17-trixie
+    environment:
+      POSTGRES_DB: ehr_rwe_eln
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    # Localhost only: nothing off this machine can reach the database.
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ehr_rwe_eln"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  db:
+    name: ehr-rwe-eln-db
