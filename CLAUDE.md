@@ -328,12 +328,12 @@ Tools in this phase:
 - **Amazon Cognito**: managed sign-up, sign-in, and password reset. It issues JWTs, which are signed tokens the frontend attaches to each API call. Why: authentication is a solved problem you should never hand-build; the backend just verifies the token signature.
 - **AWS Amplify Hosting**: watches the repo, builds the frontend on every push, and serves it on a CDN with HTTPS. Why: frontend deployment becomes a side effect of `git push`.
 
-- [ ] `frontend/`: Next.js + Tailwind, one page that calls the backend and renders the result
-- [ ] Cognito user pool + app client, hosted UI or Amplify Auth components. Put it in `BackendStack`, not `FrontendStack`: the API verifies the tokens and the frontend needs the API's URL, so a downstream pool makes the two stacks import each other and CloudFormation rejects cyclic exports
-- [ ] Backend validates Cognito JWTs on protected routes
-- [ ] Amplify Hosting serving `frontend/`. CloudFormation cannot create a Git-backed Amplify app without a stored GitHub token (`AccessToken` or `OauthToken` is required), so either accept a long-lived credential in the account or create the app with no repository and have CI upload the build through the Amplify deployment API
-- [ ] Route the API through an Amplify rewrite (`/api/<*>` to the backend) so the browser stays same-origin. This removes the need for CORS entirely and breaks the other half of the stack cycle
-- [ ] A visible disclaimer/footer component slot (project-specific text comes later)
+- [x] `frontend/`: Next.js + Tailwind, one page that calls the backend and renders the result
+- [x] Cognito user pool + app client, hosted UI or Amplify Auth components. Put it in `BackendStack`, not `FrontendStack`: the API verifies the tokens and the frontend needs the API's URL, so a downstream pool makes the two stacks import each other and CloudFormation rejects cyclic exports
+- [x] Backend validates Cognito JWTs on protected routes
+- [x] Amplify Hosting serving `frontend/`. CloudFormation cannot create a Git-backed Amplify app without a stored GitHub token (`AccessToken` or `OauthToken` is required), so either accept a long-lived credential in the account or create the app with no repository and have CI upload the build through the Amplify deployment API
+- [x] Route the API through an Amplify rewrite (`/api/<*>` to the backend) so the browser stays same-origin. This removes the need for CORS entirely and breaks the other half of the stack cycle
+- [x] A visible disclaimer/footer component slot (project-specific text comes later)
 
 STOP gate 7: maintainer signs up, logs in on the deployed Amplify URL, and sees data returned from an authenticated backend call. Unauthenticated calls return 401 (show it).
 

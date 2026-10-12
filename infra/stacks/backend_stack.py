@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import aws_cdk as cdk
+from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_ecr_assets as ecr_assets
 from aws_cdk import aws_ecs as ecs
@@ -42,6 +43,23 @@ class BackendStack(cdk.Stack):
             log_group_name=f"/{project}/api",
             retention=logs.RetentionDays.ONE_MONTH,
             removal_policy=cdk.RemovalPolicy.DESTROY,
+        )
+
+        # Lives here, not in FrontendStack: the API verifies its tokens, and the frontend
+        # already depends on this stack for the API URL. Either other placement is a cycle.
+        user_pool = cognito.UserPool(
+            self,
+            "UserPool",
+            user_pool_name=project,
+            self_sign_up_enabled=True,
+            sign_in_aliases=cognito.SignInAliases(email=True),
+            auto_verify=cognito.AutoVerifiedAttrs(email=True),
+            account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+        )
+        # Public client: the browser cannot keep a secret. SRP keeps the password off the wire.
+        user_pool_client = user_pool.add_client(
+            "WebClient", auth_flows=cognito.AuthFlow(user_srp=True), generate_secret=False
         )
 
         task_sg = ec2.SecurityGroup(
@@ -119,7 +137,13 @@ class BackendStack(cdk.Stack):
                 environment=[
                     ecs.CfnExpressGatewayService.KeyValuePairProperty(
                         name="LOG_LEVEL", value="INFO"
-                    )
+                    ),
+                    ecs.CfnExpressGatewayService.KeyValuePairProperty(
+                        name="COGNITO_USER_POOL_ID", value=user_pool.user_pool_id
+                    ),
+                    ecs.CfnExpressGatewayService.KeyValuePairProperty(
+                        name="COGNITO_CLIENT_ID", value=user_pool_client.user_pool_client_id
+                    ),
                 ],
                 secrets=secrets,
                 aws_logs_configuration=ecs.CfnExpressGatewayService.ExpressGatewayServiceAwsLogsConfigurationProperty(
@@ -137,4 +161,6 @@ class BackendStack(cdk.Stack):
         self.api_endpoint = service.attr_endpoint
 
         cdk.CfnOutput(self, "ApiEndpoint", value=service.attr_endpoint)
+        cdk.CfnOutput(self, "UserPoolId", value=user_pool.user_pool_id)
+        cdk.CfnOutput(self, "UserPoolClientId", value=user_pool_client.user_pool_client_id)
         cdk.CfnOutput(self, "ApiLogGroup", value=log_group.log_group_name)

@@ -4,6 +4,7 @@ import aws_cdk as cdk
 from stacks.agent_stack import AgentStack
 from stacks.backend_stack import BackendStack
 from stacks.data_stack import DataStack
+from stacks.frontend_stack import FrontendStack
 from stacks.ops_stack import OpsStack
 
 app = cdk.App()
@@ -34,6 +35,13 @@ AgentStack(
     stack_name=f"{project}-AgentStack",
     api_endpoint=backend.api_endpoint,
     alerts_topic=ops.alerts_topic,
+    env=env,
+)
+FrontendStack(
+    app,
+    "FrontendStack",
+    stack_name=f"{project}-FrontendStack",
+    api_endpoint=backend.api_endpoint,
     env=env,
 )
 

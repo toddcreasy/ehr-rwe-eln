@@ -13,3 +13,5 @@ class Settings(BaseSettings):
     db_user: str = "postgres"
     db_password: SecretStr
     log_level: str = "INFO"
+    cognito_user_pool_id: str
+    cognito_client_id: str
