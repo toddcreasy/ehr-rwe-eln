@@ -98,5 +98,39 @@ class OpsStack(cdk.Stack):
             )
         )
 
+        # Pull request checks get their own role: it can only chain into CDK's read-only lookup
+        # role, so a workflow on an unmerged branch can diff but never deploy.
+        diff_role = iam.Role(
+            self,
+            "GitHubDiffRole",
+            role_name=f"{project}-github-diff",
+            max_session_duration=cdk.Duration.hours(1),
+            assumed_by=iam.WebIdentityPrincipal(
+                provider.open_id_connect_provider_arn,
+                conditions={
+                    "StringEquals": {
+                        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+                    },
+                    "StringLike": {
+                        "token.actions.githubusercontent.com:sub": [
+                            f"repo:{owner}/{repo}:pull_request",
+                            f"repo:{owner}@{ctx('github_owner_id')}/{repo}@{ctx('github_repo_id')}"
+                            ":pull_request",
+                        ]
+                    },
+                },
+            ),
+        )
+        diff_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["sts:AssumeRole", "sts:TagSession"],
+                resources=[
+                    f"arn:aws:iam::{self.account}:role/"
+                    f"cdk-hnb659fds-lookup-role-{self.account}-{self.region}"
+                ],
+            )
+        )
+
         cdk.CfnOutput(self, "AlertsTopicArn", value=self.alerts_topic.topic_arn)
         cdk.CfnOutput(self, "GitHubActionsRoleArn", value=github_role.role_arn)
+        cdk.CfnOutput(self, "GitHubDiffRoleArn", value=diff_role.role_arn)
