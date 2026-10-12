@@ -58,7 +58,7 @@ Build order: 1, then 7, then 4, then 2. Every module reads the OMOP tables modul
 
 ## Stack
 
-- **Python 3.12+** with uv, ruff, pytest, pre-commit
+- **Python 3.14+** with uv, ruff, pytest, pre-commit
 - **Data**: OMOP CDM v5.4 on DuckDB locally and Aurora Serverless v2 PostgreSQL with pgvector on AWS
 - **Analysis**: scikit-learn, statsmodels, lifelines
 - **Interoperability**: FHIR R4 via `fhir.resources`

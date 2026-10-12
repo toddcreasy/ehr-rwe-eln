@@ -51,7 +51,7 @@ class Exit(Strict):
     days: int | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
-    def days_match_strategy(self) -> "Exit":
+    def days_match_strategy(self) -> Exit:
         if (self.strategy == "fixed_days") != (self.days is not None):
             raise ValueError("days is required for fixed_days and not allowed otherwise")
         return self

@@ -182,7 +182,7 @@ Do not re-ask. Rationale and history in `docs/SETUP.md`.
 | Decision | Value |
 |---|---|
 | Monthly budget | $50, filtered to `project=ehr-rwe-eln`, alerts to the address in `infra/cdk.json`. Bedrock token spend is untagged and not counted (open item) |
-| Python | 3.12, pinned in `.python-version` |
+| Python | 3.14, pinned in `.python-version` |
 | `MODEL_SMALL` | `us.anthropic.claude-haiku-4-5-20251001-v1:0`. Probed 2026-10-12: works |
 | `MODEL_LARGE` | `us.anthropic.claude-sonnet-5-5` is configured but not available for this account (probed 2026-10-12, `AccessDeniedException`). Pick and probe a replacement before any code uses the large tier |
 | Guardrail | `ehr-rwe-eln-agent`: PII masked, clinical advice denied. Policy changes cut a new version via the config hash in `infra/stacks/agent_stack.py` |
