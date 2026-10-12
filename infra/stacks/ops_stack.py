@@ -72,9 +72,11 @@ class OpsStack(cdk.Stack):
                         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
                     },
                     "StringLike": {
+                        # main only: this role can deploy, so unmerged branches never get it.
                         "token.actions.githubusercontent.com:sub": [
-                            f"repo:{owner}/{repo}:*",
-                            f"repo:{owner}@{ctx('github_owner_id')}/{repo}@{ctx('github_repo_id')}:*",
+                            f"repo:{owner}/{repo}:ref:refs/heads/main",
+                            f"repo:{owner}@{ctx('github_owner_id')}/{repo}@{ctx('github_repo_id')}"
+                            ":ref:refs/heads/main",
                         ]
                     },
                 },

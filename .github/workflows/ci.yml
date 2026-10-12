@@ -9,7 +9,9 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  AWS_ROLE_ARN: arn:aws:iam::123456789012:role/ehr-rwe-eln-github-actions
+  # Pull-request-only role; it can reach nothing but CDK's read-only lookup role.
+  AWS_ROLE_ARN: arn:aws:iam::123456789012:role/ehr-rwe-eln-github-diff
+  CDK_LOOKUP_ROLE_ARN: arn:aws:iam::123456789012:role/cdk-hnb659fds-lookup-role-123456789012-us-east-1
   CDK_VERSION: 2.1145.0
 
 jobs:
@@ -38,6 +40,12 @@ jobs:
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.CDK_LOOKUP_ROLE_ARN }}
+          role-chaining: true
+          aws-region: ${{ env.AWS_REGION }}
       - run: uv sync --locked --group infra
+      # Template mode: a change set diff needs the deploy role, which this job cannot reach.
       - working-directory: infra
-        run: npx --yes aws-cdk@${{ env.CDK_VERSION }} diff --all
+        run: npx --yes aws-cdk@${{ env.CDK_VERSION }} diff --all --method=template
