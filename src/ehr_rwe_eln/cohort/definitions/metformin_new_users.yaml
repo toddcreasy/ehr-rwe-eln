@@ -1,0 +1,13 @@
+id: 2
+name: metformin_new_users
+description: >-
+  Adults starting metformin for the first time, with at least 365 days of records before the
+  first exposure. Followed to the end of their observation period.
+entry:
+  domain: drug
+  concept_ids: [1503297] # metformin (RxNorm ingredient), with every product containing it
+inclusion:
+  prior_observation_days: 365
+  min_age: 18
+exit:
+  strategy: end_of_observation

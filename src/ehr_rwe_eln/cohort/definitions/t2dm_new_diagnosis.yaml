@@ -1,0 +1,14 @@
+id: 1
+name: t2dm_new_diagnosis
+description: >-
+  Adults with a first recorded type 2 diabetes diagnosis on or after 2015-01-01, with at least
+  365 days of records before it. Followed to the end of their observation period.
+entry:
+  domain: condition
+  concept_ids: [201826] # Type 2 diabetes mellitus (SNOMED), with descendants
+inclusion:
+  prior_observation_days: 365
+  min_age: 18
+  index_from: 2015-01-01
+exit:
+  strategy: end_of_observation
