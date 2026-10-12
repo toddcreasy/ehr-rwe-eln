@@ -134,8 +134,10 @@ class AgentStack(cdk.Stack):
             )
         )
 
+        # Scoped by runtime name: the account hosts other projects' runtimes under the same prefix.
         runtime_log_groups = (
-            f"arn:aws:logs:{self.region}:{self.account}:log-group:/aws/bedrock-agentcore/runtimes/*"
+            f"arn:aws:logs:{self.region}:{self.account}:log-group:"
+            f"/aws/bedrock-agentcore/runtimes/{runtime_name}-*"
         )
         role.add_to_policy(
             iam.PolicyStatement(
@@ -388,11 +390,19 @@ class AgentStack(cdk.Stack):
                 },
             ),
         )
-        # Logs Insights queries cannot be scoped to a log group; AWS's documented policy uses *.
+        # DescribeLogGroups has no resource type; the queries scope to the groups they read.
+        eval_role.add_to_policy(
+            iam.PolicyStatement(actions=["logs:DescribeLogGroups"], resources=["*"])
+        )
         eval_role.add_to_policy(
             iam.PolicyStatement(
-                actions=["logs:DescribeLogGroups", "logs:StartQuery", "logs:GetQueryResults"],
-                resources=["*"],
+                actions=["logs:StartQuery", "logs:GetQueryResults"],
+                resources=[
+                    f"arn:aws:logs:{self.region}:{self.account}:log-group:aws/spans",
+                    f"arn:aws:logs:{self.region}:{self.account}:log-group:aws/spans:*",
+                    log_group_arn,
+                    f"{log_group_arn}:*",
+                ],
             )
         )
         eval_results_groups = (
