@@ -158,7 +158,7 @@ cdk deploy BackendStack                      # resume (backend_tasks=1 in cdk.js
 
 CDK app lives in `infra/`. Deployed stacks are named `ehr-rwe-eln-<Stack>`; other projects in the same account own the bare names. CDK commands take the short ID (`OpsStack`).
 
-Destroy in reverse dependency order, `OpsStack` last so budget alerts stay live until everything else is gone:
+Destroy in reverse dependency order (`cdk list --show-dependencies` prints the graph), `OpsStack` last so budget alerts stay live until everything else is gone. `AgentStack` and `FrontendStack` also attach policies to the CI role in `OpsStack` by name, so they must go first:
 
 ```bash
 cd infra
@@ -172,6 +172,8 @@ cdk destroy OpsStack
 Skip any stack not deployed yet (`cdk list` shows what the app defines). Run `cdk diff <Stack>` first to confirm what will go. Left in place on purpose: the `CDKToolkit` bootstrap stack and the GitHub OIDC provider, both shared with other projects in the account. CloudWatch Transaction Search, which agent tracing needs, is an account-wide setting owned by the glia-nav project; if that project disables it, traces from this one stop.
 
 `DataStack` leaves two things behind after destroy: a final Aurora snapshot (the cluster default) and the documents bucket (S3 default is retain). Delete both by hand once you are sure nothing in them is needed.
+
+`AgentStack` leaves the two log groups AgentCore creates itself: `/aws/bedrock-agentcore/runtimes/ehr_rwe_eln_hello-*` and `/aws/bedrock-agentcore/evaluations/results/ehr_rwe_eln_quality-*`. Their events expire after 30 days; delete the empty groups by hand. Container images stay in the shared `CDKToolkit` asset repository.
 
 ## Data and licensing
 
