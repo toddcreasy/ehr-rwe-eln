@@ -2,16 +2,12 @@ import datetime
 from dataclasses import replace
 
 import pytest
-from alembic import command
-from alembic.config import Config
 
 from ehr_rwe_eln.cohort.cdm import create_cdm
 from ehr_rwe_eln.dq.checks import load_checks, matches
 from ehr_rwe_eln.dq.run import run_checks, save_run
 from ehr_rwe_eln.dq.scoring import Result, evaluate, summarize
 from ehr_rwe_eln.dq.sql import check_sql
-
-from .conftest import TEST_DB
 
 CHECKS = {c.check_id: c for c in load_checks()}
 
@@ -98,18 +94,6 @@ def test_summary_keeps_dqds_pass_count_and_adds_a_strict_rate():
     assert overview["percentPassed"] == 75.0
     assert overview["countNotApplicable"] == 2
     assert overview["strictPercentPassed"] == 50.0
-
-
-@pytest.fixture(scope="session")
-def dq_schema(database, monkeypatch_session):
-    monkeypatch_session.setenv("DB_NAME", TEST_DB)
-    command.upgrade(Config("alembic.ini"), "head")
-
-
-@pytest.fixture(scope="session")
-def monkeypatch_session():
-    with pytest.MonkeyPatch.context() as mp:
-        yield mp
 
 
 def test_run_on_a_small_cdm(pg, dq_schema):

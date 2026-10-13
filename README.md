@@ -74,7 +74,7 @@ The platform was first built and deployed on AWS, then moved to this local stack
 |---|---|
 | Local platform: Postgres, API, agent, frontend in Compose | Done |
 | Module 1: cohort pipeline | Done |
-| Module 7: data quality | In progress: checks and scoring done; dashboard next |
+| Module 7: data quality | In progress: table and field checks, scoring, and dashboard done; concept checks and the R comparison next |
 | Modules 4, 2 | Not started |
 
 ## Setup
@@ -113,7 +113,7 @@ uv run fastapi dev                         # http://localhost:8000, reloads on s
 
 `uv run python scripts/db_check.py` runs a pgvector round trip against the database and leaves nothing behind.
 
-`uv run python scripts/run_dq.py` runs the 1,912 table and field checks from OHDSI DataQualityDashboard v2.9.0 against the CDM (about 20 s) and stores the run in the `dq` schema.
+`uv run python scripts/run_dq.py` runs the 1,912 table and field checks from OHDSI DataQualityDashboard v2.9.0 against the CDM (about 20 s) and stores the run in the `dq` schema. The dashboard at http://127.0.0.1:8000/dq/ shows the latest run.
 
 ```bash
 docker compose down      # stop; data stays in the ehr-rwe-eln-db volume

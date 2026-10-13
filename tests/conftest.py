@@ -1,4 +1,6 @@
 import pytest
+from alembic import command
+from alembic.config import Config
 
 from ehr_rwe_eln.config import DatabaseSettings
 
@@ -34,3 +36,11 @@ def pg(database):
 @pytest.fixture(scope="module")
 def pg_module(database):
     yield from rolled_back(database)
+
+
+@pytest.fixture(scope="session")
+def dq_schema(database):
+    """The test database migrated to head, so the dq schema exists. Alembic commits this."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("DB_NAME", TEST_DB)
+        command.upgrade(Config("alembic.ini"), "head")

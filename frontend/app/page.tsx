@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 function HealthPanel() {
@@ -30,6 +31,9 @@ export default function Home() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-12">
       <h1 className="text-2xl font-semibold">ehr-rwe-eln</h1>
+      <Link href="/dq/" className="w-fit underline">
+        Data quality dashboard
+      </Link>
       <HealthPanel />
     </main>
   );
