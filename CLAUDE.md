@@ -117,7 +117,7 @@ Local-first: everything runs on one machine in Docker Compose, with no cloud acc
 | Slot | Tool | Why |
 |---|---|---|
 | Models | Claude on the Anthropic API | Each user brings `ANTHROPIC_API_KEY`. Replaced Bedrock 2026-10-12. |
-| Agent framework | Strands Agents SDK, Anthropic provider | Already built on it; it handles the tool loop and structured output. |
+| Agent framework | Anthropic Python SDK, `client.beta.messages.tool_runner` | Runs the tool loop and returns typed output with no extra framework. Replaced Strands Agents, which pulled in boto3. |
 | Relational + vector DB | PostgreSQL 17 + pgvector, in Docker Compose | Runs anywhere Docker does. Concurrent writes and pgvector for RAG. Replaced DuckDB and Aurora Serverless v2. |
 | Secrets and settings | `.env` read by `pydantic-settings` | One gitignored file; `.env.example` lists every variable. |
 | Auth | None; every port binds to 127.0.0.1 | Single-user local app. Replaced Cognito. |

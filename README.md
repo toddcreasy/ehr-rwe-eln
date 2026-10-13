@@ -62,7 +62,7 @@ Build order: 1, then 7, then 4, then 2. Every module reads the OMOP tables modul
 - **Data**: OMOP CDM v5.4 on PostgreSQL 17 with pgvector, in Docker Compose; schema changes with Alembic
 - **Analysis**: scikit-learn, statsmodels, lifelines
 - **Interoperability**: FHIR R4 via `fhir.resources`
-- **LLM**: Claude on the Anthropic API, through Strands Agents
+- **LLM**: Claude on the Anthropic API, through the Anthropic Python SDK's tool runner
 - **App**: FastAPI serving the API under `/api` and a static Next.js build at `/`
 - **CI**: GitHub Actions, lint and tests against a Postgres service container
 

@@ -4,28 +4,30 @@ from ehr_rwe_eln.agents import app
 from ehr_rwe_eln.agents.hello import HelloReply, check_database_health
 
 
-class FakeAgent:
-    def __init__(self, result, messages):
-        self.result = result
-        self.messages = messages
-
-    def __call__(self, *args, **kwargs):
-        return self.result
+def response(content, parsed_output=None, **usage):
+    usage = {"input_tokens": 0, "output_tokens": 0} | usage
+    usage.setdefault("cache_read_input_tokens", None)
+    usage.setdefault("cache_creation_input_tokens", None)
+    return SimpleNamespace(
+        content=content, parsed_output=parsed_output, usage=SimpleNamespace(**usage)
+    )
 
 
 def test_invoke_returns_typed_reply_and_tools_called(monkeypatch):
-    result = SimpleNamespace(
-        structured_output=HelloReply(reply="It is noon.", utc_time="2026-10-12T12:00:00+00:00"),
-        metrics=SimpleNamespace(accumulated_usage={"inputTokens": 10}, cycle_count=2),
-    )
-    messages = [{"content": [{"toolUse": {"name": "current_time"}}, {"text": "..."}]}]
-    monkeypatch.setattr(app, "build_agent", lambda *args: FakeAgent(result, messages))
+    reply = HelloReply(reply="It is noon.", utc_time="2026-10-12T12:00:00+00:00")
+    responses = [
+        response([SimpleNamespace(type="tool_use", name="current_time")], input_tokens=10),
+        response([SimpleNamespace(type="text")], reply, input_tokens=5, cache_read_input_tokens=3),
+    ]
+    monkeypatch.setattr(app, "run_agent", lambda *args: responses)
 
-    response = app.invoke(app.AgentRequest(prompt="What time is it?"))
+    result = app.invoke(app.AgentRequest(prompt="What time is it?"))
 
-    assert response["output"]["reply"] == "It is noon."
-    assert response["usage"]["tools_called"] == ["current_time"]
-    assert response["usage"]["input_tokens"] == 10
+    assert result["output"]["reply"] == "It is noon."
+    assert result["usage"]["tools_called"] == ["current_time"]
+    assert result["usage"]["input_tokens"] == 15
+    assert result["usage"]["cache_read"] == 3
+    assert result["usage"]["model_calls"] == 2
 
 
 def test_database_health_tool(database, monkeypatch):

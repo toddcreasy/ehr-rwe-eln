@@ -1,10 +1,10 @@
 from datetime import UTC, datetime
 
+import anthropic
 import psycopg
+from anthropic import beta_tool
+from anthropic.types.beta.parsed_beta_message import ParsedBetaMessage
 from pydantic import BaseModel, Field
-from strands import Agent, tool
-from strands.models import CacheConfig
-from strands.models.anthropic import AnthropicModel
 
 from ehr_rwe_eln.config import DatabaseSettings
 
@@ -28,13 +28,13 @@ class HelloReply(BaseModel):
     )
 
 
-@tool
+@beta_tool
 def current_time() -> str:
     """Return the current UTC date and time in ISO 8601 format."""
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-@tool
+@beta_tool
 def check_database_health() -> str:
     """Check whether the project's Postgres database is reachable."""
     try:
@@ -45,15 +45,21 @@ def check_database_health() -> str:
     return "reachable"
 
 
-def build_agent(model_id: str, api_key: str | None = None) -> Agent:
-    model = AnthropicModel(
-        client_args={"api_key": api_key} if api_key else None,
-        model_id=model_id,
+def run_agent(
+    model_id: str, prompt: str, api_key: str | None = None
+) -> list[ParsedBetaMessage[HelloReply]]:
+    """Run the tool loop to a final typed reply. Returns every model response, in order."""
+    # api_key=None makes the SDK read ANTHROPIC_API_KEY from the environment.
+    client = anthropic.Anthropic(api_key=api_key)
+    runner = client.beta.messages.tool_runner(
+        model=model_id,
         max_tokens=1024,
+        system=SYSTEM_PROMPT,
+        tools=[current_time, check_database_health],
+        messages=[{"role": "user", "content": prompt}],
+        output_format=HelloReply,
         # Caches the system prompt and tool definitions once they exceed the model's minimum
         # cacheable length. This prompt is below it, so expect cache_read 0 here.
-        cache_config=CacheConfig(strategy="auto"),
+        cache_control={"type": "ephemeral"},
     )
-    tools = [current_time, check_database_health]
-    # callback_handler=None stops Strands printing the streamed reply to stdout.
-    return Agent(model=model, system_prompt=SYSTEM_PROMPT, tools=tools, callback_handler=None)
+    return list(runner)

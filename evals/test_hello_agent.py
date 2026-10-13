@@ -18,7 +18,6 @@ from ehr_rwe_eln.agents.app import AgentRequest, invoke
 pytestmark = pytest.mark.evals
 
 DB_TOOL = "check_database_health"
-STRUCTURED_OUTPUT_TOOL = "HelloReply"  # Strands' hidden tool for typed output; not a real call
 
 
 def run_agent(prompt: str) -> dict:
@@ -36,8 +35,7 @@ class CalledTool(Evaluator):
 @dataclass
 class NoToolCalls(Evaluator):
     def evaluate(self, ctx: EvaluatorContext) -> bool:
-        called = set(ctx.output["usage"]["tools_called"]) - {STRUCTURED_OUTPUT_TOOL}
-        return not called
+        return not ctx.output["usage"]["tools_called"]
 
 
 @dataclass
