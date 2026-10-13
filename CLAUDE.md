@@ -21,9 +21,9 @@ Real world evidence from synthetic EHR data, linked to lab notebook records. Fou
 
 Build order after the platform: 1, then 7, then 4, then 2. Each module depends on the OMOP tables from module 1.
 
-### TODO before module 7: run locally, no AWS
+### Done 2026-10-12: run locally, no AWS
 
-Goal: anyone can clone the repo, install it, and run every module on their own machine without an AWS account. This comes before module 7 and changes the platform the remaining modules build on.
+Goal: anyone can clone the repo, install it, and run every module on their own machine without an AWS account. It came before module 7 and changed the platform the remaining modules build on.
 
 Decided 2026-10-12: PostgreSQL with pgvector replaces both DuckDB and Aurora (17 at first, to match Aurora; 18 since 2026-10-13). The app will have concurrent writers and large vector search (RAG), which DuckDB's single-writer file does not fit. It runs locally from `docker-compose.yml`, and tests run against that database.
 

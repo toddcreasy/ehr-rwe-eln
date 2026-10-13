@@ -43,3 +43,10 @@ covariates:
     - {name: hba1c, measurements: {concept_ids: [3004410]}} # hemoglobin A1c, percent
 analysis:
   truncate_percentile: 1
+negative_controls:
+  # Neither drug plausibly causes these. Avoided: gum and dental conditions (amlodipine causes gum
+  # overgrowth), cough (ACE inhibitors), and injuries (any blood pressure drug can cause falls).
+  - {name: viral_sinusitis, conditions: {concept_ids: [40481087]}}
+  - {name: viral_pharyngitis, conditions: {concept_ids: [4112343]}}
+  - {name: cystitis, conditions: {concept_ids: [4144035]}} # acute infective cystitis
+  - {name: colon_polyp, conditions: {concept_ids: [4285898]}}

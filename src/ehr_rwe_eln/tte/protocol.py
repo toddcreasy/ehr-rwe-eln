@@ -107,6 +107,9 @@ class Protocol(Strict):
     causal_contrast: Literal["intention_to_treat"] = "intention_to_treat"
     covariates: Covariates = Covariates()
     analysis: Analysis = Analysis()
+    # Outcomes neither strategy can plausibly cause. Each runs through the same analysis; a hazard
+    # ratio away from 1 points to confounding the weights did not remove.
+    negative_controls: list[Outcome] = []
 
 
 def load_protocol(path: Path) -> Protocol:

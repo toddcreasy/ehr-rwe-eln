@@ -47,3 +47,9 @@ covariates:
     - {name: bmi, measurements: {concept_ids: [3038553]}}
 analysis:
   truncate_percentile: 1
+negative_controls:
+  # Neither drug plausibly causes these. Colon polyp, used for the lisinopril protocols, is left
+  # out: metformin is studied for preventing colorectal adenomas.
+  - {name: viral_sinusitis, conditions: {concept_ids: [40481087]}}
+  - {name: viral_pharyngitis, conditions: {concept_ids: [4112343]}}
+  - {name: cystitis, conditions: {concept_ids: [4144035]}} # acute infective cystitis

@@ -1,5 +1,6 @@
 """Run each target trial protocol: analysis table, propensity score, and survival estimates.
-Prints the attrition, arms, balance, positivity diagnostics, risks, and hazard ratio.
+Prints each bias report: attrition, arms, balance, positivity diagnostics, risks, hazard ratio,
+and negative controls.
 
 Usage: uv run python scripts/run_tte.py
 Module 4's larger population: DB_NAME=ehr_rwe_eln_tte uv run python scripts/run_tte.py
@@ -8,35 +9,28 @@ Demonstration on synthetic data only; no clinical claims.
 """
 
 from ehr_rwe_eln.config import DatabaseSettings
-from ehr_rwe_eln.tte.cohort import build_analysis_table
-from ehr_rwe_eln.tte.covariates import add_covariates
-from ehr_rwe_eln.tte.propensity import NotEstimable, fit_propensity
 from ehr_rwe_eln.tte.protocol import PROTOCOLS, load_protocol
-from ehr_rwe_eln.tte.survival import analyze
+from ehr_rwe_eln.tte.report import build_report
 
 
 def main() -> None:
     with DatabaseSettings().connect() as con:
         for path in sorted(PROTOCOLS.glob("*.yaml")):
             protocol = load_protocol(path)
-            attrition, table = build_analysis_table(con, protocol)
+            report = build_report(con, protocol)
             print(f"{protocol.id}: {protocol.name}")
-            for label, persons in attrition:
+            for label, persons in report.attrition:
                 print(f"  {persons:>8,}  {label}")
-            strategies = protocol.strategies
-            for arm, strategy in ((1, strategies.treatment), (0, strategies.comparator)):
-                rows = table[table.arm == arm]
+            for arm in report.arms:
                 print(
-                    f"  {strategy.name:<12} {len(rows):>6,} persons  {rows.event.sum():>5,} events"
-                    f"  median follow-up {rows.days.median():.0f} days"
+                    f"  {arm.name:<12} {arm.persons:>6,} persons  {arm.events:>5,} events"
+                    f"  median follow-up {arm.median_follow_up_days:.0f} days"
                 )
-            table = add_covariates(con, protocol, table)
-            try:
-                result = fit_propensity(table, protocol)
-            except NotEstimable as exc:
-                print(f"  NOT ESTIMABLE: {exc}\n")
+            if report.not_estimable:
+                print(f"  NOT ESTIMABLE: {report.not_estimable}\n")
                 continue
-            balance, d = result.balance, result.diagnostics
+            strategies = protocol.strategies
+            balance, d = report.propensity.balance, report.propensity.diagnostics
             print(
                 f"  largest |SMD| {balance.smd_before.abs().max():.2f} before weighting,"
                 f" {balance.smd_after.abs().max():.2f} after;"
@@ -50,7 +44,7 @@ def main() -> None:
             )
             for column, reason in d["covariates_dropped"].items():
                 print(f"  dropped {column}: {reason}")
-            survival = analyze(table, protocol)
+            survival = report.survival
             ci = survival.bootstrap
             print("  risk by day, crude / weighted; 95% bootstrap CI for the weighted difference:")
             crude = survival.crude.risks.set_index("day")
@@ -78,6 +72,19 @@ def main() -> None:
                 f"  bootstrap: {survival.replicates_used} replicates,"
                 f" {survival.replicates_not_estimable} not estimable"
             )
+            print("  negative controls, weighted hazard ratio (robust 95% CI), expected near 1:")
+            for nc in report.negative_controls:
+                head = f"    {nc.name:<20} {nc.persons:>6,} persons {nc.events:>5,} events  "
+                if nc.not_estimable:
+                    print(f"{head}not estimable: {nc.not_estimable}")
+                elif nc.hazard_ratio is None:
+                    print(f"{head}none, an arm has no events")
+                else:
+                    flag = "  EXCLUDES 1" if nc.excludes_null else ""
+                    print(
+                        f"{head}{nc.hazard_ratio:.2f}"
+                        f" ({nc.robust_ci[0]:.2f} to {nc.robust_ci[1]:.2f}){flag}"
+                    )
             print()
         con.rollback()
 
