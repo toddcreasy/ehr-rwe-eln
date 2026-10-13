@@ -76,10 +76,28 @@ class Column(Strict):
 
 class Release(Strict):
     # bayes_net measures each column with its parents; independent measures each column alone,
-    # a baseline that keeps every marginal and loses every relationship between columns.
-    method: Literal["bayes_net", "independent"]
-    # The total privacy budget for this release, split evenly across its histograms.
+    # a baseline that keeps every marginal and loses every relationship between columns. vae
+    # trains a variational autoencoder with DP-SGD.
+    method: Literal["bayes_net", "independent", "vae"]
+    # The total privacy budget for this release: split evenly across the histograms, or for
+    # vae, 1% to the noisy row count and the rest to training.
     epsilon: float = Field(gt=0)
+
+
+class VaeSettings(Strict):
+    """Training settings for vae releases. Fixed in the spec, not tuned against the source:
+    every training run on private data spends privacy, tuning runs included."""
+
+    hidden: int = Field(default=128, gt=0)
+    latent: int = Field(default=16, gt=0)
+    epochs: int = Field(default=20, gt=0)
+    batch_size: int = Field(default=512, gt=0)
+    learning_rate: float = Field(default=1e-3, gt=0)
+    # DP-SGD clips each person's gradient to this length before adding noise.
+    max_grad_norm: float = Field(default=1.0, gt=0)
+    # DP-SGD's guarantee is (epsilon, delta): delta is the small chance it does not hold.
+    # Keep it well below one over the number of people.
+    delta: float = Field(default=1e-5, gt=0, lt=1)
 
 
 class Spec(Strict):
@@ -90,6 +108,7 @@ class Spec(Strict):
     # subtract it. Leave it null for real data, and the noise comes from a secure generator.
     seed: int | None = None
     releases: list[Release] = Field(min_length=1)
+    vae: VaeSettings = VaeSettings()
     columns: list[Column] = Field(min_length=1)
 
     @model_validator(mode="after")

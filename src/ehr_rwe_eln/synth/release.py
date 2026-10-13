@@ -1,5 +1,8 @@
 """Store a synthetic release with its provenance: what made it, from what, at what privacy cost.
 
+The privacy spend (the measurements column) is one record per mechanism that touched the source:
+a histogram's columns, cells, and epsilon, or DP-SGD's epsilon, delta, noise, and steps.
+
 source_rows is the exact source count. It is kept for the release record and its reviewers; it
 is not part of the synthetic data, whose row count is noisy.
 """
@@ -14,7 +17,6 @@ import pandas as pd
 import psycopg
 from psycopg.types.json import Jsonb
 
-from ehr_rwe_eln.synth.bayes_net import Measurement, plan
 from ehr_rwe_eln.synth.spec import Release, Spec
 
 
@@ -40,7 +42,7 @@ def save_release(
     con: psycopg.Connection,
     spec: Spec,
     release: Release,
-    measurements: list[Measurement],
+    spend: list[dict],
     synthetic: pd.DataFrame,
     source_rows: int,
 ) -> int:
@@ -56,7 +58,7 @@ def save_release(
             release.epsilon,
             spec.seed,
             Jsonb(spec.model_dump(mode="json")),
-            Jsonb(plan(measurements)),
+            Jsonb(spend),
             source_rows,
             len(synthetic),
             code_version(),

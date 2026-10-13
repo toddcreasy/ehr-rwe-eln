@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from ehr_rwe_eln.cohort.cdm import create_cdm
-from ehr_rwe_eln.synth.bayes_net import decode, encode, synthesize
+from ehr_rwe_eln.synth.bayes_net import decode, encode, plan, synthesize
 from ehr_rwe_eln.synth.release import load_release, save_release
 from ehr_rwe_eln.synth.source import build_source
 from ehr_rwe_eln.synth.spec import SPECS, Column, Release, Spec, load_spec
@@ -35,7 +35,7 @@ def spec(*columns, seed=0, releases=None) -> Spec:
 def test_the_shipped_spec_loads():
     s = load_spec(SPECS / "person_summary.yaml")
     assert len(s.columns) == 21
-    assert {r.method for r in s.releases} == {"bayes_net", "independent"}
+    assert {r.method for r in s.releases} == {"bayes_net", "independent", "vae"}
 
 
 @pytest.mark.parametrize(
@@ -201,7 +201,7 @@ def test_release_round_trips_with_provenance(con):
     s = spec(AGE, FLAG, DRUG, SBP)
     table = toy(500).assign(systolic_bp=np.where(np.arange(500) % 2, 120.0, np.nan))
     out, measurements = synthesize(table, s, s.releases[0])
-    release_id = save_release(con, s, s.releases[0], measurements, out, len(table))
+    release_id = save_release(con, s, s.releases[0], plan(measurements), out, len(table))
     record = con.execute(
         "SELECT spec_name, method, epsilon, seed, source_rows, rows, jsonb_array_length("
         "measurements), spec ->> 'name' FROM synth.release WHERE release_id = %s",

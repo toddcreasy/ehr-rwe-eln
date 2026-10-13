@@ -10,7 +10,7 @@ import argparse
 from pathlib import Path
 
 from ehr_rwe_eln.config import DatabaseSettings
-from ehr_rwe_eln.synth.bayes_net import synthesize
+from ehr_rwe_eln.synth import bayes_net, vae
 from ehr_rwe_eln.synth.release import save_release
 from ehr_rwe_eln.synth.source import build_source
 from ehr_rwe_eln.synth.spec import SPECS, load_spec
@@ -26,13 +26,17 @@ def main() -> None:
         source = build_source(con, spec)
         print(f"{spec.name}: {len(source):,} source rows, {len(spec.columns)} columns")
         for release in spec.releases:
-            synthetic, measurements = synthesize(source, spec, release)
-            release_id = save_release(con, spec, release, measurements, synthetic, len(source))
+            if release.method == "vae":
+                synthetic, spend = vae.synthesize(source, spec, release)
+            else:
+                synthetic, measurements = bayes_net.synthesize(source, spec, release)
+                spend = bayes_net.plan(measurements)
+            release_id = save_release(con, spec, release, spend, synthetic, len(source))
             con.commit()
+            spent = sum(s["epsilon"] for s in spend)
             print(
-                f"  release {release_id}: {release.method}, epsilon {release.epsilon:g},"
-                f" {len(synthetic):,} rows, {len(measurements)} histograms of"
-                f" up to {max(m.cells for m in measurements)} cells"
+                f"  release {release_id}: {release.method}, epsilon {release.epsilon:g}"
+                f" (spent {spent:.3f}), {len(synthetic):,} rows"
             )
 
 
