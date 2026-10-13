@@ -1,4 +1,4 @@
-"""Compare row counts: our ETL (data/omop.duckdb) against OHDSI ETL-Synthea (local Postgres).
+"""Compare row counts: our ETL (the Compose Postgres) against OHDSI ETL-Synthea (local Postgres).
 
 Usage: uv run python scripts/compare_etl_synthea.py
 
@@ -8,8 +8,9 @@ whose code has no standard concept, so "ours, mapped" leaves out concept_id 0 to
 
 from pathlib import Path
 
-import duckdb
 import psycopg
+
+from ehr_rwe_eln.config import DatabaseSettings
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 
@@ -29,7 +30,7 @@ TABLES = {
 
 
 def main() -> None:
-    ours = duckdb.connect(str(DATA / "omop.duckdb"), read_only=True)
+    ours = DatabaseSettings().connect()
     password = (DATA / "etl-synthea" / "pgpass").read_text().strip()
     ref = psycopg.connect(
         host="127.0.0.1", port=5433, dbname="synthea", user="postgres", password=password

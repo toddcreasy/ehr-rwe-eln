@@ -28,8 +28,8 @@ Goal: anyone can clone the repo, install it, and run every module on their own m
 Decided 2026-10-12: PostgreSQL 17 with pgvector replaces both DuckDB and Aurora. The app will have concurrent writers and large vector search (RAG), which DuckDB's single-writer file does not fit. It runs locally from `docker-compose.yml`, and tests run against that database.
 
 - [x] `docker-compose.yml` with the database service
-- [ ] Port module 1 from DuckDB to Postgres (`cohort/cdm.py`, `etl.py`, `spec.py`, the build scripts, the tests). The 1,325,353-row reconciliation and the counts in `docs/etl_synthea_comparison.md` must reproduce
-- [ ] CI runs the tests against a Postgres service container
+- [x] Port module 1 from DuckDB to Postgres. The 1,325,353-row reconciliation, the counts in `docs/etl_synthea_comparison.md`, and both cohorts reproduce exactly
+- [x] CI runs the tests against a Postgres service container
 - [ ] Plan the move: for each AWS row in "Stack decisions", pick a local replacement or drop it. Agree the plan with the maintainer before changing code
 - [ ] Rewrite "Stack decisions", "Conventions", and the README install steps for the local stack
 - [x] Tear down the deployed AWS stacks (2026-10-12, README runbook). `deploy.yml` and the `cdk-diff` CI job are gone; `lint-test` is the only required check

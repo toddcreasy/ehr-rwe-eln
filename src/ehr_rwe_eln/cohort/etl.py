@@ -1,4 +1,4 @@
-"""Synthea CSV to OMOP CDM v5.4 in DuckDB.
+"""Synthea CSV to OMOP CDM v5.4 in PostgreSQL.
 
 Follows OHDSI ETL-Synthea (the correctness reference) for ids, type concepts, and observation
 periods, with three deliberate differences:
@@ -10,9 +10,11 @@ periods, with three deliberate differences:
 Not converted yet: allergies, care plans, imaging studies, supplies, and the billing files.
 """
 
+import csv
 from pathlib import Path
 
-import duckdb
+import psycopg
+from psycopg import sql
 
 SOURCES = (
     "patients",
@@ -103,7 +105,8 @@ SELECT coalesce(m.domain_id, e.default_domain) AS domain_id,
        CAST(e.start_ts AS TIMESTAMP) AS start_datetime,
        CAST(coalesce(e.end_ts, e.start_ts) AS TIMESTAMP) AS end_datetime,
        m.concept_id, m.source_concept_id, e.code AS source_value,
-       TRY_CAST(e.value_text AS DOUBLE) AS value_as_number,
+       CASE WHEN pg_input_is_valid(e.value_text, 'numeric') THEN e.value_text::numeric END
+           AS value_as_number,
        e.value_text, e.units, coalesce(u.concept_id, 0) AS unit_concept_id,
        e.type_concept_id
 FROM events e
@@ -114,7 +117,8 @@ LEFT JOIN cdm.concept u
   ON u.vocabulary_id = 'UCUM' AND u.concept_code = e.units AND u.standard_concept = 'S'
 """
 
-# Columns beyond the shared ones, per target table.
+# Columns beyond the shared ones, per target table. Text is cut to the CDM column width:
+# some Synthea survey answers run past 100 characters.
 EXTRA_COLUMNS = {
     "condition_occurrence": {
         "condition_end_date": "CAST(end_datetime AS DATE)",
@@ -128,14 +132,14 @@ EXTRA_COLUMNS = {
         "value_as_number": "value_as_number",
         "unit_concept_id": "unit_concept_id",
         "unit_source_value": "units",
-        "value_source_value": "value_text",
+        "value_source_value": "left(value_text, 50)",
     },
     "observation": {
         "value_as_number": "value_as_number",
-        "value_as_string": "CASE WHEN value_as_number IS NULL THEN value_text END",
+        "value_as_string": "CASE WHEN value_as_number IS NULL THEN left(value_text, 60) END",
         "unit_concept_id": "unit_concept_id",
         "unit_source_value": "units",
-        "value_source_value": "value_text",
+        "value_source_value": "left(value_text, 50)",
     },
     "device_exposure": {
         "device_exposure_end_date": "CAST(end_datetime AS DATE)",
@@ -144,17 +148,25 @@ EXTRA_COLUMNS = {
 }
 
 
-def _quote(path: Path) -> str:
-    return "'" + str(path).replace("'", "''") + "'"
-
-
-def run_etl(con: duckdb.DuckDBPyConnection, synthea_csv: Path) -> dict:
+def run_etl(con: psycopg.Connection, synthea_csv: Path) -> dict:
     """Convert one Synthea CSV export into the empty CDM tables. Returns row counts."""
+    # Every column loads as text, named after Synthea's header in lower case (Postgres folds
+    # unquoted names, so the SQL below can keep Synthea's spelling). Empty fields load as NULL.
     for name in SOURCES:
-        con.execute(
-            f"CREATE OR REPLACE TEMP VIEW src_{name} AS "
-            f"SELECT * FROM read_csv({_quote(synthea_csv / f'{name}.csv')}, all_varchar = true)"
-        )
+        path = synthea_csv / f"{name}.csv"
+        with path.open(newline="") as f:
+            header = [column.lower() for column in next(csv.reader(f))]
+        table = sql.Identifier(f"src_{name}")
+        columns = sql.SQL(", ").join(sql.SQL("{} text").format(sql.Identifier(c)) for c in header)
+        con.execute(sql.SQL("CREATE TEMP TABLE {} ({})").format(table, columns))
+        with (
+            path.open("rb") as f,
+            con.cursor().copy(
+                sql.SQL("COPY {} FROM STDIN (FORMAT csv, HEADER true)").format(table)
+            ) as copy,
+        ):
+            while data := f.read(1 << 20):
+                copy.write(data)
 
     con.execute(
         "CREATE TEMP TABLE person_map AS "
@@ -168,7 +180,8 @@ def run_etl(con: duckdb.DuckDBPyConnection, synthea_csv: Path) -> dict:
             ethnicity_source_concept_id)
         SELECT m.person_id,
                CASE p.GENDER WHEN 'M' THEN 8507 WHEN 'F' THEN 8532 ELSE 0 END,
-               year(b), month(b), day(b), CAST(b AS TIMESTAMP),
+               extract(year FROM b), extract(month FROM b), extract(day FROM b),
+               CAST(b AS TIMESTAMP),
                CASE p.RACE WHEN 'white' THEN 8527 WHEN 'black' THEN 8516 WHEN 'asian' THEN 8515
                    WHEN 'hawaiian' THEN 8557 WHEN 'native' THEN 8657 ELSE 0 END,
                CASE p.ETHNICITY WHEN 'hispanic' THEN 38003563 WHEN 'nonhispanic' THEN 38003564
@@ -238,7 +251,7 @@ def run_etl(con: duckdb.DuckDBPyConnection, synthea_csv: Path) -> dict:
         }
         con.execute(
             f"INSERT INTO cdm.{table} ({', '.join(columns)}) "
-            f"SELECT {', '.join(columns.values())} FROM mapped WHERE domain_id = ?",
+            f"SELECT {', '.join(columns.values())} FROM mapped WHERE domain_id = %s",
             [domain],
         )
 
@@ -246,8 +259,7 @@ def run_etl(con: duckdb.DuckDBPyConnection, synthea_csv: Path) -> dict:
     tables += [table for table, *_ in DOMAIN_TABLES.values()]
     counts = {t: con.execute(f"SELECT count(*) FROM cdm.{t}").fetchone()[0] for t in tables}
     # Mapped to a domain with no target table here (Note, Specimen, ...): counted, not loaded.
-    placeholders = ", ".join("?" * len(DOMAIN_TABLES))
     counts["unrouted"] = con.execute(
-        f"SELECT count(*) FROM mapped WHERE domain_id NOT IN ({placeholders})", list(DOMAIN_TABLES)
+        "SELECT count(*) FROM mapped WHERE domain_id <> ALL(%s)", [list(DOMAIN_TABLES)]
     ).fetchone()[0]
     return counts

@@ -1,8 +1,8 @@
--- OMOP CDM v5.4 tables for DuckDB.
+-- OMOP CDM v5.4 tables for PostgreSQL.
 -- Copied unchanged from OHDSI/CommonDataModel tag v5.4.3,
--- inst/ddl/5.4/duckdb/OMOPCDM_duckdb_5.4_ddl.sql. Apache License 2.0.
+-- inst/ddl/5.4/postgresql/OMOPCDM_postgresql_5.4_ddl.sql. Apache License 2.0.
 -- @cdmDatabaseSchema is replaced with the target schema at load time.
---duckdb CDM DDL Specification for OMOP Common Data Model 5.4
+--postgresql CDM DDL Specification for OMOP Common Data Model 5.4
 CREATE TABLE @cdmDatabaseSchema.person (
 			person_id integer NOT NULL,
 			gender_concept_id integer NOT NULL,

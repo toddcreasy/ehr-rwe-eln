@@ -1,7 +1,7 @@
 import csv
 import datetime
+from decimal import Decimal
 
-import duckdb
 import pytest
 
 from ehr_rwe_eln.cohort.cdm import create_cdm
@@ -149,24 +149,24 @@ MAPS_TO = [(910003, 910001)] + [(c, c) for c, *_, s in CONCEPTS if s == "S"]
 
 
 @pytest.fixture(scope="module")
-def etl(tmp_path_factory):
+def etl(pg_module, tmp_path_factory):
     folder = tmp_path_factory.mktemp("synthea")
     for name, rows in SYNTHEA.items():
         with (folder / f"{name}.csv").open("w", newline="") as f:
             writer = csv.DictWriter(f, HEADERS[name])
             writer.writeheader()
             writer.writerows(rows)
-    con = duckdb.connect()
+    con = pg_module
     create_cdm(con)
     for cid, vocab, code, domain, standard in CONCEPTS:
         con.execute(
-            "INSERT INTO cdm.concept VALUES (?, ?, ?, ?, 'x', ?, ?, DATE '1970-01-01', "
+            "INSERT INTO cdm.concept VALUES (%s, %s, %s, %s, 'x', %s, %s, DATE '1970-01-01', "
             "DATE '2099-12-31', NULL)",
             [cid, code, domain, vocab, standard, code],
         )
     for source, target in MAPS_TO:
         con.execute(
-            "INSERT INTO cdm.concept_relationship VALUES (?, ?, 'Maps to', DATE '1970-01-01', "
+            "INSERT INTO cdm.concept_relationship VALUES (%s, %s, 'Maps to', DATE '1970-01-01', "
             "DATE '2099-12-31', NULL)",
             [source, target],
         )
@@ -237,7 +237,7 @@ def test_unmapped_codes_are_kept_with_concept_zero(con):
 def test_values_and_units(con):
     assert one(
         con, "SELECT value_as_number, unit_concept_id, unit_source_value FROM cdm.measurement"
-    ) == [(0.0045, 910008, "mg/dL")]
+    ) == [(Decimal("0.0045"), 910008, "mg/dL")]
     assert one(
         con, "SELECT value_as_string FROM cdm.observation WHERE observation_source_value = 'L-TEXT'"
     ) == [("Never smoked",)]

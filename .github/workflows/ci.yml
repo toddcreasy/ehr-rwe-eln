@@ -10,6 +10,22 @@ permissions:
 jobs:
   lint-test:
     runs-on: ubuntu-latest
+    # Same image as docker-compose.yml. The password exists only inside this job.
+    services:
+      db:
+        image: pgvector/pgvector:0.8.7-pg17-trixie
+        env:
+          POSTGRES_DB: ehr_rwe_eln
+          POSTGRES_PASSWORD: ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ehr_rwe_eln"
+          --health-interval 2s
+          --health-retries 30
+    env:
+      DB_HOST: localhost
+      DB_PASSWORD: ci-only
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.0 # astral publishes no moving major tag

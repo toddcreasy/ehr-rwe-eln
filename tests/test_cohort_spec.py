@@ -1,6 +1,5 @@
 import datetime
 
-import duckdb
 import pydantic
 import pytest
 import yaml
@@ -42,11 +41,11 @@ DEFINITION = {
 
 
 @pytest.fixture
-def con():
-    con = duckdb.connect()
+def con(pg):
+    con = pg
     create_cdm(con)
     con.execute(
-        "INSERT INTO cdm.concept_ancestor VALUES (?, ?, 0, 0), (?, ?, 1, 1)",
+        "INSERT INTO cdm.concept_ancestor VALUES (%s, %s, 0, 0), (%s, %s, 1, 1)",
         [PARENT, PARENT, PARENT, CHILD],
     )
     event_id = 0
@@ -54,11 +53,11 @@ def con():
         con.execute(
             "INSERT INTO cdm.person (person_id, gender_concept_id, year_of_birth, "
             "month_of_birth, day_of_birth, race_concept_id, ethnicity_concept_id) "
-            "VALUES (?, 0, ?, 1, 1, 0, 0)",
+            "VALUES (%s, 0, %s, 1, 1, 0, 0)",
             [person_id, born],
         )
         con.execute(
-            "INSERT INTO cdm.observation_period VALUES (?, ?, ?, ?, 0)",
+            "INSERT INTO cdm.observation_period VALUES (%s, %s, %s, %s, 0)",
             [person_id, person_id, start, end],
         )
         for concept, day in events:
@@ -66,7 +65,7 @@ def con():
             con.execute(
                 "INSERT INTO cdm.condition_occurrence (condition_occurrence_id, person_id, "
                 "condition_concept_id, condition_start_date, condition_type_concept_id) "
-                "VALUES (?, ?, ?, ?, 0)",
+                "VALUES (%s, %s, %s, %s, 0)",
                 [event_id, person_id, concept, day],
             )
     return con

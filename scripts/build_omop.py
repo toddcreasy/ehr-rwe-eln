@@ -1,27 +1,29 @@
-"""Build data/omop.duckdb: OMOP CDM v5.4 tables, Athena vocabularies, then the Synthea ETL.
+"""Build the OMOP CDM v5.4 schema in the Compose Postgres: tables, Athena vocabularies, then the
+Synthea ETL.
 
 Usage: uv run python scripts/build_omop.py
 
 Needs the Athena downloads in data/vocab/ (clinical vocabularies) and data/vocab_extra/
-(Gender, Race, Ethnicity), and scripts/generate_synthea.py output.
+(Gender, Race, Ethnicity), scripts/generate_synthea.py output, and the database running
+(docker compose up -d --wait).
 """
 
 import time
 from pathlib import Path
 
-import duckdb
-
 from ehr_rwe_eln.cohort.cdm import create_cdm, load_vocabulary
 from ehr_rwe_eln.cohort.etl import run_etl
+from ehr_rwe_eln.config import DatabaseSettings
 
 DATA = Path(__file__).resolve().parent.parent / "data"
-DATABASE = DATA / "omop.duckdb"
 
 
 def main() -> None:
-    if DATABASE.exists():
-        raise SystemExit(f"{DATABASE} already exists; move it to the trash and rerun")
-    con = duckdb.connect(str(DATABASE))
+    con = DatabaseSettings().connect()
+    if con.execute(
+        "SELECT 1 FROM information_schema.schemata WHERE schema_name = 'cdm'"
+    ).fetchone():
+        raise SystemExit("schema cdm already exists; drop it (DROP SCHEMA cdm CASCADE) and rerun")
     create_cdm(con)
 
     start = time.time()
@@ -35,6 +37,7 @@ def main() -> None:
     print(f"ETL done in {time.time() - start:.0f}s")
     for table, n in counts.items():
         print(f"  {table:<22}{n:>14,}")
+    con.commit()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import datetime
+from decimal import Decimal
 
-import duckdb
 import pytest
 
 from ehr_rwe_eln.cohort.cdm import VOCABULARY_TABLES, create_cdm, load_vocabulary
@@ -28,10 +28,9 @@ FAKE_ATHENA = {
 
 
 @pytest.fixture
-def con():
-    con = duckdb.connect()
-    create_cdm(con)
-    return con
+def con(pg):
+    create_cdm(pg)
+    return pg
 
 
 def test_create_cdm_builds_all_v54_tables(con):
@@ -56,8 +55,12 @@ def test_numeric_columns_keep_small_and_large_values(con):
         "measurement_date, measurement_type_concept_id, value_as_number) "
         "VALUES (1, 1, 1, DATE '2020-01-01', 1, 0.0045)"
     )
-    assert con.execute("SELECT numerator_value FROM cdm.drug_strength").fetchone()[0] == 2.34e15
-    assert con.execute("SELECT value_as_number FROM cdm.measurement").fetchone()[0] == 0.0045
+    assert con.execute("SELECT numerator_value FROM cdm.drug_strength").fetchone()[0] == Decimal(
+        2340000000000000
+    )
+    assert con.execute("SELECT value_as_number FROM cdm.measurement").fetchone()[0] == Decimal(
+        "0.0045"
+    )
 
 
 def test_load_vocabulary_parses_athena_format(con, tmp_path):
@@ -68,7 +71,7 @@ def test_load_vocabulary_parses_athena_format(con, tmp_path):
                 row[0]
                 for row in con.execute(
                     "SELECT column_name FROM information_schema.columns "
-                    "WHERE table_schema = 'cdm' AND table_name = ? ORDER BY ordinal_position",
+                    "WHERE table_schema = 'cdm' AND table_name = %s ORDER BY ordinal_position",
                     [table],
                 ).fetchall()
             ]
@@ -105,7 +108,7 @@ def test_later_downloads_only_add_missing_rows(con, tmp_path):
                 row[0]
                 for row in con.execute(
                     "SELECT column_name FROM information_schema.columns "
-                    "WHERE table_schema = 'cdm' AND table_name = ? ORDER BY ordinal_position",
+                    "WHERE table_schema = 'cdm' AND table_name = %s ORDER BY ordinal_position",
                     [table],
                 ).fetchall()
             ]

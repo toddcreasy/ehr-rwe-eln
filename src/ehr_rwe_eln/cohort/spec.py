@@ -9,7 +9,7 @@ import datetime
 from pathlib import Path
 from typing import Literal
 
-import duckdb
+import psycopg
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -70,24 +70,23 @@ def load_definition(path: Path) -> CohortDefinition:
     return CohortDefinition.model_validate(yaml.safe_load(path.read_text()))
 
 
-def build_cohort(
-    con: duckdb.DuckDBPyConnection, definition: CohortDefinition
-) -> list[tuple[str, int]]:
+def build_cohort(con: psycopg.Connection, definition: CohortDefinition) -> list[tuple[str, int]]:
     """Replace this definition's rows in cdm.cohort. Returns (rule, persons remaining) pairs."""
     table, concept_column, date_column = DOMAINS[definition.entry.domain]
     ids = definition.entry.concept_ids
-    concepts = "SELECT unnest(?::INTEGER[]) AS concept_id"
+    concepts = "SELECT unnest(%s::integer[]) AS concept_id"
     if definition.entry.include_descendants:
         concepts += (
             " UNION SELECT descendant_concept_id FROM cdm.concept_ancestor "
-            "WHERE ancestor_concept_id IN (SELECT unnest(?::INTEGER[]))"
+            "WHERE ancestor_concept_id = ANY(%s::integer[])"
         )
     params = [ids, ids] if definition.entry.include_descendants else [ids]
 
     # First event per person, over all of their history, is the index date.
+    con.execute("DROP TABLE IF EXISTS candidates")
     con.execute(
         f"""
-        CREATE OR REPLACE TEMP TABLE candidates AS
+        CREATE TEMP TABLE candidates AS
         WITH concepts AS ({concepts}),
         entry AS (
             SELECT person_id, min({date_column}) AS index_date FROM cdm.{table}
@@ -95,8 +94,8 @@ def build_cohort(
             GROUP BY person_id
         )
         SELECT e.person_id, e.index_date,
-               datesub('year', make_date(p.year_of_birth, coalesce(p.month_of_birth, 1),
-                                         coalesce(p.day_of_birth, 1)), e.index_date) AS age,
+               extract(year FROM age(e.index_date, make_date(p.year_of_birth,
+                   coalesce(p.month_of_birth, 1), coalesce(p.day_of_birth, 1))))::integer AS age,
                op.observation_period_start_date AS op_start,
                op.observation_period_end_date AS op_end
         FROM entry e
@@ -115,18 +114,20 @@ def build_cohort(
         rules.append(
             (
                 f"at least {rule.prior_observation_days} days of prior observation",
-                "index_date - op_start >= ?",
+                "index_date - op_start >= %s",
                 [rule.prior_observation_days],
             )
         )
     if rule.min_age is not None:
-        rules.append((f"age {rule.min_age} or older at index", "age >= ?", [rule.min_age]))
+        rules.append((f"age {rule.min_age} or older at index", "age >= %s", [rule.min_age]))
     if rule.max_age is not None:
-        rules.append((f"age {rule.max_age} or younger at index", "age <= ?", [rule.max_age]))
+        rules.append((f"age {rule.max_age} or younger at index", "age <= %s", [rule.max_age]))
     if rule.index_from is not None:
-        rules.append((f"index on or after {rule.index_from}", "index_date >= ?", [rule.index_from]))
+        rules.append(
+            (f"index on or after {rule.index_from}", "index_date >= %s", [rule.index_from])
+        )
     if rule.index_to is not None:
-        rules.append((f"index on or before {rule.index_to}", "index_date <= ?", [rule.index_to]))
+        rules.append((f"index on or before {rule.index_to}", "index_date <= %s", [rule.index_to]))
 
     attrition = [("first event in concept set", _count(con, "TRUE", []))]
     where, where_params = "TRUE", []
@@ -138,14 +139,14 @@ def build_cohort(
     exit_date = "op_end"
     if definition.exit.strategy == "fixed_days":
         exit_date = f"least(index_date + {definition.exit.days}, op_end)"
-    con.execute("DELETE FROM cdm.cohort WHERE cohort_definition_id = ?", [definition.id])
+    con.execute("DELETE FROM cdm.cohort WHERE cohort_definition_id = %s", [definition.id])
     con.execute(
-        f"INSERT INTO cdm.cohort SELECT ?, person_id, index_date, {exit_date} "
+        f"INSERT INTO cdm.cohort SELECT %s, person_id, index_date, {exit_date} "
         f"FROM candidates WHERE {where}",
         [definition.id, *where_params],
     )
     return attrition
 
 
-def _count(con: duckdb.DuckDBPyConnection, where: str, params: list) -> int:
+def _count(con: psycopg.Connection, where: str, params: list) -> int:
     return con.execute(f"SELECT count(*) FROM candidates WHERE {where}", params).fetchone()[0]
