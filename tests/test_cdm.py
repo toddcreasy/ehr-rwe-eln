@@ -1,9 +1,10 @@
 import datetime
 from decimal import Decimal
 
+import psycopg
 import pytest
 
-from ehr_rwe_eln.cohort.cdm import VOCABULARY_TABLES, create_cdm, load_vocabulary
+from ehr_rwe_eln.cohort.cdm import VOCABULARY_TABLES, add_constraints, create_cdm, load_vocabulary
 
 # Invented rows in Athena's format. Not real vocabulary content: CLAUDE.md forbids committing that.
 FAKE_ATHENA = {
@@ -125,3 +126,28 @@ def test_later_downloads_only_add_missing_rows(con, tmp_path):
         (900000001, "Kept from the first download"),
         (900000003, "New in the second download"),
     ]
+
+
+def test_constraints_reject_duplicate_keys_and_dangling_references(con):
+    # One self-consistent vocabulary row set first: concept, vocabulary, domain, and
+    # concept_class point at each other, so they can only be loaded before the keys exist.
+    con.execute(
+        "INSERT INTO cdm.concept (concept_id, concept_name, domain_id, vocabulary_id,"
+        " concept_class_id, concept_code, valid_start_date, valid_end_date)"
+        " VALUES (900000001, 'Fake gender', 'Gender', 'FAKE', 'Gender', 'G1', '1970-01-01',"
+        " '2099-12-31')"
+    )
+    con.execute("INSERT INTO cdm.vocabulary VALUES ('FAKE', 'Fake', NULL, NULL, 900000001)")
+    con.execute("INSERT INTO cdm.domain VALUES ('Gender', 'Gender', 900000001)")
+    con.execute("INSERT INTO cdm.concept_class VALUES ('Gender', 'Gender', 900000001)")
+    add_constraints(con)
+    person = (
+        "INSERT INTO cdm.person (person_id, gender_concept_id, year_of_birth, race_concept_id,"
+        " ethnicity_concept_id) VALUES (%s, %s, 1980, 900000001, 900000001)"
+    )
+    con.execute(person, [1, 900000001])
+
+    with pytest.raises(psycopg.errors.UniqueViolation), con.transaction():
+        con.execute(person, [1, 900000001])
+    with pytest.raises(psycopg.errors.ForeignKeyViolation), con.transaction():
+        con.execute(person, [2, 999999999])

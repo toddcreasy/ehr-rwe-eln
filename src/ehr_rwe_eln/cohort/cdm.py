@@ -5,6 +5,10 @@ from pathlib import Path
 import psycopg
 
 DDL = Path(__file__).parent / "sql" / "omop_cdm_5.4_postgresql.sql"
+PRIMARY_KEYS, FOREIGN_KEYS, INDICES = (
+    DDL.with_name(f"omop_cdm_5.4_postgresql_{part}.sql")
+    for part in ("primary_keys", "constraints", "indices")
+)
 
 # Athena names each download file after its table, in upper case: CONCEPT.csv and so on.
 # Each table's key: when several downloads are loaded, a row whose key is already present is
@@ -29,6 +33,16 @@ ATHENA_COPY = "FORMAT csv, DELIMITER E'\\t', QUOTE E'\\x01', HEADER true"
 def create_cdm(con: psycopg.Connection, schema: str = "cdm") -> None:
     con.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
     con.execute(DDL.read_text().replace("@cdmDatabaseSchema", schema))
+
+
+def add_constraints(con: psycopg.Connection, schema: str = "cdm") -> None:
+    """Primary keys, foreign keys, and indices. Run after loading: checking each row as it is
+    inserted would slow the vocabulary load and the ETL, and a violation fails here instead."""
+    con.execute(PRIMARY_KEYS.read_text().replace("@cdmDatabaseSchema", schema))
+    # v5.4.3 leaves this key out of its primary key file, yet foreign keys point at it.
+    con.execute(f"ALTER TABLE {schema}.vocabulary ADD PRIMARY KEY (vocabulary_id)")
+    con.execute(FOREIGN_KEYS.read_text().replace("@cdmDatabaseSchema", schema))
+    con.execute(INDICES.read_text().replace("@cdmDatabaseSchema", schema))
 
 
 def load_vocabulary(con: psycopg.Connection, *vocab_dirs: Path, schema: str = "cdm") -> dict:

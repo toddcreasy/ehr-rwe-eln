@@ -1,5 +1,5 @@
-"""Build the OMOP CDM v5.4 schema in the Compose Postgres: tables, Athena vocabularies, then the
-Synthea ETL.
+"""Build the OMOP CDM v5.4 schema in the Compose Postgres: tables, Athena vocabularies, the
+Synthea ETL, then primary keys, foreign keys, and indices.
 
 Usage: uv run python scripts/build_omop.py
 
@@ -11,7 +11,7 @@ Needs the Athena downloads in data/vocab/ (clinical vocabularies) and data/vocab
 import time
 from pathlib import Path
 
-from ehr_rwe_eln.cohort.cdm import create_cdm, load_vocabulary
+from ehr_rwe_eln.cohort.cdm import add_constraints, create_cdm, load_vocabulary
 from ehr_rwe_eln.cohort.etl import run_etl
 from ehr_rwe_eln.config import DatabaseSettings
 
@@ -37,6 +37,10 @@ def main() -> None:
     print(f"ETL done in {time.time() - start:.0f}s")
     for table, n in counts.items():
         print(f"  {table:<22}{n:>14,}")
+
+    start = time.time()
+    add_constraints(con)
+    print(f"keys and indices added in {time.time() - start:.0f}s")
     con.commit()
 
 
