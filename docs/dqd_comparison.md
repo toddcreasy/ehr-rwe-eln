@@ -1,0 +1,88 @@
+# DataQualityDashboard comparison
+
+Module 7's data quality checks (`src/ehr_rwe_eln/dq/`) checked against OHDSI DataQualityDashboard
+(DQD), the reference implementation, on the same databases. Run on 2026-10-13.
+
+**Reference:** DQD v2.9.0 in R (`data/r-lib`), `executeDqChecks` with `cdmVersion = "5.4"`,
+`checkLevels = c("TABLE", "FIELD")`, default thresholds and default excluded tables. CONCEPT
+level checks are not ported yet, so neither side runs them.
+
+**Inputs:**
+- The local CDM: 1,172 Synthea patients, as built by modules 1 and 7's prerequisites (keys,
+  `cdm_source`, eras).
+- A planted CDM (`scripts/build_dq_edge_cdm.py`, schema `dq_edge` in the test database) with
+  a missing table, a duplicate primary key, a dangling foreign key, an implausible birth year,
+  reversed dates, and a condition with no era. It exists to reach the scoring paths the real
+  data never does: errors and missing objects.
+
+## Result
+
+Identical on both inputs. Every one of the 1,912 checks matches on every field compared, and
+DQD's Overview matches line for line.
+
+Fields compared per check: `numViolatedRows`, `numDenominatorRows`, `pctViolatedRows`,
+`thresholdValue`, `failed`, `passed`, `isError`, `notApplicable`, `notApplicableReason`,
+`checkDescription`, `category`, `subcategory`, `context`.
+
+| | Local CDM | Planted CDM |
+|---|---:|---:|
+| Checks, ours and DQD | 1,912 | 1,912 |
+| Checks with any field different | 0 | 0 |
+| Failed | 12 | 23 |
+| Queries that errored (`countErrorFailed`) | 0 | 75 |
+| Scored as errors (`isError`) | 0 | 59 |
+| Not applicable | 734 | 1,317 |
+| DQD `percentPassed` | 99.37 | 98.80 |
+
+On the planted CDM both sides fail the same 23 checks. They include `cdmTable` for the missing
+SPECIMEN table (scored as failed, not as an error, because the error says the table does not
+exist), the duplicate `person_id`, the dangling `person_id`, the concept foreign keys on
+populated rows (the planted CDM has no vocabulary), the 1849 birth year, the reversed drug
+dates (caught by both `plausibleStartBeforeEnd` and the older `plausibleTemporalAfter`), and
+the condition with no era. All 75 errored queries are on SPECIMEN: `cdmTable` (failed), 15 `cdmField` checks (not
+applicable, since the table itself is missing), and 59 other checks, scored as errors and not
+applicable.
+
+Run time on the local CDM: about 16 s for ours, 60 s for DQD.
+
+## Differences that are not differences
+
+**DQD's JSON rounds `pctViolatedRows` to 4 decimals.** DQD writes the file with
+`jsonlite::toJSON(result)` (`R/writeResultsTo.R`), and jsonlite keeps 4 decimals by default.
+Thresholds are evaluated before that, on the unrounded value, which is why `failed` matches on
+every check. The comparison rounds ours the same way; without that, 82 checks differ in the
+fifth decimal or later.
+
+**DQD's JSON trims trailing spaces from check descriptions.** The CSV text keeps them. The
+comparison strips both.
+
+## A DQD limitation: a missing column stops the run
+
+With one column dropped from the planted CDM (`note.note_text`), DQD v2.9.0 does not finish.
+`measureValueCompleteness` errors on the missing column, so its denominator is NA, while the
+table's other fields return a number. `.calculateNotApplicableStatus` then finds two values
+for "is NOTE empty" and calls `stop()` ("Duplicate table names in emptyTables"). This happens
+for any missing field, on empty and populated tables alike.
+
+Ours does not stop there: an unknown denominator counts as "not empty", the reading DQD's own
+`coalesce(..., FALSE)` gives it, and the field's checks are scored not applicable because
+`cdmField` failed. That path is covered by `tests/test_dq.py`, but it cannot be checked against
+DQD, so the planted CDM leaves the column in place.
+
+## To rerun
+
+From the repo root, with the Compose database running and `JAVA_HOME` set as in the R script's
+header:
+
+```bash
+# Local CDM
+R_LIBS_USER=$PWD/data/r-lib Rscript scripts/dqd_reference.R
+uv run python scripts/compare_dqd.py
+
+# Planted CDM
+uv run python scripts/build_dq_edge_cdm.py
+R_LIBS_USER=$PWD/data/r-lib Rscript scripts/dqd_reference.R ehr_rwe_eln_test dq_edge dqd-edge.json
+uv run python scripts/compare_dqd.py --database ehr_rwe_eln_test --schema dq_edge --reference dqd-edge.json
+```
+
+DQD's JSON goes to `data/dqd/`, which is gitignored.

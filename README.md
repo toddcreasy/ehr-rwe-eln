@@ -74,7 +74,7 @@ The platform was first built and deployed on AWS, then moved to this local stack
 |---|---|
 | Local platform: Postgres, API, agent, frontend in Compose | Done |
 | Module 1: cohort pipeline | Done |
-| Module 7: data quality | In progress: table and field checks, scoring, and dashboard done; concept checks and the R comparison next |
+| Module 7: data quality | In progress: table and field checks, scoring, and dashboard done and matched against DQD v2.9.0 ([comparison](docs/dqd_comparison.md)); concept checks next |
 | Modules 4, 2 | Not started |
 
 ## Setup
