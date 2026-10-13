@@ -19,6 +19,8 @@ Return every subject specimen the entry reports and every result measured on one
 controls, calibrators, and blanks are not samples: skip them and their values.
 - Reagent lots, plate numbers, and instrument details are not results.
 - When a run failed and was repeated, report only the repeated value.
+- When a value is measured in replicate, report one result: the mean the entry gives.
+- When a value was read on a diluted specimen, report it multiplied by the dilution factor.
 - analyte: creatinine; hba1c (hemoglobin A1c); crp (standard C-reactive protein); hs_crp \
 (high-sensitivity CRP, a separate assay from crp); il6 (interleukin-6); nt_probnp (N-terminal \
 pro-B-type natriuretic peptide).
