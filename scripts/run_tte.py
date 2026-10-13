@@ -1,23 +1,30 @@
 """Run each target trial protocol: analysis table, propensity score, and survival estimates.
 Prints each bias report: attrition, arms, balance, positivity diagnostics, risks, hazard ratio,
-and negative controls.
+and negative controls. Stores the run in the tte schema for the /tte page.
 
 Usage: uv run python scripts/run_tte.py
 Module 4's larger population: DB_NAME=ehr_rwe_eln_tte uv run python scripts/run_tte.py
 
+Needs migrations applied (uv run alembic upgrade head), against the same DB_NAME.
+
 Demonstration on synthetic data only; no clinical claims.
 """
 
+from datetime import UTC, datetime
+
 from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.tte.protocol import PROTOCOLS, load_protocol
-from ehr_rwe_eln.tte.report import build_report
+from ehr_rwe_eln.tte.report import build_report, save_run
 
 
 def main() -> None:
+    started_at = datetime.now(UTC)
+    reports = []
     with DatabaseSettings().connect() as con:
         for path in sorted(PROTOCOLS.glob("*.yaml")):
             protocol = load_protocol(path)
             report = build_report(con, protocol)
+            reports.append(report)
             print(f"{protocol.id}: {protocol.name}")
             for label, persons in report.attrition:
                 print(f"  {persons:>8,}  {label}")
@@ -86,7 +93,11 @@ def main() -> None:
                         f" ({nc.robust_ci[0]:.2f} to {nc.robust_ci[1]:.2f}){flag}"
                     )
             print()
+        # Drops the temporary tables the analysis built before storing the run.
         con.rollback()
+        run_id = save_run(con, reports, started_at)
+        con.commit()
+    print(f"stored as tte run {run_id}")
 
 
 if __name__ == "__main__":

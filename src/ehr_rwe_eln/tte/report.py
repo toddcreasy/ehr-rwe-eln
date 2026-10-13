@@ -13,9 +13,13 @@ trusted, gathered in one place.
 Demonstration on synthetic data only; no clinical claims.
 """
 
-from dataclasses import dataclass, field
+import json
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 
+import pandas as pd
 import psycopg
+from psycopg.types.json import Jsonb
 
 from ehr_rwe_eln.tte.cohort import build_analysis_table
 from ehr_rwe_eln.tte.covariates import add_covariates
@@ -105,3 +109,64 @@ def negative_control(
     result.hazard_ratio = survival.weighted.hazard_ratio
     result.robust_ci = survival.hazard_ratio_robust_ci
     return result
+
+
+def _records(frame: pd.DataFrame) -> list[dict]:
+    # Through pandas' JSON writer: numpy numbers become plain ones, NaN becomes null.
+    return json.loads(frame.to_json(orient="records"))
+
+
+def report_json(report: Report) -> dict:
+    protocol = report.protocol
+    out = {
+        "protocol": {
+            "id": protocol.id,
+            "name": protocol.name,
+            "description": protocol.description,
+            "treatment": protocol.strategies.treatment.name,
+            "comparator": protocol.strategies.comparator.name,
+            "outcome": protocol.outcome.name,
+        },
+        "attrition": [{"rule": rule, "persons": n} for rule, n in report.attrition],
+        "arms": [asdict(arm) for arm in report.arms],
+        "not_estimable": report.not_estimable,
+        "balance": None,
+        "diagnostics": None,
+        "survival": None,
+        "negative_controls": [
+            {**asdict(nc), "excludes_null": nc.excludes_null} for nc in report.negative_controls
+        ],
+    }
+    if report.propensity is not None:
+        out["balance"] = _records(report.propensity.balance)
+        out["diagnostics"] = report.propensity.diagnostics
+    if report.survival is not None:
+        s = report.survival
+        out["survival"] = {
+            "crude_risks": _records(s.crude.risks),
+            "weighted_risks": _records(s.weighted.risks),
+            "crude_hazard_ratio": s.crude.hazard_ratio,
+            "hazard_ratio": s.weighted.hazard_ratio,
+            "hazard_ratio_robust_ci": s.hazard_ratio_robust_ci,
+            # Keyed by estimate, e.g. risk_difference_365 or hazard_ratio: {low, high}.
+            "bootstrap_ci": json.loads(s.bootstrap.to_json(orient="index")),
+            "replicates_used": s.replicates_used,
+            "replicates_not_estimable": s.replicates_not_estimable,
+        }
+    return out
+
+
+def save_run(con: psycopg.Connection, reports: list[Report], started_at: datetime) -> int:
+    source = con.execute("SELECT cdm_source_name FROM cdm.cdm_source").fetchone()
+    persons = con.execute("SELECT count(*) FROM cdm.person").fetchone()[0]
+    run_id = con.execute(
+        "INSERT INTO tte.run (started_at, finished_at, cdm_source_name, persons)"
+        " VALUES (%s, %s, %s, %s) RETURNING run_id",
+        [started_at, datetime.now(UTC), source[0] if source else None, persons],
+    ).fetchone()[0]
+    with con.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO tte.report VALUES (%s, %s, %s, %s)",
+            [(run_id, r.protocol.id, r.protocol.name, Jsonb(report_json(r))) for r in reports],
+        )
+    return run_id

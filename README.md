@@ -75,7 +75,7 @@ The platform was first built and deployed on AWS, then moved to this local stack
 | Local platform: Postgres, API, agent, frontend in Compose | Done |
 | Module 1: cohort pipeline | Done |
 | Module 7: data quality | Done: all DQD v2.9.0 checks, scoring, and dashboard, matched against DQD itself ([comparison](docs/dqd_comparison.md)) |
-| Module 4: target trial emulation | In progress: protocols, propensity scores, and survival estimates done; bias report next |
+| Module 4: target trial emulation | Done: protocols, propensity scores, survival estimates, bias report with negative controls, and its page |
 | Module 2 | Not started |
 
 ## Setup
@@ -115,6 +115,8 @@ uv run fastapi dev                         # http://localhost:8000, reloads on s
 `uv run python scripts/db_check.py` runs a pgvector round trip against the database and leaves nothing behind.
 
 `uv run python scripts/run_dq.py` runs the 2,384 checks from OHDSI DataQualityDashboard v2.9.0 against the CDM (about 20 s) and stores the run in the `dq` schema. The dashboard at http://127.0.0.1:8000/dq/ shows the latest run.
+
+`uv run python scripts/run_tte.py` runs each target trial protocol in `src/ehr_rwe_eln/tte/protocols/`, prints its bias report, and stores the run in the `tte` schema (about 1 minute on 23,420 patients). The page at http://127.0.0.1:8000/tte/ shows it. The 1,172-patient default has too few outcome events for estimates; module 4 uses a 20,000-patient build in its own database, `DB_NAME=ehr_rwe_eln_tte` (see `scripts/generate_synthea.py` and `scripts/build_omop.py`). The app shows runs from whichever database `DB_NAME` names.
 
 ```bash
 docker compose down      # stop; data stays in the ehr-rwe-eln-db volume

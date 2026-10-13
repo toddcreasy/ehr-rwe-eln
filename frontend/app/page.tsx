@@ -34,6 +34,9 @@ export default function Home() {
       <Link href="/dq/" className="w-fit underline">
         Data quality dashboard
       </Link>
+      <Link href="/tte/" className="w-fit underline">
+        Target trial emulation
+      </Link>
       <HealthPanel />
     </main>
   );
