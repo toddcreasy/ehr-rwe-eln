@@ -44,6 +44,8 @@ ignore = []
 "evals/**" = ["S101"]
 # The OMOP ETL builds SQL from table and column names defined in code; values are bound.
 "src/ehr_rwe_eln/cohort/**" = ["S608"]
+# Data quality SQL is built from table, field, and value text in DQD's vendored CSVs.
+"src/ehr_rwe_eln/dq/**" = ["S608"]
 
 [tool.ruff.format]
 quote-style = "double"
