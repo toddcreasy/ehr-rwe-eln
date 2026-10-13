@@ -11,6 +11,7 @@ requires-python = ">=3.14"
 dependencies = [
     "alembic>=1.20.0",
     "anthropic>=0.125.0",
+    "diffprivlib>=0.6.6",
     "fastapi[standard]>=0.142.2",
     "fhir-resources>=8.3.0",
     "lifelines>=0.30.0",
@@ -70,3 +71,7 @@ filterwarnings = [
 
 [tool.fastapi]
 entrypoint = "ehr_rwe_eln.api.main:app"
+
+[tool.uv]
+# diffprivlib 0.6.6 imports private scikit-learn names that 1.9 removed. Lift when it catches up.
+constraint-dependencies = ["scikit-learn<1.9"]

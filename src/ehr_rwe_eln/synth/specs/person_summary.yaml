@@ -1,0 +1,65 @@
+name: person_summary
+description: >-
+  One row per person: demographics, whether each of eight conditions and four drugs was ever
+  recorded, and the latest of four measurements. The OMOP build stands in for a controlled-access
+  source. Bounds are clinical ranges, not read from the data; values outside them are clamped into
+  the end bins. Synthetic Synthea data only; no clinical claims.
+# The source is synthetic, so releases are seeded and reproducible. Null for real data.
+seed: 0
+releases:
+  - {method: independent, epsilon: 1}
+  - {method: bayes_net, epsilon: 0.25}
+  - {method: bayes_net, epsilon: 1}
+  - {method: bayes_net, epsilon: 4}
+columns:
+  # Demographics. Age is at the end of the person's observation period.
+  - {name: age, demographic: age, numeric: {low: 0, high: 110, bins: 11, integer: true}}
+  - {name: sex, demographic: sex, categories: [female, male]}
+  - {name: race, demographic: race, categories: [white, black, asian, hawaiian, native, other]}
+  - {name: ethnicity, demographic: ethnicity, categories: [hispanic, nonhispanic], parents: [race]}
+
+  # Conditions, with the concept ids the module 4 protocols use.
+  - {name: hypertension, condition: {concept_ids: [320128]}, parents: [age]}
+  - {name: obesity, condition: {concept_ids: [4060985]}, parents: [age]} # body mass index 30+
+  - name: diabetes # type 2 diabetes, or a condition recorded as due to it
+    condition: {concept_ids: [201826, 192279, 45769905, 45757499]}
+    parents: [age, obesity]
+  - {name: hyperlipidemia, condition: {concept_ids: [432867]}, parents: [age]}
+  - name: ischemic_heart_disease
+    condition: {concept_ids: [4185932]}
+    parents: [age, hyperlipidemia]
+  - name: myocardial_infarction
+    condition: {concept_ids: [4329847]}
+    parents: [ischemic_heart_disease]
+  - name: heart_failure
+    condition: {concept_ids: [4229440]}
+    parents: [age, ischemic_heart_disease]
+  - name: chronic_kidney_disease # stages 1 to 4 and end-stage renal disease
+    condition: {concept_ids: [443614, 443601, 443597, 443612, 193782]}
+    parents: [age, diabetes]
+
+  # Drugs, as RxNorm ingredients with every product containing them.
+  - {name: lisinopril, drug: {concept_ids: [1308216]}, parents: [hypertension]}
+  - {name: amlodipine, drug: {concept_ids: [1332418]}, parents: [hypertension]}
+  - {name: metformin, drug: {concept_ids: [1503297]}, parents: [diabetes]}
+  - {name: insulin, drug: {concept_ids: [1596977, 46221581, 1550023]}, parents: [diabetes]}
+
+  # Latest value ever recorded; a missing value is its own code.
+  - name: systolic_bp # mmHg
+    measurement: {concept_ids: [3004249]}
+    numeric: {low: 70, high: 190, bins: 12}
+    parents: [hypertension]
+  - name: bmi # kg/m2
+    measurement: {concept_ids: [3038553]}
+    numeric: {low: 10, high: 60, bins: 10}
+    parents: [obesity]
+  - name: egfr # MDRD, mL/min/1.73 m2
+    measurement: {concept_ids: [46236952]}
+    numeric: {low: 0, high: 150, bins: 10}
+    parents: [chronic_kidney_disease]
+  - name: hba1c # percent
+    measurement: {concept_ids: [3004410]}
+    numeric: {low: 2, high: 12, bins: 10}
+    parents: [diabetes]
+
+  - {name: deceased, demographic: deceased, parents: [age]}
