@@ -109,6 +109,11 @@ class Spec(Strict):
     seed: int | None = None
     releases: list[Release] = Field(min_length=1)
     vae: VaeSettings = VaeSettings()
+    # The share of people kept out of every release, to evaluate against: real people the
+    # synthesizer never saw (utility tests, and non-members for membership inference).
+    holdout_fraction: float = Field(default=0.3, gt=0, lt=1)
+    # A 0/1 column to predict in the utility test (train on synthetic, test on real).
+    utility_target: str | None = None
     columns: list[Column] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -121,6 +126,10 @@ class Spec(Strict):
                 if parent not in seen:
                     raise ValueError(f"{column.name}: parent {parent} must be listed before it")
             seen.add(column.name)
+        if self.utility_target is not None:
+            target = next((c for c in self.columns if c.name == self.utility_target), None)
+            if target is None or target.categories != [0, 1]:
+                raise ValueError(f"utility_target {self.utility_target} must be a 0/1 column")
         return self
 
 

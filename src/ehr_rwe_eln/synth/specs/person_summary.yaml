@@ -13,6 +13,10 @@ releases:
   - {method: bayes_net, epsilon: 4}
   - {method: vae, epsilon: 1}
   - {method: vae, epsilon: 4}
+# 30% of people are kept out of every release, to evaluate against.
+holdout_fraction: 0.3
+# The utility test predicts death from the other columns.
+utility_target: deceased
 # Training settings for the vae releases; these are the defaults, written out for review.
 vae: {hidden: 128, latent: 16, epochs: 20, batch_size: 512, learning_rate: 0.001, max_grad_norm: 1.0, delta: 0.00001}
 columns:

@@ -1,7 +1,9 @@
 """The source table a synthesizer learns from: one row per person, one column per spec column.
 
-person_id is used to join and then dropped; it never reaches a synthesizer.
+person_id is the index, used to join and to split; synthesizers read only the spec's columns.
 """
+
+import hashlib
 
 import pandas as pd
 import psycopg
@@ -38,12 +40,14 @@ ORDER BY person_id, measurement_date DESC, measurement_id DESC
 
 
 def build_source(con: psycopg.Connection, spec: Spec) -> pd.DataFrame:
-    """Every person with an observation period, in person_id order, as the spec's columns."""
+    """Every person with an observation period, indexed and ordered by person_id, as the spec's
+    columns."""
     base = pd.DataFrame(
         con.execute(DEMOGRAPHICS_SQL).fetchall(),
         columns=["person_id", "age", "sex", "race", "ethnicity", "deceased"],
     )
-    out = pd.DataFrame(index=base.index)
+    out = pd.DataFrame(index=pd.Index(base["person_id"], name="person_id"))
+    base = base.set_index("person_id", drop=False)
     for column in spec.columns:
         if column.demographic:
             out[column.name] = base[column.demographic]
@@ -66,3 +70,16 @@ def build_source(con: psycopg.Connection, spec: Spec) -> pd.DataFrame:
         else:
             out[column.name] = mapped.fillna(0).astype(int)
     return out
+
+
+def split(source: pd.DataFrame, spec: Spec) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(training, holdout). A person is held out when a hash of the spec name and their
+    person_id falls below holdout_fraction: the same person always lands on the same side, and
+    there is nothing to store or keep secret."""
+    position = source.index.map(
+        lambda person_id: (
+            int(hashlib.sha256(f"{spec.name}:{person_id}".encode()).hexdigest()[:12], 16) / 16**12
+        )
+    )
+    held = position < spec.holdout_fraction
+    return source[~held], source[held]

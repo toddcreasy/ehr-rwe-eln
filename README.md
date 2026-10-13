@@ -53,7 +53,9 @@ Treats the OMOP build as if it were a controlled-access source and releases synt
 - An independent-columns baseline, which keeps each column's distribution and loses every relationship between columns
 - Each release stored in the `synth` schema with its provenance: the spec as run, each histogram's epsilon, the source, the seed, and the code version
 - A variational autoencoder (PyTorch) trained with DP-SGD through Opacus, using the same encoding, as a generative model to compare against
-- Next: fidelity and utility reports, and privacy attack reports
+- A fixed 30% of people held out of every release (by a hash of `person_id`), to evaluate against
+- Fidelity and utility reports per release: total variation distance per column and per pair of columns, KS statistics, the correlation gap, and train-on-synthetic, test-on-real AUC, each read against the noise floor of the real holdout against the real training set
+- Next: the module 4 trials rerun on synthetic data, and privacy attack reports
 
 ## How the modules fit
 
@@ -87,7 +89,7 @@ The platform was first built and deployed on AWS, then moved to this local stack
 | Module 1: cohort pipeline | Done |
 | Module 7: data quality | Done: all DQD v2.9.0 checks, scoring, and dashboard, matched against DQD itself ([comparison](docs/dqd_comparison.md)) |
 | Module 4: target trial emulation | Done: protocols, propensity scores, survival estimates, bias report with negative controls, and its page |
-| Synthetic data | In progress: DP Bayesian network synthesizer, DP-SGD variational autoencoder, and independent baseline, with versioned releases and provenance |
+| Synthetic data | In progress: DP Bayesian network synthesizer, DP-SGD variational autoencoder, and independent baseline, with versioned releases, provenance, and fidelity and utility reports |
 | Module 2: ELN to EHR bridge | Done: synthetic ELN entries (default and hard), batch extraction on MODEL_SMALL with a per-trap precision and recall eval, written to OMOP specimen and measurement rows and a FHIR R4 bundle of Specimen and Observation resources |
 
 ## Setup
@@ -132,7 +134,7 @@ uv run fastapi dev                         # http://localhost:8000, reloads on s
 
 `uv run python scripts/generate_eln.py` writes 300 synthetic ELN entries on 200 hypertension subjects to `data/eln/`, each with the extraction it should produce, plus the registry linking study codes (`HTN-0001`) to OMOP persons. `uv run python scripts/extract_eln.py` loads them into the `eln` schema and extracts every entry with `MODEL_SMALL` through the Message Batches API (half price; about 8 minutes for 300 entries), then scores the extractions against the known answers. `uv run python scripts/write_eln_omop.py` writes them to OMOP `specimen` and `measurement` rows, linked through `fact_relationship`, and can be rerun. `uv run python scripts/export_eln_fhir.py` writes the same samples and results to `data/eln/fhir_bundle.json` as FHIR R4 `Specimen` and `Observation` resources; samples without a stated collection date carry none there.
 
-`DB_NAME=ehr_rwe_eln_tte uv run python scripts/synthesize.py` makes every release in `src/ehr_rwe_eln/synth/specs/person_summary.yaml` from the 20,000-patient build (under a minute; the VAE releases train on CPU) and stores each in the `synth` schema. The spec is seeded because its source is synthetic; a spec over real data must leave `seed` null, so the noise comes from a secure generator and cannot be regenerated.
+`DB_NAME=ehr_rwe_eln_tte uv run python scripts/synthesize.py` makes every release in `src/ehr_rwe_eln/synth/specs/person_summary.yaml` from the 20,000-patient build (under a minute; the VAE releases train on CPU) and stores each in the `synth` schema. The spec is seeded because its source is synthetic; a spec over real data must leave `seed` null, so the noise comes from a secure generator and cannot be regenerated. Each release trains on 70% of people; `DB_NAME=ehr_rwe_eln_tte uv run python scripts/evaluate_synth.py` scores every release against the 30% held out, stores the reports in `synth.report`, and prints them under the noise floor. The reports read real data and are for internal review, not for release: they are not differentially private.
 
 ```bash
 docker compose down      # stop; data stays in the ehr-rwe-eln-db volume

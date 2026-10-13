@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from ehr_rwe_eln.cohort.cdm import create_cdm
 from ehr_rwe_eln.synth.bayes_net import decode, encode, plan, synthesize
 from ehr_rwe_eln.synth.release import load_release, save_release
-from ehr_rwe_eln.synth.source import build_source
+from ehr_rwe_eln.synth.source import build_source, split
 from ehr_rwe_eln.synth.spec import SPECS, Column, Release, Spec, load_spec
 
 AGE = {"name": "age", "demographic": "age", "numeric": {"low": 0, "high": 100, "bins": 10}}
@@ -184,6 +184,7 @@ def test_source_has_one_row_per_person_and_no_person_id(con):
     s = spec(AGE, SEX, FLAG, DRUG, SBP, deceased)
     source = build_source(con, s)
     assert list(source.columns) == [c.name for c in s.columns]
+    assert source.index.name == "person_id" and list(source.index) == [1, 2]
     assert source.to_dict("records")[0] == {
         "age": 70,  # 2020 minus 1950
         "sex": "female",
@@ -201,12 +202,28 @@ def test_release_round_trips_with_provenance(con):
     s = spec(AGE, FLAG, DRUG, SBP)
     table = toy(500).assign(systolic_bp=np.where(np.arange(500) % 2, 120.0, np.nan))
     out, measurements = synthesize(table, s, s.releases[0])
-    release_id = save_release(con, s, s.releases[0], plan(measurements), out, len(table))
+    release_id = save_release(con, s, s.releases[0], plan(measurements), out, len(table), 200)
     record = con.execute(
-        "SELECT spec_name, method, epsilon, seed, source_rows, rows, jsonb_array_length("
-        "measurements), spec ->> 'name' FROM synth.release WHERE release_id = %s",
+        "SELECT spec_name, method, epsilon, seed, source_rows, holdout_rows, rows,"
+        " jsonb_array_length(measurements), spec ->> 'name'"
+        " FROM synth.release WHERE release_id = %s",
         [release_id],
     ).fetchone()
-    assert record == ("t", "bayes_net", 1.0, 0, 500, len(out), 4, "t")
+    assert record == ("t", "bayes_net", 1.0, 0, 500, 200, len(out), 4, "t")
     loaded = load_release(con, release_id)
     pd.testing.assert_frame_equal(loaded, out, check_dtype=False)
+
+
+def test_split_is_stable_and_near_the_fraction():
+    s = spec(AGE).model_copy(update={"holdout_fraction": 0.3})
+    table = pd.DataFrame({"age": range(10_000)}, index=pd.Index(range(10_000), name="person_id"))
+    train, holdout = split(table, s)
+    assert len(train) + len(holdout) == 10_000 and not set(train.index) & set(holdout.index)
+    assert 0.28 < len(holdout) / 10_000 < 0.32
+    again, _ = split(table.iloc[::-1], s)  # order does not matter, only person_id
+    assert set(again.index) == set(train.index)
+
+
+def test_utility_target_must_be_a_flag():
+    with pytest.raises(ValidationError, match="must be a 0/1 column"):
+        Spec.model_validate({**spec(AGE).model_dump(), "utility_target": "age"})

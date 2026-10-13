@@ -3,8 +3,9 @@
 The privacy spend (the measurements column) is one record per mechanism that touched the source:
 a histogram's columns, cells, and epsilon, or DP-SGD's epsilon, delta, noise, and steps.
 
-source_rows is the exact source count. It is kept for the release record and its reviewers; it
-is not part of the synthetic data, whose row count is noisy.
+source_rows (the people the release was trained on) and holdout_rows (the people kept out for
+evaluation) are exact counts. They are kept for the release record and its reviewers; they are
+not part of the synthetic data, whose row count is noisy.
 """
 
 import json
@@ -45,11 +46,12 @@ def save_release(
     spend: list[dict],
     synthetic: pd.DataFrame,
     source_rows: int,
+    holdout_rows: int,
 ) -> int:
     release_id = con.execute(
         "INSERT INTO synth.release (created_at, spec_name, method, epsilon, seed, spec,"
-        " measurements, source_database, source_rows, rows, code_version)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s, current_database(), %s, %s, %s)"
+        " measurements, source_database, source_rows, holdout_rows, rows, code_version)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, current_database(), %s, %s, %s, %s)"
         " RETURNING release_id",
         [
             datetime.now(UTC),
@@ -60,6 +62,7 @@ def save_release(
             Jsonb(spec.model_dump(mode="json")),
             Jsonb(spend),
             source_rows,
+            holdout_rows,
             len(synthetic),
             code_version(),
         ],
@@ -81,3 +84,12 @@ def load_release(con: psycopg.Connection, release_id: int) -> pd.DataFrame:
         "SELECT data FROM synth.row WHERE release_id = %s ORDER BY row_number", [release_id]
     ).fetchall()
     return pd.DataFrame([r[0] for r in rows], columns=[c["name"] for c in spec["columns"]])
+
+
+def save_report(con: psycopg.Connection, release_id: int, kind: str, report: dict) -> None:
+    con.execute(
+        "INSERT INTO synth.report VALUES (%s, %s, %s, %s, %s) ON CONFLICT (release_id, kind)"
+        " DO UPDATE SET created_at = excluded.created_at, code_version = excluded.code_version,"
+        " report = excluded.report",
+        [release_id, kind, datetime.now(UTC), code_version(), Jsonb(report)],
+    )
