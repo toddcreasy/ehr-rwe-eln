@@ -114,7 +114,7 @@ def uniqueness(train: pd.DataFrame, spec: Spec) -> dict:
     return {"exact_age": float((exact == 1).mean()), "age_group": float((grouped == 1).mean())}
 
 
-def _pct(value: float) -> str:
+def signed_percent(value: float) -> str:
     return f"{round(value, 3) + 0.0:+.1%}"  # + 0.0 turns -0.0 into 0.0
 
 
@@ -164,8 +164,9 @@ def summary(report: dict) -> str:
         f" Membership: an attacker holding someone's record and this release tells whether they"
         f" were in the training data with an AUC of {auc:.2f} (0.50 is a coin flip)."
         f" Sensitive values: guessing a condition, drug, or death from age group, sex, race, and"
-        f" ethnicity is {_pct(attrs['gap_mean'])} more accurate for training people than for"
-        f" held-out ones on average, at most {_pct(attrs['gap_max'])} ({attrs['gap_worst']})."
+        f" ethnicity is {signed_percent(attrs['gap_mean'])} more accurate for training people"
+        f" than for held-out ones on average, at most {signed_percent(attrs['gap_max'])}"
+        f" ({attrs['gap_worst']})."
         f" In the source, {unique['exact_age']:.1%} of people are the only one with their exact"
         f" age, sex, race, and ethnicity, and {unique['age_group']:.1%} with age in groups."
         f" These attacks are a lower bound on risk; the source has no location, which a real"

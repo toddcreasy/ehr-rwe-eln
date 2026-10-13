@@ -84,15 +84,18 @@ def main() -> None:
                 train, holdout = split(build_source(con, spec), spec)
                 target = spec.utility_target
                 trtr = utility_auc(train, holdout, spec.columns, target) if target else None
-                sources[key] = (train, holdout, trtr)
+                floor = None
                 if len(holdout):
-                    floor = fidelity_report(train, holdout, spec.columns)
-                    print(row(f"{spec.name}: noise floor", floor, trtr, None))
+                    floor = fidelity_report(train, holdout, spec.columns)["summary"]
+                    print(row(f"{spec.name}: noise floor", {"summary": floor}, trtr, None))
                 else:
                     print(f"{spec.name}: no holdout, so no noise floor")
-            train, holdout, trtr = sources[key]
+                sources[key] = (train, holdout, trtr, floor)
+            train, holdout, trtr, floor = sources[key]
             synthetic = load_release(con, release_id)
             report = fidelity_report(train, synthetic, spec.columns)
+            # Stored with each report, so the report can be read on its own.
+            report["noise_floor"] = floor
             if spec.utility_target:
                 tstr = utility_auc(synthetic, holdout, spec.columns, spec.utility_target)
                 report["utility"] = {
@@ -108,10 +111,17 @@ def main() -> None:
             if len(holdout):
                 copy_key = ("copy", key)
                 if copy_key not in sources:
-                    sources[copy_key] = True
-                    copied = privacy_report(train, holdout, train, spec)
-                    privacy_lines.append(privacy_row(f"{spec.name}: copy", copied))
+                    sources[copy_key] = privacy_report(train, holdout, train, spec)
+                    privacy_lines.append(privacy_row(f"{spec.name}: copy", sources[copy_key]))
+                copied = sources[copy_key]
                 privacy = privacy_report(train, holdout, synthetic, spec)
+                # The same attacks on a copy of the training data, what real leakage looks like.
+                privacy["copy_of_training_data"] = {
+                    "distance_to_closest_record": copied["distance_to_closest_record"],
+                    "membership_inference": copied["membership_inference"],
+                    "attribute_gap_mean": copied["attribute_inference"]["gap_mean"],
+                    "attribute_gap_max": copied["attribute_inference"]["gap_max"],
+                }
                 save_report(con, release_id, "privacy", privacy)
                 con.commit()
                 privacy_lines.append(privacy_row(f"{release_id}: {method} {epsilon:g}", privacy))
