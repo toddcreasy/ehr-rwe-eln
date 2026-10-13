@@ -1,13 +1,17 @@
 """Build the OMOP CDM v5.4 schema in the Compose Postgres: tables, Athena vocabularies, the
 Synthea ETL, condition and drug eras, then primary keys, foreign keys, and indices.
 
-Usage: uv run python scripts/build_omop.py
+Usage: uv run python scripts/build_omop.py [--synthea data/synthea/output/csv]
+
+The database comes from DB_NAME (default ehr_rwe_eln). Module 4's larger population:
+  DB_NAME=ehr_rwe_eln_tte uv run python scripts/build_omop.py --synthea data/synthea_20k/output/csv
 
 Needs the Athena downloads in data/vocab/ (clinical vocabularies) and data/vocab_extra/
 (Gender, Race, Ethnicity), scripts/generate_synthea.py output, and the database running
 (docker compose up -d --wait).
 """
 
+import argparse
 import time
 from pathlib import Path
 
@@ -20,6 +24,10 @@ DATA = Path(__file__).resolve().parent.parent / "data"
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--synthea", type=Path, default=DATA / "synthea" / "output" / "csv")
+    args = parser.parse_args()
+
     con = DatabaseSettings().connect()
     if con.execute(
         "SELECT 1 FROM information_schema.schemata WHERE schema_name = 'cdm'"
@@ -34,7 +42,7 @@ def main() -> None:
         print(f"  {table:<22}{n:>14,}")
 
     start = time.time()
-    counts = run_etl(con, DATA / "synthea" / "output" / "csv")
+    counts = run_etl(con, args.synthea)
     print(f"ETL done in {time.time() - start:.0f}s")
     for table, n in counts.items():
         print(f"  {table:<22}{n:>14,}")

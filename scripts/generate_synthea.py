@@ -1,6 +1,10 @@
-"""Generate synthetic patients with Synthea as CSV under data/synthea/output/csv/.
+"""Generate synthetic patients with Synthea as CSV under <output>/csv/.
 
-Usage: uv run python scripts/generate_synthea.py [--patients 1000]
+Usage: uv run python scripts/generate_synthea.py [--patients 1000] [--output data/synthea/output]
+
+--patients counts living patients; those who die during the simulation are written too, so 1000
+gives 1,172. Module 1 uses the defaults; module 4 uses --patients 20000 --output
+data/synthea_20k/output.
 
 Seeds and the reference date are fixed, so the same arguments always produce the same patients.
 Needs Java 17 or newer on PATH.
@@ -41,11 +45,13 @@ def fetch_jar() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--patients", type=int, default=1000)
+    parser.add_argument("--output", type=Path, default=OUTPUT)
     args = parser.parse_args()
+    output = args.output.resolve()
 
     # Refuse rather than mix files from two runs with different settings.
-    if OUTPUT.exists():
-        raise SystemExit(f"{OUTPUT} already exists; move it to the trash and rerun")
+    if output.exists():
+        raise SystemExit(f"{output} already exists; move it to the trash and rerun")
     fetch_jar()
     subprocess.run(  # noqa: S603
         [  # noqa: S607
@@ -57,7 +63,7 @@ def main() -> None:
             "-p", str(args.patients),
             "-r", REFERENCE_DATE,
             "-e", REFERENCE_DATE,
-            f"--exporter.baseDirectory={OUTPUT}",
+            f"--exporter.baseDirectory={output}",
             # One thread: parallel runs order rows and sum billing totals differently each time.
             "--generate.thread_pool_size=1",
             "--exporter.csv.export=true",
@@ -69,7 +75,7 @@ def main() -> None:
         check=True,
         cwd=DATA_DIR,
     )  # fmt: skip
-    for csv in sorted((OUTPUT / "csv").glob("*.csv")):
+    for csv in sorted((output / "csv").glob("*.csv")):
         rows = sum(1 for _ in csv.open()) - 1
         print(f"{csv.name:<28}{rows:>10,} rows")
 
