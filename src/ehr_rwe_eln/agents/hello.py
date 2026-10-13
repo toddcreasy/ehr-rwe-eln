@@ -1,11 +1,12 @@
 from datetime import UTC, datetime
 
-from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
+import psycopg
 from pydantic import BaseModel, Field
 from strands import Agent, tool
-from strands.models import BedrockModel
-from strands.models.bedrock import CacheConfig
-from strands.tools.mcp import MCPClient
+from strands.models import CacheConfig
+from strands.models.anthropic import AnthropicModel
+
+from ehr_rwe_eln.config import DatabaseSettings
 
 SYSTEM_PROMPT = (
     "You are the platform check agent for ehr-rwe-eln, a research project on synthetic data. "
@@ -13,9 +14,8 @@ SYSTEM_PROMPT = (
     "and general questions answer directly and leave utc_time empty. If the user asks about the "
     "date or time, call the "
     "current_time tool and use its result; never guess the time. If the user asks whether the "
-    "database is reachable or healthy, call the checkDatabaseHealth tool and report its result. "
-    "If that tool fails or says the database may be resuming, tell the user the database pauses "
-    "when idle and to ask again in about 30 seconds. "
+    "database is reachable or healthy, call the check_database_health tool and report its result. "
+    "If it reports the database unreachable, suggest starting it with docker compose up -d. "
     "Never give medical or clinical advice: if asked for a diagnosis, treatment or dosing, decline "
     "and say this is a research tool on synthetic data."
 )
@@ -34,46 +34,26 @@ def current_time() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def build_agent(
-    model_id: str,
-    region: str,
-    gateway_url: str | None = None,
-    guardrail_id: str | None = None,
-    guardrail_version: str | None = None,
-) -> Agent:
-    guardrail = {}
-    if guardrail_id:
-        guardrail = {
-            "guardrail_id": guardrail_id,
-            "guardrail_version": guardrail_version,
-            # sync: the guardrail sees each chunk before it is released; async skips PII masking.
-            "guardrail_stream_processing_mode": "sync",
-        }
-    model = BedrockModel(
+@tool
+def check_database_health() -> str:
+    """Check whether the project's Postgres database is reachable."""
+    try:
+        with DatabaseSettings().connect(connect_timeout=5) as con:
+            con.execute("SELECT 1")
+    except psycopg.OperationalError:
+        return "unreachable"
+    return "reachable"
+
+
+def build_agent(model_id: str, api_key: str | None = None) -> Agent:
+    model = AnthropicModel(
+        client_args={"api_key": api_key} if api_key else None,
         model_id=model_id,
-        region_name=region,
-        # Explicit cap: unset, Bedrock reserves the model's maximum output against our quota.
         max_tokens=1024,
         # Caches the system prompt and tool definitions once they exceed the model's minimum
-        # (4,096 tokens for Haiku 4.5). Below that Bedrock ignores it, so expect cache_read 0 here.
+        # cacheable length. This prompt is below it, so expect cache_read 0 here.
         cache_config=CacheConfig(strategy="auto"),
-        **guardrail,
     )
-    tools = [current_time]
-    if gateway_url:
-        # Gateway tools over MCP. Requests are SigV4-signed with whatever AWS credentials are
-        # active: the runtime's execution role when deployed, your own credentials locally.
-        tools.append(
-            MCPClient(
-                lambda: aws_iam_streamablehttp_client(
-                    endpoint=gateway_url,
-                    aws_service="bedrock-agentcore",
-                    aws_region=region,
-                    # Above the Gateway's 55 s invocation limit, so a slow tool surfaces the
-                    # Gateway's error instead of a client-side timeout.
-                    timeout=60,
-                )
-            )
-        )
+    tools = [current_time, check_database_health]
     # callback_handler=None stops Strands printing the streamed reply to stdout.
     return Agent(model=model, system_prompt=SYSTEM_PROMPT, tools=tools, callback_handler=None)

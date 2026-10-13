@@ -1,3 +1,4 @@
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,12 +8,8 @@ class AgentSettings(BaseSettings):
     # protected_namespaces=() because pydantic reserves the "model_" prefix by default.
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", protected_namespaces=())
 
-    model_small: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-    model_large: str = "us.anthropic.claude-sonnet-5-5"
-    aws_region: str = "us-east-1"
-    # AgentCore Gateway MCP endpoint. Unset: the agent runs with local tools only.
-    gateway_url: str | None = None
-    # Bedrock Guardrail applied to every model call. Unset: no guardrail (local dev).
-    guardrail_id: str | None = None
-    guardrail_version: str | None = None
-    log_level: str = "INFO"
+    # Each user brings their own key. Unset here, the Anthropic SDK reads ANTHROPIC_API_KEY from
+    # the environment and fails with its own message if that is missing too.
+    anthropic_api_key: SecretStr | None = None
+    model_small: str = "claude-haiku-5-5"
+    model_large: str = "claude-sonnet-5-5"

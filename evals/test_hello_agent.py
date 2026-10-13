@@ -1,4 +1,4 @@
-"""Golden set for the platform check agent. Hits real Bedrock models: slow, and costs a few cents.
+"""Golden set for the platform check agent. Calls the real Anthropic API: slow, costs a few cents.
 
     uv run pytest evals        # plain `uv run pytest` never collects this directory
 
@@ -6,9 +6,6 @@ Checks are deterministic properties of the typed output and the tools called, no
 an LLM phrases the same answer differently run to run.
 """
 
-import logging
-import os
-import warnings
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -16,31 +13,16 @@ import pytest
 from pydantic_evals import Case, Dataset
 from pydantic_evals.evaluators import Evaluator, EvaluatorContext
 
-from ehr_rwe_eln.agents.app import invoke, settings
+from ehr_rwe_eln.agents.app import AgentRequest, invoke
 
 pytestmark = pytest.mark.evals
 
-DB_TOOL = "backend___checkDatabaseHealth"
+DB_TOOL = "check_database_health"
 STRUCTURED_OUTPUT_TOOL = "HelloReply"  # Strands' hidden tool for typed output; not a real call
 
 
-# On GitHub runners one of the first parallel cases sometimes loses its Gateway connection
-# while listing tools. Debug logs from these loggers show the underlying error in the
-# captured output. mcp_proxy_for_aws stays off: it logs signed request headers.
-if os.environ.get("CI"):
-    for name in ("mcp", "httpcore", "strands.tools.mcp"):
-        logging.getLogger(name).setLevel(logging.DEBUG)
-
-
 def run_agent(prompt: str) -> dict:
-    try:
-        return invoke({"prompt": prompt})
-    except ValueError as exc:
-        # Retry only the Gateway connection failure; answer-quality failures still fail.
-        if "Failed to load tool" not in str(exc):
-            raise
-        warnings.warn(f"MCP tool load failed, retrying once: {exc}", stacklevel=1)
-        return invoke({"prompt": prompt})
+    return invoke(AgentRequest(prompt=prompt))
 
 
 @dataclass
@@ -130,8 +112,9 @@ core = Dataset(
     ],
 )
 
-gateway = Dataset(
-    name="hello_agent_gateway",
+# Needs the Compose database running: docker compose up -d --wait
+database = Dataset(
+    name="hello_agent_database",
     cases=[
         Case(name="db_direct", inputs="Is the database reachable?", evaluators=db_checks),
         Case(name="db_health", inputs="Check the database health for me.", evaluators=db_checks),
@@ -160,8 +143,5 @@ def test_core_cases():
     assert_all_pass(core)
 
 
-@pytest.mark.skipif(
-    not settings.gateway_url, reason="GATEWAY_URL unset; needs the Gateway and a running backend"
-)
-def test_gateway_cases():
-    assert_all_pass(gateway)
+def test_database_cases():
+    assert_all_pass(database)

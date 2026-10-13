@@ -7,6 +7,7 @@ import psycopg
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from ehr_rwe_eln.agents.app import AgentRequest, invoke
 from ehr_rwe_eln.api.log_config import configure_logging
 from ehr_rwe_eln.config import Settings
 
@@ -90,3 +91,8 @@ def health_db() -> dict[str, str]:
             detail="database unreachable; it may be resuming from pause, retry in about 30 seconds",
         ) from exc
     return {"status": "ok", "database": "reachable"}
+
+
+@app.post("/agent")
+def agent(request: AgentRequest) -> dict:
+    return invoke(request)

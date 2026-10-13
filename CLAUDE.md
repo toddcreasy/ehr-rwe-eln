@@ -30,7 +30,10 @@ Decided 2026-10-12: PostgreSQL 17 with pgvector replaces both DuckDB and Aurora.
 - [x] `docker-compose.yml` with the database service
 - [x] Port module 1 from DuckDB to Postgres. The 1,325,353-row reconciliation, the counts in `docs/etl_synthea_comparison.md`, and both cohorts reproduce exactly
 - [x] CI runs the tests against a Postgres service container
-- [ ] Plan the move: for each AWS row in "Stack decisions", pick a local replacement or drop it. Agree the plan with the maintainer before changing code
+- [x] Plan the move (agreed 2026-10-12): Anthropic API replaces Bedrock (each user brings `ANTHROPIC_API_KEY`); no auth, the app binds to 127.0.0.1; everything runs in Docker Compose (`db` plus one `app` container serving the API, agent, and static frontend). Dropped: Guardrail, AgentCore (Runtime, Gateway, Observability, Evaluations), S3, Secrets Manager, Cognito, Budgets, CDK. Work in four PRs:
+  - [x] 1. Agent on the Anthropic API, served at `POST /agent`; evals run against it
+  - [ ] 2. Remove auth; FastAPI serves the frontend; `app` service in Compose
+  - [ ] 3. Delete `infra/`, the AWS scripts and dependencies; migrations run with plain Alembic
 - [ ] Rewrite "Stack decisions", "Conventions", and the README install steps for the local stack
 - [x] Tear down the deployed AWS stacks (2026-10-12, README runbook). `deploy.yml` and the `cdk-diff` CI job are gone; `lint-test` is the only required check
 
@@ -185,9 +188,8 @@ Do not re-ask. Rationale and history in `docs/SETUP.md`.
 
 | Decision | Value |
 |---|---|
-| Monthly budget | $50, filtered to `project=ehr-rwe-eln`, alerts to the address in `infra/cdk.json`. Bedrock token spend is untagged and not counted (open item) |
+| API key and spend limit | Personal key scoped to the `ehr-rwe-eln` workspace in the Claude Console, which carries the monthly spend limit. The key lives in macOS Keychain (`anthropic-api-key`) and `~/.zshrc` exports it as `ANTHROPIC_API_KEY` |
 | Python | 3.14, pinned in `.python-version` |
 | Database | PostgreSQL 17 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg17-trixie`, defined in `docker-compose.yml` |
-| `MODEL_SMALL` | `us.anthropic.claude-haiku-4-5-20251001-v1:0`. Probed 2026-10-12: works |
-| `MODEL_LARGE` | `us.anthropic.claude-sonnet-5-5` is configured but not available for this account (probed 2026-10-12, `AccessDeniedException`). Pick and probe a replacement before any code uses the large tier |
-| Guardrail | `ehr-rwe-eln-agent`: PII masked, clinical advice denied. Policy changes cut a new version via the config hash in `infra/stacks/agent_stack.py` |
+| `MODEL_SMALL` | `claude-haiku-5-5` on the Anthropic API. Probed 2026-10-12: works (all 12 evals pass) |
+| `MODEL_LARGE` | `claude-sonnet-5-5` on the Anthropic API. Probed 2026-10-12: works. Final synthesis only |
