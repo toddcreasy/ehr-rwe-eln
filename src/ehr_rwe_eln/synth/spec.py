@@ -43,6 +43,11 @@ class Column(Strict):
     condition: ConceptSet | None = None  # 1 if ever recorded, else 0
     drug: ConceptSet | None = None  # 1 if ever exposed, else 0
     measurement: ConceptSet | None = None  # the latest value; missing when never measured
+    # A column of a module 4 protocol's analysis table, taken as is (specs with a protocol).
+    analysis: str | None = None
+    # Whether an analysis column can be missing (a measurement covariate with no value in its
+    # lookback window). OMOP measurements always allow it.
+    allow_missing: bool = False
     # The domain: categories, or numeric bounds and bins. Flags default to [0, 1].
     categories: list[str | int] | None = None
     numeric: Numeric | None = None
@@ -50,7 +55,7 @@ class Column(Strict):
 
     @model_validator(mode="after")
     def _one_source_and_a_domain(self) -> Column:
-        sources = [self.demographic, self.condition, self.drug, self.measurement]
+        sources = [self.demographic, self.condition, self.drug, self.measurement, self.analysis]
         if sum(s is not None for s in sources) != 1:
             raise ValueError(f"{self.name}: give exactly one source")
         flag = self.condition or self.drug or self.demographic == "deceased"
@@ -64,7 +69,7 @@ class Column(Strict):
 
     @property
     def missing_allowed(self) -> bool:
-        return self.measurement is not None
+        return self.measurement is not None or self.allow_missing
 
     @property
     def size(self) -> int:
@@ -111,7 +116,11 @@ class Spec(Strict):
     vae: VaeSettings = VaeSettings()
     # The share of people kept out of every release, to evaluate against: real people the
     # synthesizer never saw (utility tests, and non-members for membership inference).
-    holdout_fraction: float = Field(default=0.3, gt=0, lt=1)
+    # 0 keeps no holdout: for a spec judged against the data it learned from (trial parity).
+    holdout_fraction: float = Field(default=0.3, ge=0, lt=1)
+    # A module 4 protocol (its file name without .yaml). When set, the source is that
+    # protocol's analysis table, and every column is an analysis column.
+    protocol: str | None = None
     # A 0/1 column to predict in the utility test (train on synthetic, test on real).
     utility_target: str | None = None
     columns: list[Column] = Field(min_length=1)
@@ -126,6 +135,8 @@ class Spec(Strict):
                 if parent not in seen:
                     raise ValueError(f"{column.name}: parent {parent} must be listed before it")
             seen.add(column.name)
+        if any((c.analysis is not None) != (self.protocol is not None) for c in self.columns):
+            raise ValueError("with a protocol every column is an analysis column; without, none")
         if self.utility_target is not None:
             target = next((c for c in self.columns if c.name == self.utility_target), None)
             if target is None or target.categories != [0, 1]:

@@ -9,7 +9,9 @@ import pandas as pd
 import psycopg
 
 from ehr_rwe_eln.synth.spec import Spec
-from ehr_rwe_eln.tte.cohort import concept_set_sql
+from ehr_rwe_eln.tte.cohort import build_analysis_table, concept_set_sql
+from ehr_rwe_eln.tte.covariates import add_covariates
+from ehr_rwe_eln.tte.protocol import PROTOCOLS, load_protocol
 
 DEMOGRAPHICS_SQL = """
 SELECT p.person_id,
@@ -39,9 +41,20 @@ ORDER BY person_id, measurement_date DESC, measurement_id DESC
 """
 
 
+def build_analysis_source(con: psycopg.Connection, spec: Spec) -> pd.DataFrame:
+    """The spec's protocol's analysis table (its eligible people, with covariates), indexed by
+    person_id, as the spec's columns."""
+    protocol = load_protocol(PROTOCOLS / f"{spec.protocol}.yaml")
+    _, table = build_analysis_table(con, protocol)
+    table = add_covariates(con, protocol, table).set_index("person_id").sort_index()
+    return pd.DataFrame({c.name: table[c.analysis] for c in spec.columns})
+
+
 def build_source(con: psycopg.Connection, spec: Spec) -> pd.DataFrame:
     """Every person with an observation period, indexed and ordered by person_id, as the spec's
-    columns."""
+    columns. With a protocol, that protocol's analysis table instead."""
+    if spec.protocol is not None:
+        return build_analysis_source(con, spec)
     base = pd.DataFrame(
         con.execute(DEMOGRAPHICS_SQL).fetchall(),
         columns=["person_id", "age", "sex", "race", "ethnicity", "deceased"],

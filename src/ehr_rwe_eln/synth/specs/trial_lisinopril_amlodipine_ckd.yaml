@@ -1,0 +1,65 @@
+name: trial_lisinopril_amlodipine_ckd
+description: >-
+  The analysis table of module 4's lisinopril versus amlodipine trial (CKD stage 3 or worse):
+  one row per eligible person, with arm, baseline covariates, follow-up days, and outcome.
+  Releases are judged by rerunning the trial's propensity-weighted Cox analysis on them and
+  comparing the hazard ratio with the real one. Synthetic Synthea data only; no clinical claims.
+protocol: lisinopril_vs_amlodipine_ckd
+# Judged against the data it learned from, so nothing is held out: the cohort has 26 events.
+holdout_fraction: 0
+seed: 0
+releases:
+  - {method: bayes_net, epsilon: 1}
+  - {method: bayes_net, epsilon: 4}
+  - {method: bayes_net, epsilon: 16}
+  # Effectively no privacy: separates what the declared structure loses from what noise loses.
+  - {method: bayes_net, epsilon: 1000}
+  - {method: vae, epsilon: 4}
+# 1,890 people: batches of 128 give the VAE more steps per epoch than the default 512.
+vae: {batch_size: 128}
+columns:
+  - {name: age, analysis: age, numeric: {low: 0, high: 110, bins: 11, integer: true}}
+  - {name: male, analysis: male, categories: [0, 1]}
+  - {name: obesity, analysis: obesity, categories: [0, 1], parents: [age]}
+  - {name: diabetes, analysis: diabetes, categories: [0, 1], parents: [age, obesity]}
+  - {name: hyperlipidemia, analysis: hyperlipidemia, categories: [0, 1], parents: [age]}
+  - name: ischemic_heart_disease
+    analysis: ischemic_heart_disease
+    categories: [0, 1]
+    parents: [age, hyperlipidemia]
+  - name: ckd_stage_1_or_2
+    analysis: ckd_stage_1_or_2
+    categories: [0, 1]
+    parents: [age, diabetes]
+  - name: heart_failure
+    analysis: heart_failure
+    categories: [0, 1]
+    parents: [age, ischemic_heart_disease]
+  # Measurement covariates: the latest value in the lookback window, or missing.
+  - name: systolic_bp
+    analysis: systolic_bp
+    numeric: {low: 70, high: 190, bins: 12}
+    allow_missing: true
+    parents: [age]
+  - name: egfr
+    analysis: egfr
+    numeric: {low: 0, high: 150, bins: 10}
+    allow_missing: true
+    parents: [ckd_stage_1_or_2]
+  - name: bmi
+    analysis: bmi
+    numeric: {low: 10, high: 60, bins: 10}
+    allow_missing: true
+    parents: [obesity]
+  - name: hba1c
+    analysis: hba1c
+    numeric: {low: 2, high: 12, bins: 10}
+    allow_missing: true
+    parents: [diabetes]
+  # Treatment: ACE inhibitors such as lisinopril are the usual choice with diabetes or kidney
+  # disease (public prescribing guidance), so those are the confounders the network keeps.
+  - {name: arm, analysis: arm, categories: [0, 1], parents: [diabetes, ckd_stage_1_or_2]}
+  # Follow-up days, capped at the protocol's 1825.
+  - {name: days, analysis: days, numeric: {low: 1, high: 1826, bins: 10, integer: true}, parents: [age]}
+  # The outcome depends on the arm (the effect being estimated) and on how long follow-up ran.
+  - {name: event, analysis: event, categories: [0, 1], parents: [arm, days]}
