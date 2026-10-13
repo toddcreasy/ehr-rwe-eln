@@ -51,6 +51,8 @@ ignore = []
 "src/ehr_rwe_eln/dq/**" = ["S608"]
 # Target trial SQL is built from concept set clauses defined in code; values are bound.
 "src/ehr_rwe_eln/tte/**" = ["S608"]
+# Seeded random synthetic ELN entries, not cryptography.
+"src/ehr_rwe_eln/eln/synthetic.py" = ["S311"]
 
 [tool.ruff.format]
 quote-style = "double"
