@@ -76,7 +76,7 @@ The platform was first built and deployed on AWS, then moved to this local stack
 | Module 1: cohort pipeline | Done |
 | Module 7: data quality | Done: all DQD v2.9.0 checks, scoring, and dashboard, matched against DQD itself ([comparison](docs/dqd_comparison.md)) |
 | Module 4: target trial emulation | Done: protocols, propensity scores, survival estimates, bias report with negative controls, and its page |
-| Module 2: ELN to EHR bridge | In progress: synthetic ELN entries with known extractions; extraction agent next |
+| Module 2: ELN to EHR bridge | In progress: synthetic ELN entries, extraction on MODEL_SMALL with a precision and recall eval; OMOP writes next |
 
 ## Setup
 
