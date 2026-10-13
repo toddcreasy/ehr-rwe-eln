@@ -12,6 +12,7 @@ dependencies = [
     "alembic>=1.20.0",
     "anthropic>=0.125.0",
     "fastapi[standard]>=0.142.2",
+    "pandas>=3.0.6",
     "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.15.0",
     "pyyaml>=6.0.3",
@@ -46,6 +47,8 @@ ignore = []
 "src/ehr_rwe_eln/cohort/**" = ["S608"]
 # Data quality SQL is built from table, field, and value text in DQD's vendored CSVs.
 "src/ehr_rwe_eln/dq/**" = ["S608"]
+# Target trial SQL is built from concept set clauses defined in code; values are bound.
+"src/ehr_rwe_eln/tte/**" = ["S608"]
 
 [tool.ruff.format]
 quote-style = "double"

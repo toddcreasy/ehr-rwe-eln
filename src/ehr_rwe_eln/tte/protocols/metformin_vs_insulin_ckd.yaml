@@ -1,0 +1,34 @@
+id: 1
+name: metformin_vs_insulin_ckd
+description: >-
+  Emulates a trial of starting metformin versus starting insulin as the first diabetes drug for
+  adults with newly diagnosed type 2 diabetes, followed for progression to chronic kidney disease
+  stage 3 or worse. Demonstration on synthetic Synthea data only; no clinical claims.
+eligibility:
+  diagnosis:
+    # Type 2 diabetes, or a condition recorded as due to it. Synthea writes no diabetes code for
+    # many patients whose diabetes shows only as kidney complications; those still count.
+    # 201826 type 2 diabetes mellitus, 192279 disorder of kidney due to diabetes mellitus,
+    # 45769905 microalbuminuria due to T2DM, 45757499 proteinuria due to T2DM.
+    concept_ids: [201826, 192279, 45769905, 45757499]
+  max_days_from_diagnosis: 365
+  min_age: 18
+  prior_observation_days: 365
+strategies:
+  treatment:
+    name: metformin
+    drugs:
+      concept_ids: [1503297] # metformin (RxNorm ingredient), with every product containing it
+  comparator:
+    name: insulin
+    drugs:
+      # insulin regular human, insulin isophane, insulin lispro: the insulins Synthea prescribes
+      concept_ids: [1596977, 46221581, 1550023]
+outcome:
+  name: ckd_stage_3_or_worse
+  conditions:
+    # chronic kidney disease stage 3, stage 4, end-stage renal disease
+    concept_ids: [443597, 443612, 193782]
+follow_up:
+  max_days: 1825
+causal_contrast: intention_to_treat
