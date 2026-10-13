@@ -32,7 +32,7 @@ Decided 2026-10-12: PostgreSQL 17 with pgvector replaces both DuckDB and Aurora.
 - [ ] CI runs the tests against a Postgres service container
 - [ ] Plan the move: for each AWS row in "Stack decisions", pick a local replacement or drop it. Agree the plan with the maintainer before changing code
 - [ ] Rewrite "Stack decisions", "Conventions", and the README install steps for the local stack
-- [ ] Decide what happens to the deployed AWS stacks: tear down with the README runbook, or keep them running for a while
+- [x] Tear down the deployed AWS stacks (2026-10-12, README runbook). `deploy.yml` and the `cdk-diff` CI job are gone; `lint-test` is the only required check
 
 Data rules:
 - Synthetic or openly licensed de-identified data only: Synthea output, the MIMIC-IV demo, and synthetic ELN entries generated in this repo. No real patient data, ever.
@@ -177,7 +177,7 @@ What each directory is for, which of these are real conventions and which are ch
 
 - Account `123456789012`, region `us-east-1`. Credentials come from IAM Identity Center (`https://example.awsapps.com/start`, permission set `AdministratorAccess`) and expire. On `ExpiredToken` or `Unable to locate credentials`, ask the maintainer to run `aws sso login`. Do not try to re-authenticate non-interactively.
 - Other projects (glia-nav, nf-multiomics) share this account. This project's stacks are `ehr-rwe-eln-<Stack>`; the bare stack names belong to glia-nav. Never touch resources not tagged `project=ehr-rwe-eln`.
-- Deploys go through GitHub Actions on merge to `main`. Branch protection requires `lint-test` and `cdk-diff`. The deploy role trusts only `main`; pull requests get a read-only diff role.
+- The `ehr-rwe-eln-*` stacks were destroyed on 2026-10-12. Nothing deploys on merge; branch protection requires `lint-test` only.
 
 ## Settled decisions
 
