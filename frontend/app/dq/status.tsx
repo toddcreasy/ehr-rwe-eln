@@ -20,6 +20,8 @@ export type CheckResult = {
   check_description: string;
   cdm_table_name: string;
   cdm_field_name: string | null;
+  concept_id: string | null;
+  unit_concept_id: string | null;
   category: string;
   subcategory: string | null;
   context: string;

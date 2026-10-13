@@ -2,8 +2,8 @@
 
 The csv/ files are copied unchanged from OHDSI/DataQualityDashboard v2.9.0, inst/csv
 (Apache License 2.0). Each row of Check_Descriptions is a check type with a filter; the check
-type runs once for every Table_Level or Field_Level row its filter matches, exactly as DQD's
-executeDqChecks expands them. CONCEPT level checks are not ported yet.
+type runs once for every Table_Level, Field_Level, or Concept_Level row its filter matches,
+exactly as DQD's executeDqChecks expands them.
 """
 
 import csv
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 CSV = Path(__file__).parent / "csv"
-LEVELS = ("TABLE", "FIELD")
+LEVELS = ("TABLE", "FIELD", "CONCEPT")
 
 # DQD's default tablesToExclude: the vocabulary tables, which come from Athena, not the ETL.
 EXCLUDED_TABLES = {
@@ -38,6 +38,8 @@ class Check:
     name: str
     table: str
     field: str | None
+    concept_id: str | None
+    unit_concept_id: str | None
     description: str
     context: str
     category: str
@@ -69,16 +71,20 @@ def matches(row: dict[str, str], evaluation_filter: str) -> bool:
 def _check(description: dict[str, str], row: dict[str, str]) -> Check:
     level, name = description["checkLevel"], description["checkName"]
     table, field = row["cdmTableName"], row.get("cdmFieldName")
+    concept_id, unit_concept_id = row.get("conceptId"), row.get("unitConceptId")
     # DQD renders the description with every value upper cased.
     values = {k: v.upper() for k, v in row.items()}
     text = re.sub(r"@(\w+)", lambda m: values.get(m[1], m[0]), description["checkDescription"])
     threshold = row.get(f"{name}Threshold")
+    id_parts = (level, name, table, field, concept_id, unit_concept_id)
     return Check(
-        check_id="_".join(p.replace(" ", "") for p in (level, name, table, field) if p).lower(),
+        check_id="_".join(p.replace(" ", "") for p in id_parts if p).lower(),
         level=level,
         name=name,
         table=table,
         field=field,
+        concept_id=concept_id,
+        unit_concept_id=unit_concept_id,
         description=text,
         context=description["kahnContext"],
         category=description["kahnCategory"],
@@ -99,7 +105,10 @@ def load_checks() -> list[Check]:
     ]
     for row in fields:
         row["cdmFieldName"] = row["cdmFieldName"].upper()
-    rows = {"TABLE": tables, "FIELD": fields}
+    concepts = [r for r in _read("Concept_Level") if r["cdmTableName"] not in EXCLUDED_TABLES]
+    for row in concepts:
+        row["cdmFieldName"] = row["cdmFieldName"].upper()
+    rows = {"TABLE": tables, "FIELD": fields, "CONCEPT": concepts}
     return [
         _check(description, row)
         for description in _read("Check_Descriptions")

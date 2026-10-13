@@ -81,6 +81,13 @@ def _not_applicable(results: list[Result]) -> None:
             "field_missing": field_missing.get((table, field), False),
             "table_empty": table_empty.get(table, False),
             "field_empty": field_empty.get((table, field), False),
+            # A concept check with nothing to count: the concept (and unit) never appears.
+            "concept_missing": r.check.level == "CONCEPT"
+            and r.check.unit_concept_id is None
+            and r.num_denominator_rows == 0,
+            "concept_and_unit_missing": r.check.level == "CONCEPT"
+            and r.check.unit_concept_id is not None
+            and r.num_denominator_rows == 0,
         }
         if r.check.name == "measureConditionEraCompleteness":
             r.not_applicable = conditions_absent
@@ -89,10 +96,18 @@ def _not_applicable(results: list[Result]) -> None:
             continue
         r.not_applicable = _applies_not(r, **flags)
         if r.not_applicable:
-            r.not_applicable_reason = _reason(table, field, **flags)
+            r.not_applicable_reason = _reason(r.check, **flags)
 
 
-def _applies_not(r: Result, table_missing, field_missing, table_empty, field_empty) -> bool:
+def _applies_not(
+    r: Result,
+    table_missing,
+    field_missing,
+    table_empty,
+    field_empty,
+    concept_missing,
+    concept_and_unit_missing,
+) -> bool:
     name = r.check.name
     if name in ("measurePersonCompleteness", "cdmField"):
         return table_missing
@@ -106,17 +121,33 @@ def _applies_not(r: Result, table_missing, field_missing, table_empty, field_emp
         return True
     if name == "measureValueCompleteness":
         return False
-    return field_empty
+    return field_empty or concept_missing or concept_and_unit_missing
 
 
-def _reason(table, field, table_missing, field_missing, table_empty, field_empty) -> str:
+def _reason(
+    check: Check,
+    table_missing,
+    field_missing,
+    table_empty,
+    field_empty,
+    concept_missing,
+    concept_and_unit_missing,
+) -> str:
+    table, field = check.table, check.field
     if table_missing:
         return f"Table {table} does not exist."
     if field_missing:
         return f"Field {table}.{field} does not exist."
     if table_empty:
         return f"Table {table} is empty."
-    return f"Field {table}.{field} is not populated."
+    if field_empty:
+        return f"Field {table}.{field} is not populated."
+    if concept_missing:
+        return f"{field}={check.concept_id} is missing from the {table} table."
+    return (
+        f"Combination of {field}={check.concept_id}, unitConceptId={check.unit_concept_id}"
+        f" and VALUE_AS_NUMBER IS NOT NULL is missing from the {table} table."
+    )
 
 
 def summarize(results: list[Result]) -> dict:

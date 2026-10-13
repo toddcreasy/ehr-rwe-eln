@@ -6,6 +6,7 @@ SqlRender would produce. Cohort filtering is not ported. Table, field, and value
 from the vendored CSVs, never from user input.
 """
 
+import re
 from collections.abc import Callable
 
 from ehr_rwe_eln.dq.checks import Check
@@ -15,6 +16,12 @@ BOUNDS = {
     "DATEADD(dd,1,GETDATE())": "CURRENT_DATE + 1",
     "YEAR(GETDATE())+1": "EXTRACT(YEAR FROM CURRENT_DATE) + 1",
 }
+
+# Concept checks put the CSV's comma separated id lists straight into IN (...).
+ID_LIST = re.compile(r"-?\d+(\s*,\s*-?\d+)*")
+
+# DQD's plausible gender values, as the gender concepts its templates compare against.
+GENDER_CONCEPTS = {"Male": 8507, "Female": 8532}
 
 # SqlRender's Postgres translation of ISNUMERIC.
 NUMERIC = r"'^[\-\+]?([0-9]+\.?[0-9]*|\.[0-9]+)$'"
@@ -54,6 +61,12 @@ def _query(violated: str, denominator: str) -> str:
 
 def _literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
+
+
+def _ids(value: str) -> str:
+    if not ID_LIST.fullmatch(value.strip()):
+        raise ValueError(f"not a concept id list: {value!r}")
+    return value
 
 
 def _source_value_column(table: str, field: str) -> str | None:
@@ -268,6 +281,40 @@ def plausible_start_before_end(s: str, t: str, f: str, p: dict) -> str:
     )
 
 
+def plausible_gender(s: str, t: str, f: str, p: dict) -> str:
+    gender = GENDER_CONCEPTS[p["plausibleGender"]]
+    concepts = _ids(p["conceptId"])
+    return _query(
+        f"SELECT count(*) FROM {s}.{t} x JOIN {s}.person pe ON x.person_id = pe.person_id"
+        f" WHERE x.{f} IN ({concepts}) AND pe.gender_concept_id <> {gender}",
+        f"SELECT count(*) FROM {s}.{t} WHERE {f} IN ({concepts})",
+    )
+
+
+def plausible_gender_use_descendants(s: str, t: str, f: str, p: dict) -> str:
+    gender = GENDER_CONCEPTS[p["plausibleGenderUseDescendants"]]
+    joined = f"{s}.{t} x JOIN {s}.concept_ancestor ca ON ca.descendant_concept_id = x.{f}"
+    within = f"ca.ancestor_concept_id IN ({_ids(p['conceptId'])})"
+    return _query(
+        f"SELECT count(*) FROM {joined} JOIN {s}.person pe ON x.person_id = pe.person_id"
+        f" WHERE {within} AND pe.gender_concept_id <> {gender}",
+        f"SELECT count(*) FROM {joined} WHERE {within}",
+    )
+
+
+def plausible_unit_concept_ids(s: str, t: str, f: str, p: dict) -> str:
+    units = _ids(p["plausibleUnitConceptIds"])
+    concept = _ids(p["conceptId"])
+    # A list of -1 means no unit is plausible: any mapped unit violates.
+    return _query(
+        f"SELECT count(*) FROM {s}.{t} WHERE {f} = {concept} AND unit_concept_id IS NOT NULL"
+        f" AND (({_literal(units)} = '-1' AND unit_concept_id <> 0)"
+        f" OR unit_concept_id NOT IN ({units}, 0))",
+        f"SELECT count(*) FROM {s}.{t} WHERE {f} = {concept}"
+        f" AND (unit_concept_id <> 0 OR unit_concept_id IS NULL)",
+    )
+
+
 PORTS: dict[str, Callable[[str, str, str, dict], str]] = {
     "cdmTable": cdm_table,
     "measurePersonCompleteness": measure_person_completeness,
@@ -293,6 +340,9 @@ PORTS: dict[str, Callable[[str, str, str, dict], str]] = {
     "plausibleAfterBirth": plausible_after_birth,
     "plausibleBeforeDeath": plausible_before_death,
     "plausibleStartBeforeEnd": plausible_start_before_end,
+    "plausibleGender": plausible_gender,
+    "plausibleGenderUseDescendants": plausible_gender_use_descendants,
+    "plausibleUnitConceptIds": plausible_unit_concept_ids,
 }
 
 

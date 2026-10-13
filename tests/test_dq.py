@@ -13,9 +13,13 @@ CHECKS = {c.check_id: c for c in load_checks()}
 
 
 def test_check_list_matches_dqd():
-    # DQD v2.9.0's own sqlOnly run expands to the same 1,912 TABLE and FIELD checks.
-    assert len(CHECKS) == 1912
+    # DQD v2.9.0's own run expands to the same 2,384 checks.
+    assert len(CHECKS) == 2384
     assert sum(c.level == "TABLE" for c in CHECKS.values()) == 50
+    assert sum(c.level == "CONCEPT" for c in CHECKS.values()) == 472
+    # A check on two concepts: DQD drops the space from the id list, not the comma.
+    pair = "concept_plausiblegenderusedescendants_condition_occurrence_condition_concept_id_"
+    assert CHECKS[pair + "4090861,4025213"].concept_id == "4090861, 4025213"
     check = CHECKS["field_plausiblestartbeforeend_drug_exposure_drug_exposure_start_date"]
     assert check.threshold == 1
     assert check.params["plausibleStartBeforeEndFieldName"] == "DRUG_EXPOSURE_END_DATE"
@@ -80,6 +84,19 @@ def test_empty_table_checks_are_not_applicable_except_presence_and_completeness(
     assert required.not_applicable_reason == f"Table {table} is empty."
 
 
+def test_concept_check_with_nothing_to_count_is_not_applicable():
+    unit = "concept_plausibleunitconceptids_measurement_measurement_concept_id_3006315"
+    gender = "concept_plausiblegender_condition_occurrence_condition_concept_id_192367"
+    results = [result(unit, violated=0, denominator=0), result(gender, violated=1, denominator=1)]
+    evaluate(results)
+    missing, present = results
+    assert missing.not_applicable
+    assert missing.not_applicable_reason == (
+        "MEASUREMENT_CONCEPT_ID=3006315 is missing from the MEASUREMENT table."
+    )
+    assert present.failed
+
+
 def test_summary_keeps_dqds_pass_count_and_adds_a_strict_rate():
     results = [
         result("table_cdmtable_person", denominator=1),
@@ -108,6 +125,13 @@ def test_run_on_a_small_cdm(pg, dq_schema):
         " VALUES (1, 1, 0, %s, %s, 32817)",
         [datetime.date(2020, 3, 1), datetime.date(2020, 2, 1)],
     )
+    # A female-only condition (192367) on a male patient.
+    pg.execute(
+        "INSERT INTO cdm.condition_occurrence (condition_occurrence_id, person_id,"
+        " condition_concept_id, condition_start_date, condition_type_concept_id)"
+        " VALUES (1, 1, 192367, DATE '2020-01-01', 32817)"
+    )
+    pg.execute("UPDATE cdm.person SET gender_concept_id = 8507")
     pg.execute("ALTER TABLE cdm.note DROP COLUMN note_text")
 
     results = {r.check.check_id: r for r in run_checks(pg)}
@@ -115,6 +139,8 @@ def test_run_on_a_small_cdm(pg, dq_schema):
     reversed_dates = results["field_plausiblestartbeforeend_drug_exposure_drug_exposure_start_date"]
     assert (reversed_dates.num_violated_rows, reversed_dates.num_denominator_rows) == (1, 1)
     assert reversed_dates.failed
+    gender = results["concept_plausiblegender_condition_occurrence_condition_concept_id_192367"]
+    assert (gender.num_violated_rows, gender.num_denominator_rows, gender.failed) == (1, 1, True)
     dropped = results["field_cdmfield_note_note_text"]
     assert dropped.failed and not dropped.is_error
     assert results["field_isrequired_specimen_specimen_date"].not_applicable
@@ -131,4 +157,4 @@ def test_run_on_a_small_cdm(pg, dq_schema):
         "SELECT count(*), count(*) FILTER (WHERE failed) FROM dq.result WHERE run_id = %s",
         [run_id],
     ).fetchone()
-    assert stored == (1912, sum(r.failed for r in results.values()))
+    assert stored == (2384, sum(r.failed for r in results.values()))

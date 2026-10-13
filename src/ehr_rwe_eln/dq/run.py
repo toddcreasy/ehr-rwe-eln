@@ -47,7 +47,7 @@ def save_run(
     with con.cursor() as cur:
         cur.executemany(
             "INSERT INTO dq.result VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,"
-            " %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            " %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             [
                 (
                     run_id,
@@ -74,6 +74,8 @@ def save_run(
                     r.error,
                     r.execution_seconds,
                     r.query_text,
+                    r.check.concept_id,
+                    r.check.unit_concept_id,
                 )
                 for r in results
             ],

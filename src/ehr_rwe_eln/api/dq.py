@@ -15,9 +15,9 @@ RUNS_SQL = (
 # Everything in dq.result except the SQL text, which the dashboard does not show.
 RESULTS_SQL = (
     "SELECT check_id, check_name, check_level, check_description, cdm_table_name,"
-    " cdm_field_name, category, subcategory, context, severity, num_violated_rows,"
-    " pct_violated_rows, num_denominator_rows, threshold_value, notes_value, failed, passed,"
-    " is_error, not_applicable, not_applicable_reason, error"
+    " cdm_field_name, concept_id, unit_concept_id, category, subcategory, context, severity,"
+    " num_violated_rows, pct_violated_rows, num_denominator_rows, threshold_value, notes_value,"
+    " failed, passed, is_error, not_applicable, not_applicable_reason, error"
     " FROM dq.result WHERE run_id = %s ORDER BY check_id"
 )
 

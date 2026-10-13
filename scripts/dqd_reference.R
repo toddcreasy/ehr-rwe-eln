@@ -2,7 +2,7 @@
 #
 # Tested with DataQualityDashboard v2.9.0, installed with
 #   remotes::install_github("OHDSI/DataQualityDashboard@v2.9.0")
-# into data/r-lib. Runs the TABLE and FIELD checks, the levels module 7 ports.
+# into data/r-lib. Runs all three check levels: TABLE, FIELD, and CONCEPT.
 #
 # Usage (from the repo root, with the Compose database running):
 #   R_LIBS_USER=$PWD/data/r-lib Rscript scripts/dqd_reference.R [database] [schema] [output file]
@@ -53,7 +53,7 @@ DataQualityDashboard::executeDqChecks(
   cohortDatabaseSchema = schema,
   cdmSourceName = "ehr-rwe-eln Synthea",
   cdmVersion = "5.4",
-  checkLevels = c("TABLE", "FIELD"),
+  checkLevels = c("TABLE", "FIELD", "CONCEPT"),
   outputFolder = output_dir,
   outputFile = output_file,
   writeToTable = FALSE

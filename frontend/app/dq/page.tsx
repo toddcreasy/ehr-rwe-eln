@@ -150,7 +150,8 @@ function ResultsTable({ results }: { results: CheckResult[] }) {
         if (status === "problems" ? !(s === "fail" || s === "error") : status !== "all" && s !== status) return false;
         if (category !== "all" && r.category !== category) return false;
         if (table !== "all" && r.cdm_table_name !== table) return false;
-        return !q || `${r.check_name} ${r.cdm_table_name} ${r.cdm_field_name ?? ""}`.toLowerCase().includes(q);
+        const text = `${r.check_name} ${r.cdm_table_name} ${r.cdm_field_name ?? ""} ${r.concept_id ?? ""} ${r.check_description}`;
+        return !q || text.toLowerCase().includes(q);
       })
       .sort((a, b) => (b.pct_violated_rows ?? -1) - (a.pct_violated_rows ?? -1));
   }, [results, status, category, table, search]);
@@ -181,7 +182,7 @@ function ResultsTable({ results }: { results: CheckResult[] }) {
         </select>
         <input
           aria-label="Search checks"
-          placeholder="Search check, table, field"
+          placeholder="Search check, table, field, concept"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className={`${select} w-56`}
@@ -211,6 +212,7 @@ function ResultsTable({ results }: { results: CheckResult[] }) {
                     {r.check_name}{" "}
                     <span className="font-normal text-zinc-600 dark:text-zinc-400">
                       {r.cdm_table_name}{r.cdm_field_name ? `.${r.cdm_field_name}` : ""}
+                      {r.concept_id ? ` = ${r.concept_id}` : ""}
                     </span>
                   </div>
                   <div className="text-zinc-600 dark:text-zinc-400">{r.not_applicable_reason ?? r.error ?? r.check_description}</div>
@@ -278,7 +280,7 @@ export default function DataQuality() {
           <Link href="/" className="text-sm text-zinc-600 underline dark:text-zinc-400">ehr-rwe-eln</Link>
           <h1 className="text-2xl font-semibold">Data quality</h1>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            OHDSI DataQualityDashboard v2.9.0 table and field checks on the OMOP CDM.
+            OHDSI DataQualityDashboard v2.9.0 checks on the OMOP CDM.
           </p>
         </div>
         {runs && runs.length > 0 && (

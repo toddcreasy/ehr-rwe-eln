@@ -4,46 +4,52 @@ Module 7's data quality checks (`src/ehr_rwe_eln/dq/`) checked against OHDSI Dat
 (DQD), the reference implementation, on the same databases. Run on 2026-10-13.
 
 **Reference:** DQD v2.9.0 in R (`data/r-lib`), `executeDqChecks` with `cdmVersion = "5.4"`,
-`checkLevels = c("TABLE", "FIELD")`, default thresholds and default excluded tables. CONCEPT
-level checks are not ported yet, so neither side runs them.
+all three check levels (TABLE, FIELD, CONCEPT), default thresholds and default excluded tables.
 
 **Inputs:**
 - The local CDM: 1,172 Synthea patients, as built by modules 1 and 7's prerequisites (keys,
   `cdm_source`, eras).
 - A planted CDM (`scripts/build_dq_edge_cdm.py`, schema `dq_edge` in the test database) with
   a missing table, a duplicate primary key, a dangling foreign key, an implausible birth year,
-  reversed dates, and a condition with no era. It exists to reach the scoring paths the real
-  data never does: errors and missing objects.
+  reversed dates, a condition with no era, a female-only condition on a male, a descendant of a
+  male-only finding on a female, and a lab in an implausible unit. It exists to reach the
+  scoring paths the real data never does: errors, missing objects, and failing concept checks.
 
 ## Result
 
-Identical on both inputs. Every one of the 1,912 checks matches on every field compared, and
+Identical on both inputs. Every one of the 2,384 checks matches on every field compared, and
 DQD's Overview matches line for line.
 
 Fields compared per check: `numViolatedRows`, `numDenominatorRows`, `pctViolatedRows`,
 `thresholdValue`, `failed`, `passed`, `isError`, `notApplicable`, `notApplicableReason`,
-`checkDescription`, `category`, `subcategory`, `context`.
+`checkDescription`, `category`, `subcategory`, `context`. Matching on `checkId` also checks the
+ids themselves, including concept checks on two concepts (`..._4090861,4025213`).
 
 | | Local CDM | Planted CDM |
 |---|---:|---:|
-| Checks, ours and DQD | 1,912 | 1,912 |
+| Checks, ours and DQD | 2,384 | 2,384 |
 | Checks with any field different | 0 | 0 |
-| Failed | 12 | 23 |
+| Failed | 12 | 28 |
 | Queries that errored (`countErrorFailed`) | 0 | 75 |
 | Scored as errors (`isError`) | 0 | 59 |
-| Not applicable | 734 | 1,317 |
-| DQD `percentPassed` | 99.37 | 98.80 |
+| Not applicable | 1,134 | 1,733 |
+| DQD `percentPassed` | 99.50 | 98.83 |
 
-On the planted CDM both sides fail the same 23 checks. They include `cdmTable` for the missing
+No concept check fails on the local CDM: Synthea writes no records for the wrong sex and no lab
+in an unlisted unit. 400 of the 472 concept checks are not applicable there, because the
+concept never appears.
+
+On the planted CDM both sides fail the same 28 checks. They include `cdmTable` for the missing
 SPECIMEN table (scored as failed, not as an error, because the error says the table does not
 exist), the duplicate `person_id`, the dangling `person_id`, the concept foreign keys on
 populated rows (the planted CDM has no vocabulary), the 1849 birth year, the reversed drug
-dates (caught by both `plausibleStartBeforeEnd` and the older `plausibleTemporalAfter`), and
-the condition with no era. All 75 errored queries are on SPECIMEN: `cdmTable` (failed), 15 `cdmField` checks (not
-applicable, since the table itself is missing), and 59 other checks, scored as errors and not
-applicable.
+dates (caught by both `plausibleStartBeforeEnd` and the older `plausibleTemporalAfter`), the
+condition with no era, and all three concept checks: `plausibleGender` (1 of 1),
+`plausibleGenderUseDescendants` (1 of 1), and `plausibleUnitConceptIds` (1 of 2). All 75
+errored queries are on SPECIMEN: `cdmTable` (failed), 15 `cdmField` checks (not applicable,
+since the table itself is missing), and 59 other checks, scored as errors and not applicable.
 
-Run time on the local CDM: about 16 s for ours, 60 s for DQD.
+Run time on the local CDM: about 18 s for ours, 68 s for DQD.
 
 ## Differences that are not differences
 
