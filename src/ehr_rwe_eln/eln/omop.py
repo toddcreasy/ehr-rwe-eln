@@ -74,13 +74,18 @@ FROM extracted
 """
 
 
+def stage(con: psycopg.Connection) -> None:
+    """Temp tables eln_samples and eln_results: one row per sample (with its OMOP specimen id)
+    and per result, deduplicated across entries. The OMOP and FHIR outputs both read these."""
+    con.execute("DROP TABLE IF EXISTS eln_samples, eln_results")
+    con.execute(SAMPLES_SQL, {"offset": ID_OFFSET})
+    con.execute(RESULTS_SQL)
+
+
 def write_omop(con: psycopg.Connection) -> dict[str, int]:
     """Replace the ELN rows in cdm.specimen, cdm.measurement, and cdm.fact_relationship.
     Returns counts, including what was skipped and why."""
-    con.execute(
-        "DROP TABLE IF EXISTS eln_samples, eln_results, eln_specimen_codes, eln_analyte_codes,"
-        " eln_measurements"
-    )
+    con.execute("DROP TABLE IF EXISTS eln_specimen_codes, eln_analyte_codes, eln_measurements")
     con.execute(
         "DELETE FROM cdm.fact_relationship WHERE (domain_concept_id_1 = %s AND fact_id_1 >= %s)"
         " OR (domain_concept_id_1 = %s AND fact_id_1 >= %s)",
@@ -89,8 +94,7 @@ def write_omop(con: psycopg.Connection) -> dict[str, int]:
     con.execute("DELETE FROM cdm.measurement WHERE measurement_id >= %s", [ID_OFFSET])
     con.execute("DELETE FROM cdm.specimen WHERE specimen_id >= %s", [ID_OFFSET])
 
-    con.execute(SAMPLES_SQL, {"offset": ID_OFFSET})
-    con.execute(RESULTS_SQL)
+    stage(con)
     con.execute("CREATE TEMP TABLE eln_specimen_codes (specimen_type text, code text)")
     con.execute("CREATE TEMP TABLE eln_analyte_codes (analyte text, unit text, code text)")
     with con.cursor() as cur:
