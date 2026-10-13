@@ -28,8 +28,6 @@ services:
       # Inside Compose the database is the db service, not localhost.
       DB_HOST: db
       DB_PORT: 5432
-      # From your shell if exported there, otherwise from .env. Only POST /api/agent needs it.
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     # Localhost only, like the database. No auth, so never expose this port.
     ports:
       - "127.0.0.1:${APP_PORT:-8000}:8000"

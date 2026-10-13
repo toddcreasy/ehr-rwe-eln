@@ -1,6 +1,6 @@
 # ehr-rwe-eln
 
-Real world evidence from synthetic electronic health records, linked to electronic lab notebook data. One OMOP CDM v5.4 database feeds four modules: a cohort pipeline, an ELN to EHR bridge, a target trial emulation toolkit, and a data quality dashboard. Runs locally on PostgreSQL 17 with pgvector in Docker Compose. The AWS deployment was torn down on 2026-10-12; the rest of the AWS stack is being replaced (see the TODO in CLAUDE.md).
+Real world evidence from synthetic electronic health records, linked to electronic lab notebook data. One OMOP CDM v5.4 database feeds four modules: a cohort pipeline, an ELN to EHR bridge, a target trial emulation toolkit, and a data quality dashboard. Runs entirely on your machine in Docker Compose: PostgreSQL 17 with pgvector, plus one app container. No cloud account needed; the agent calls the Anthropic API with your own key.
 
 > **Synthetic data only.** This project uses Synthea output, the MIMIC-IV demo, and synthetic ELN entries. It contains no real patient data and makes no clinical claims. Outputs are for research and demonstration.
 
@@ -19,7 +19,7 @@ Generates synthetic patients with Synthea, loads them into OMOP CDM v5.4, and bu
 
 Reads unstructured lab notebook entries and turns them into structured, linkable records.
 
-- Extracts sample IDs, assays, biomarkers, dosing, and results with an LLM agent on Amazon Bedrock
+- Extracts sample IDs, assays, biomarkers, dosing, and results with an LLM agent on the Anthropic API
 - Every extraction validates against a typed Pydantic model before it is written
 - Writes OMOP `specimen` and `measurement` rows and FHIR R4 `Specimen` and `Observation` resources
 - Links bench results to patient phenotypes through shared subject and specimen identifiers
@@ -59,70 +59,48 @@ Build order: 1, then 7, then 4, then 2. Every module reads the OMOP tables modul
 ## Stack
 
 - **Python 3.14+** with uv, ruff, pytest, pre-commit
-- **Data**: OMOP CDM v5.4 on PostgreSQL 17 with pgvector, in Docker Compose
+- **Data**: OMOP CDM v5.4 on PostgreSQL 17 with pgvector, in Docker Compose; schema changes with Alembic
 - **Analysis**: scikit-learn, statsmodels, lifelines
 - **Interoperability**: FHIR R4 via `fhir.resources`
-- **LLM**: Amazon Bedrock (Claude), Strands Agents, AgentCore Runtime and Gateway (MCP)
-- **App**: FastAPI on ECS Express Mode, Next.js on Amplify, Cognito auth
-- **Infra**: AWS CDK (Python), GitHub Actions with OIDC, CloudWatch, AWS Budgets
+- **LLM**: Claude on the Anthropic API, through Strands Agents
+- **App**: FastAPI serving the API under `/api` and a static Next.js build at `/`
+- **CI**: GitHub Actions, lint and tests against a Postgres service container
 
-The platform is built in phases from the [project-template AWS build plan](https://github.com/toddcreasy/project-template/tree/main/aws). See `CLAUDE.md` for the plan and its STOP gates.
+The platform was first built and deployed on AWS, then moved to this local stack on 2026-10-12. That history is in `docs/SETUP.md`.
 
 ## Status
 
-| Phase | Scope | Status |
-|---|---|---|
-| 0 | Repo scaffold | Done |
-| 1 | AWS guardrails: budget, alerts, GitHub OIDC role | Done |
-| 2 | Data layer: Aurora Serverless v2 + pgvector, S3, Alembic | Done |
-| 3 | Backend API: FastAPI on ECS Express Mode | Done |
-| 4 | Agent: Strands on Bedrock, AgentCore Runtime | Done |
-| 5 | MCP tools: AgentCore Gateway over the backend | Done |
-| 6 | Observability and evals | Done |
-| 7 | Frontend: Next.js on Amplify, Cognito sign-in | Done |
-| 8 | CI/CD: GitHub Actions, deploy on merge to main | Done |
-| 9 | Hardening and cost review | Not started |
-| 10 | Archive the build plan to `docs/SETUP.md` | Not started |
-| Modules | 1, 7, 4, 2 | Not started |
+| Part | Status |
+|---|---|
+| Local platform: Postgres, API, agent, frontend in Compose | Done |
+| Module 1: cohort pipeline | Done |
+| Modules 7, 4, 2 | Not started |
 
 ## Setup
 
-Requires [uv](https://docs.astral.sh/uv/).
+Requires [uv](https://docs.astral.sh/uv/), Docker, and Node.js 24 (only for frontend work outside Docker).
 
 ```bash
 git clone https://github.com/toddcreasy/ehr-rwe-eln.git
 cd ehr-rwe-eln
+cp .env.example .env    # set DB_PASSWORD and ANTHROPIC_API_KEY
 uv sync
 uv run pre-commit install
-uv run ruff check .
-uv run pytest
 ```
 
-Copy `.env.example` to `.env` and fill in values as phases add them.
+`.env` is gitignored and is the only place secrets live. Every variable the app reads is listed in `.env.example`. A variable exported in your shell overrides the same one in `.env`, so don't export `ANTHROPIC_API_KEY` or the `DB_*` variables.
 
-### Database access
-
-Aurora sits in isolated subnets with no public address. Local scripts reach it through the RDS Data API using `DATABASE_SECRET_ARN` and your AWS credentials, so no bastion or VPN is needed.
-
-```bash
-uv run python scripts/migrate.py    # apply pending Alembic migrations
-uv run python scripts/db_check.py   # pgvector round trip, leaves nothing behind
-```
-
-`migrate.py` renders migrations with Alembic offline mode and runs the SQL in one Data API transaction. The cluster auto-pauses to 0 ACU after 5 minutes idle; the first call after a pause takes about 15 seconds while it resumes.
-
-### Run the API locally
-
-The deployed API talks to Aurora; locally it talks to Postgres 17 with pgvector from `docker-compose.yml`. `.env` needs `DB_HOST=localhost` and a `DB_PASSWORD` of your choice (see `.env.example`).
+### Run it
 
 ```bash
 docker compose up -d --build --wait   # Postgres on 127.0.0.1:5432, app on http://127.0.0.1:8000
+uv run alembic upgrade head           # apply pending migrations
 curl localhost:8000/api/health/db
 curl -X POST localhost:8000/api/agent -H 'Content-Type: application/json' \
   -d '{"prompt": "Is the database reachable?"}'
 ```
 
-The `app` service serves the API under `/api` and the built frontend at `/`. There is no sign-in, so both ports bind to 127.0.0.1 only. `POST /api/agent` needs `ANTHROPIC_API_KEY`, from your shell or `.env`.
+The `app` service serves the API under `/api` and the built frontend at `/`. There is no sign-in, so both ports bind to 127.0.0.1 only. Each `POST /api/agent` call costs a fraction of a cent on your Anthropic key.
 
 For a reload-on-save loop, run the database in Compose and the API on the host:
 
@@ -132,59 +110,22 @@ docker compose up -d --wait db
 uv run fastapi dev                         # http://localhost:8000, reloads on save
 ```
 
-### Run the agent locally
-
-The agent (`src/ehr_rwe_eln/agents/`) is a Strands agent on Bedrock, deployed to AgentCore Runtime. Locally it uses your AWS credentials to call Claude, so each call costs a fraction of a cent.
+`uv run python scripts/db_check.py` runs a pgvector round trip against the database and leaves nothing behind.
 
 ```bash
-uv run python -m ehr_rwe_eln.agents.app        # serves /ping and /invocations on :8080
-curl -X POST localhost:8080/invocations -H 'Content-Type: application/json' \
-  -d '{"prompt": "What time is it in UTC?"}'
-uv run python scripts/agent_smoke.py           # calls the deployed runtime (needs AGENT_RUNTIME_ARN)
+docker compose down      # stop; data stays in the ehr-rwe-eln-db volume
+docker compose down -v   # stop and delete the data
 ```
 
-The agent reaches the backend through AgentCore Gateway, which publishes `GET /health/db` as the MCP tool `backend___checkDatabaseHealth`. To use the Gateway tool locally without deploying the agent, set `GATEWAY_URL` in `.env` (AgentStack output `GatewayUrl`). The local agent signs MCP requests with your own AWS credentials, which need `bedrock-agentcore:InvokeGateway`. The backend must be running (`backend_tasks=1`). Leave `GATEWAY_URL` unset to run with local tools only.
-
-### Evals and observability
+### Tests and evals
 
 ```bash
-uv run pytest evals    # 12 golden cases against real Bedrock models, about 20 s and a few cents
+uv run ruff check .
+uv run pytest          # fast tests; needs the Compose db running
+uv run pytest evals    # golden cases against the real model, about 10 s and a few cents
 ```
 
-Plain `uv run pytest` never collects `evals/`. The three Gateway cases skip unless `GATEWAY_URL` is set and the backend is running.
-
-Deployed runs are traced end to end (model calls, tool calls, the Gateway hop) with ADOT and CloudWatch Transaction Search: CloudWatch console, **GenAI Observability**, agent `ehr_rwe_eln_hello`. The `ehr-rwe-eln-agent` dashboard shows invocations, errors, latency, Gateway tool time, and daily tokens. Alarms on error rate and daily tokens email the Phase 1 alerts topic. AgentCore Evaluations scores every live run for helpfulness and tool selection.
-
-### Pause the backend when idle
-
-The API runs on ECS Express Mode (Fargate). A running task costs about $13 a month; the load balancer costs about $24 a month whether or not a task runs. Scale to zero tasks when you stop working:
-
-```bash
-cd infra
-cdk deploy BackendStack -c backend_tasks=0   # pause
-cdk deploy BackendStack                      # resume (backend_tasks=1 in cdk.json)
-```
-
-## Teardown
-
-CDK app lives in `infra/`. Deployed stacks are named `ehr-rwe-eln-<Stack>`; other projects in the same account own the bare names. CDK commands take the short ID (`OpsStack`).
-
-Destroy in reverse dependency order (`cdk list --show-dependencies` prints the graph), `OpsStack` last so budget alerts stay live until everything else is gone. `AgentStack` and `FrontendStack` also attach policies to the CI role in `OpsStack` by name, so they must go first:
-
-```bash
-cd infra
-cdk destroy FrontendStack
-cdk destroy AgentStack
-cdk destroy BackendStack
-cdk destroy DataStack
-cdk destroy OpsStack
-```
-
-Skip any stack not deployed yet (`cdk list` shows what the app defines). Run `cdk diff <Stack>` first to confirm what will go. Left in place on purpose: the `CDKToolkit` bootstrap stack and the GitHub OIDC provider, both shared with other projects in the account. CloudWatch Transaction Search, which agent tracing needs, is an account-wide setting owned by the glia-nav project; if that project disables it, traces from this one stop.
-
-`DataStack` leaves two things behind after destroy: a final Aurora snapshot (the cluster default) and the documents bucket (S3 default is retain). Delete both by hand once you are sure nothing in them is needed.
-
-`AgentStack` leaves the two log groups AgentCore creates itself: `/aws/bedrock-agentcore/runtimes/ehr_rwe_eln_hello-*` and `/aws/bedrock-agentcore/evaluations/results/ehr_rwe_eln_quality-*`. Their events expire after 30 days; delete the empty groups by hand. Container images stay in the shared `CDKToolkit` asset repository.
+Plain `uv run pytest` never collects `evals/`.
 
 ## Data and licensing
 

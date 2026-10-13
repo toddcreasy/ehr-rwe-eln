@@ -21,10 +21,6 @@ node_modules/
 frontend/.next/
 frontend/out/
 
-# CDK
-infra/cdk.out/
-cdk.context.json
-
 # Data (synthetic or not, never commit patient-level files)
 data/
 *.parquet

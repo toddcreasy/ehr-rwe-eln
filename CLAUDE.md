@@ -33,9 +33,9 @@ Decided 2026-10-12: PostgreSQL 17 with pgvector replaces both DuckDB and Aurora.
 - [x] Plan the move (agreed 2026-10-12): Anthropic API replaces Bedrock (each user brings `ANTHROPIC_API_KEY`); no auth, the app binds to 127.0.0.1; everything runs in Docker Compose (`db` plus one `app` container serving the API, agent, and static frontend). Dropped: Guardrail, AgentCore (Runtime, Gateway, Observability, Evaluations), S3, Secrets Manager, Cognito, Budgets, CDK. Work in four PRs:
   - [x] 1. Agent on the Anthropic API, served at `POST /agent`; evals run against it
   - [x] 2. Remove auth; FastAPI serves the frontend; `app` service in Compose
-  - [ ] 3. Delete `infra/`, the AWS scripts and dependencies; migrations run with plain Alembic
-- [ ] Rewrite "Stack decisions", "Conventions", and the README install steps for the local stack
-- [x] Tear down the deployed AWS stacks (2026-10-12, README runbook). `deploy.yml` and the `cdk-diff` CI job are gone; `lint-test` is the only required check
+  - [x] 3. Delete `infra/`, the AWS scripts and dependencies; migrations run with plain Alembic
+- [x] Rewrite "Stack decisions", "Conventions", and the README install steps for the local stack
+- [x] Tear down the deployed AWS stacks (2026-10-12). `deploy.yml` and the `cdk-diff` CI job are gone; `lint-test` is the only required check
 
 Data rules:
 - Synthetic or openly licensed de-identified data only: Synthea output, the MIMIC-IV demo, and synthetic ELN entries generated in this repo. No real patient data, ever.
@@ -45,13 +45,13 @@ Data rules:
 
 Domain stack (additions to the platform stack below):
 
-| Slot | Tool | AWS? | If not AWS, why |
-|---|---|---|---|
-| Synthetic EHR source | Synthea (CSV output) | No | Open standard synthetic patient generator. AWS has no equivalent. |
-| Common data model | OMOP CDM v5.4 on PostgreSQL 17 + pgvector | No | The model is an OHDSI standard; Postgres hosts it, locally in Docker Compose. |
-| Interoperability format | FHIR R4 via `fhir.resources` | No | Language-level library. AWS HealthLake costs too much at personal scale. |
-| Causal inference and survival | scikit-learn, statsmodels, lifelines | No | Language-level libraries. |
-| ELN source | Synthetic entries; eLabFTW API optional | No | Open-source ELN with a REST API. AWS makes no ELN. |
+| Slot | Tool | Why |
+|---|---|---|
+| Synthetic EHR source | Synthea (CSV output) | Open standard synthetic patient generator. |
+| Common data model | OMOP CDM v5.4 on PostgreSQL 17 + pgvector | The model is an OHDSI standard; Postgres hosts it in Docker Compose. |
+| Interoperability format | FHIR R4 via `fhir.resources` | Language-level library; no FHIR server needed at this scale. |
+| Causal inference and survival | scikit-learn, statsmodels, lifelines | Language-level libraries. |
+| ELN source | Synthetic entries; eLabFTW API optional | Open-source ELN with a REST API. |
 
 OHDSI reference implementations (ETL-Synthea, DataQualityDashboard, CohortMethod) are R. This repo reimplements the needed subset in Python and uses the R tools as the correctness reference, not as dependencies.
 
@@ -62,7 +62,7 @@ Before doing anything, explain what you are about to do and why.
 
 1. Before any change that edits files, adds a dependency, or runs training, say in plain language what the step is and why it comes next.
 2. Define ML terms the first time they come up (backbone, embedding, linear probe, epoch, loss, optimizer). One or two sentences each, no stacked jargon.
-3. Point to the code: file and function, e.g. `infra/stacks/data_stack.py:24`, so the maintainer can read along.
+3. Point to the code: file and function, e.g. `src/ehr_rwe_eln/api/main.py:24`, so the maintainer can read along.
 4. For every tool or library, say what job it does and why it was picked over the obvious alternative.
 5. After a training or evaluation run, explain what the numbers mean and whether they are good.
 6. This section overrides "skip preamble" and "no trailing summaries" below for ML concepts and decisions. Routine steps (installs, lint fixes, commits) stay terse.
@@ -100,7 +100,7 @@ decisions.
 ### Python
 - Use `uv` for everything: `uv sync`, `uv run <cmd>`, `uv add <pkg>`. Never activate a venv manually; `uv run` handles it. Never use pip with `--break-system-packages`.
 - Always `pyproject.toml`. Always a `.env.example` with every variable the app reads.
-- Settings load through `pydantic-settings`. Secrets are `SecretStr`. Locally they come from `.env`; deployed they come from AWS Secrets Manager or SSM. `.env` is gitignored.
+- Settings load through `pydantic-settings`. Secrets are `SecretStr`. Every setting and secret comes from `.env` (gitignored), never from the shell, a keychain, or a cloud secret store.
 
 ### Coding principles
 - Don't add features, refactors, or improvements beyond what was asked.
@@ -112,31 +112,23 @@ decisions.
 
 ## Stack decisions
 
-AWS-first. Anything not AWS is listed with the reason AWS cannot fill the slot.
+Local-first: everything runs on one machine in Docker Compose, with no cloud account and nothing tied to the host OS. The only external service is the Anthropic API, on each user's own key.
 
-| Slot | Tool | AWS? | If not AWS, why |
-|---|---|---|---|
-| Infrastructure as code | AWS CDK (Python) | Yes | |
-| Models | Amazon Bedrock (Claude family) | Yes | |
-| Agent framework | Strands Agents SDK | Yes (AWS open source) | |
-| Agent runtime | Bedrock AgentCore Runtime | Yes | |
-| Tool access (MCP) | AgentCore Gateway | Yes | |
-| Agent observability | AgentCore Observability + CloudWatch | Yes | |
-| Production evals | AgentCore Evaluations | Yes | |
-| Relational + vector DB | PostgreSQL 17 + pgvector, in Docker Compose | No | Runs anywhere Docker does, so people can install the project without AWS. Concurrent writes and pgvector for RAG. Replaces Aurora Serverless v2 (see the TODO under Project scope). |
-| Object storage | S3 | Yes | |
-| Secrets | AWS Secrets Manager | Yes | |
-| Auth | Amazon Cognito | Yes | |
-| Backend hosting | Amazon ECS Express Mode on Fargate (alt: Lambda + API Gateway) | Yes | |
-| Frontend hosting | AWS Amplify Hosting | Yes | |
-| Cost control | AWS Budgets + cost allocation tags | Yes | |
-| Backend framework | FastAPI + Pydantic | No | Language-level tooling. AWS makes no Python web framework. |
-| Python toolchain | uv, ruff, pytest | No | Language ecosystem tools. No AWS equivalent exists. |
-| DB migrations | Alembic | No | AWS has no schema migration tool for application tables. |
-| Dev-loop evals | pydantic-evals golden set in pytest | No | AgentCore Evaluations scores deployed traces. Pre-deploy evals must run locally in seconds. Both are used. |
-| Frontend framework | Next.js + React + Tailwind | No | AWS hosts frontends (Amplify) but does not make a frontend framework. |
-| Code host + CI runner | GitHub + GitHub Actions | No | The repo lives on GitHub. Actions integrates natively, has a free tier, and assumes an AWS role via OIDC with no stored keys. AWS CodePipeline would add setup and cost for no benefit at this scale. |
-| Containers | Docker | No | Open standard. AWS consumes it; it does not replace it. |
+| Slot | Tool | Why |
+|---|---|---|
+| Models | Claude on the Anthropic API | Each user brings `ANTHROPIC_API_KEY`. Replaced Bedrock 2026-10-12. |
+| Agent framework | Strands Agents SDK, Anthropic provider | Already built on it; it handles the tool loop and structured output. |
+| Relational + vector DB | PostgreSQL 17 + pgvector, in Docker Compose | Runs anywhere Docker does. Concurrent writes and pgvector for RAG. Replaced DuckDB and Aurora Serverless v2. |
+| Secrets and settings | `.env` read by `pydantic-settings` | One gitignored file; `.env.example` lists every variable. |
+| Auth | None; every port binds to 127.0.0.1 | Single-user local app. Replaced Cognito. |
+| App hosting | One `app` container in Docker Compose | FastAPI serves the API under `/api` and the static frontend at `/`. |
+| Backend framework | FastAPI + Pydantic | Typed request and response models, OpenAPI for free. |
+| Python toolchain | uv, ruff, pytest | Fast, one tool per job, lockfile pinned. |
+| DB migrations | Alembic | Versioned schema changes; `uv run alembic upgrade head` against the Compose Postgres. |
+| Dev-loop evals | pydantic-evals golden set in pytest | Scores the agent against the real model in seconds. |
+| Frontend framework | Next.js + React + Tailwind, static export | Builds to plain files, so no Node server at runtime. |
+| Code host + CI runner | GitHub + GitHub Actions | `lint-test` runs ruff and pytest against a Postgres service container. |
+| Containers | Docker + Docker Compose | Open standard; the whole stack starts with one command. |
 
 Excluded on purpose (wrong scale for a personal project): Kubernetes, Terraform, Snowflake, Databricks, A2A, LiteLLM, dedicated vector databases, WAF-heavy perimeter builds.
 
@@ -155,9 +147,8 @@ How each piece was built, verified, and what it costs: see `docs/SETUP.md`.
 │   ├── tte/               # module 4: target trial emulation
 │   └── dq/                # module 7: data quality checks
 ├── tests/                 # fast tests; local services only (the Compose Postgres), nothing off the machine
-├── infra/                 # CDK app: app.py + stacks/
 ├── migrations/            # Alembic versioned schema changes
-├── frontend/              # Next.js app (Phase 7)
+├── frontend/              # Next.js app, static export served by FastAPI
 ├── evals/                 # golden set; hits a real model, so slow and costs money
 ├── scripts/               # one-shot operational scripts, never imported
 ├── data/                  # local synthetic data and vocabularies, gitignored
@@ -170,17 +161,8 @@ What each directory is for, which of these are real conventions and which are ch
 
 ## Conventions
 
-- One CDK app in `infra/`, one stack per phase concern: `NetworkStack`, `DataStack`, `BackendStack`, `AgentStack`, `FrontendStack`, `OpsStack`.
-- Tag every resource: `project=ehr-rwe-eln`, `env=dev`, `managed-by=cdk`.
-- One AWS region: `us-east-1`. Do not spread resources across regions.
-- Model tiering: default to the small Bedrock model tier (Haiku class) for extraction, filtering, and routing. Use the large tier only for final synthesis. Prompt caching on for any repeated prefix. Batch API for offline jobs.
-- Log retention: 30 days on every log group. Set it explicitly; the default is forever.
-
-## AWS environment
-
-- Account `123456789012`, region `us-east-1`. Credentials come from IAM Identity Center (`https://example.awsapps.com/start`, permission set `AdministratorAccess`) and expire. On `ExpiredToken` or `Unable to locate credentials`, ask the maintainer to run `aws sso login`. Do not try to re-authenticate non-interactively.
-- Other projects (glia-nav, nf-multiomics) share this account. This project's stacks are `ehr-rwe-eln-<Stack>`; the bare stack names belong to glia-nav. Never touch resources not tagged `project=ehr-rwe-eln`.
-- The `ehr-rwe-eln-*` stacks were destroyed on 2026-10-12. Nothing deploys on merge; branch protection requires `lint-test` only.
+- Everything runs in `docker-compose.yml`. Bind every published port to 127.0.0.1; there is no auth.
+- Model tiering: default to `MODEL_SMALL` (Haiku class) for extraction, filtering, and routing. Use `MODEL_LARGE` only for final synthesis. Prompt caching on for any repeated prefix. Batch API for offline jobs.
 
 ## Settled decisions
 
@@ -188,7 +170,7 @@ Do not re-ask. Rationale and history in `docs/SETUP.md`.
 
 | Decision | Value |
 |---|---|
-| API key and spend limit | Personal key scoped to the `ehr-rwe-eln` workspace in the Claude Console, which carries the monthly spend limit. The key lives in macOS Keychain (`anthropic-api-key`) and `~/.zshrc` exports it as `ANTHROPIC_API_KEY` |
+| API key and spend limit | Personal key scoped to the `ehr-rwe-eln` workspace in the Claude Console, which carries the monthly spend limit. The key lives only in `.env` as `ANTHROPIC_API_KEY`. No macOS Keychain, no shell export: an exported variable would override `.env` |
 | Python | 3.14, pinned in `.python-version` |
 | Database | PostgreSQL 17 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg17-trixie`, defined in `docker-compose.yml` |
 | `MODEL_SMALL` | `claude-haiku-5-5` on the Anthropic API. Probed 2026-10-12: works (all 12 evals pass) |

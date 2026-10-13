@@ -6,7 +6,8 @@ Phase 10 moved them here once infrastructure was done, so `CLAUDE.md` carries on
 session needs. Each phase lists the tools it introduced, why they were picked, the checklist as
 completed, and the STOP gate that verified it.
 
-Runbooks (local dev, scaling the backend to zero, teardown order) are in the README.
+The AWS stacks were destroyed on 2026-10-12 and `infra/` was deleted after that. This file is the record
+of what was built; its AWS commands no longer run. The local run steps are in the README.
 
 # Build phases
 
