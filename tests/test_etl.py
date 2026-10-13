@@ -294,6 +294,16 @@ def test_values_and_units(con):
     ) == [("Never smoked",)]
 
 
+def test_ids_break_ties_on_every_column(con):
+    # Same person, time, concept, and source code: the value decides the order, NULL last.
+    assert one(con, "SELECT measurement_id, value_as_number FROM cdm.measurement ORDER BY 1") == [
+        (1, Decimal("0.0045")),
+        (2, Decimal("3")),
+        (3, Decimal("12")),
+        (4, None),
+    ]
+
+
 def test_cdm_source_describes_the_build(con):
     assert one(
         con,

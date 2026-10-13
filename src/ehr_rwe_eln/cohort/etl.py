@@ -284,9 +284,7 @@ def run_etl(con: psycopg.Connection, synthea_csv: Path) -> dict:
     con.execute(CODE_MAP_SQL)
     con.execute(MAPPED_SQL, {"no_unit": list(NO_UNIT), "unit_codes": json.dumps(UNIT_CODES)})
     for domain, (table, prefix, id_column, date_prefix) in DOMAIN_TABLES.items():
-        columns = {
-            id_column: "row_number() OVER "
-            "(ORDER BY person_id, start_datetime, concept_id, source_value)",
+        values = {
             "person_id": "person_id",
             f"{prefix}_concept_id": "concept_id",
             f"{date_prefix}_date": "CAST(start_datetime AS DATE)",
@@ -297,6 +295,11 @@ def run_etl(con: psycopg.Connection, synthea_csv: Path) -> dict:
             f"{prefix}_source_concept_id": "source_concept_id",
             **EXTRA_COLUMNS.get(table, {}),
         }
+        # Ids follow person and start time, then every other written value, so each build gives
+        # the same ids. Rows still tied are identical in every column.
+        order = ["person_id", "start_datetime"]
+        order += [v for v in values.values() if v not in order]
+        columns = {id_column: f"row_number() OVER (ORDER BY {', '.join(order)})", **values}
         con.execute(
             f"INSERT INTO cdm.{table} ({', '.join(columns)}) "
             f"SELECT {', '.join(columns.values())} FROM mapped WHERE domain_id = %s",
