@@ -85,6 +85,11 @@ class Covariates(Strict):
 class Analysis(Strict):
     # Weights below this percentile, and above 100 minus it, are set to those percentiles.
     truncate_percentile: float = Field(default=1, ge=0, lt=50)
+    # Days after time zero at which to report each arm's risk of the outcome.
+    risk_days: list[int] = Field(default=[365, 1095, 1825], min_length=1)
+    # Bootstrap: resample people this many times, rerunning the whole analysis each time.
+    bootstrap_replicates: int = Field(default=500, ge=0)
+    seed: int = 0
 
 
 class Protocol(Strict):

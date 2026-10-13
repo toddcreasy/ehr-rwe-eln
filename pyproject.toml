@@ -12,6 +12,7 @@ dependencies = [
     "alembic>=1.20.0",
     "anthropic>=0.125.0",
     "fastapi[standard]>=0.142.2",
+    "lifelines>=0.30.0",
     "pandas>=3.0.6",
     "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.15.0",
@@ -58,6 +59,11 @@ quote-style = "double"
 testpaths = ["tests"]
 markers = ["evals: hits a real model; slow and costs money"]
 addopts = "-ra"
+# lifelines 0.30 uses calls pandas 4 and Python will drop; nothing in our code does.
+filterwarnings = [
+    "ignore::pandas.errors.Pandas4Warning:lifelines",
+    "ignore:datetime.datetime.utcnow:DeprecationWarning:lifelines",
+]
 
 [tool.fastapi]
 entrypoint = "ehr_rwe_eln.api.main:app"

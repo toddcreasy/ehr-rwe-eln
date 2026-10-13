@@ -75,7 +75,7 @@ The platform was first built and deployed on AWS, then moved to this local stack
 | Local platform: Postgres, API, agent, frontend in Compose | Done |
 | Module 1: cohort pipeline | Done |
 | Module 7: data quality | Done: all DQD v2.9.0 checks, scoring, and dashboard, matched against DQD itself ([comparison](docs/dqd_comparison.md)) |
-| Module 4: target trial emulation | In progress: protocols, analysis tables, propensity scores and balance done; survival estimates next |
+| Module 4: target trial emulation | In progress: protocols, propensity scores, and survival estimates done; bias report next |
 | Module 2 | Not started |
 
 ## Setup
