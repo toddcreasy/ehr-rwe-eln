@@ -1,11 +1,12 @@
 # Local stack: Postgres (db) and the API plus frontend (app) on http://127.0.0.1:8000.
 #   docker compose up -d --build   build and start both (reads .env)
-#   docker compose down        stop it; data stays in the ehr-rwe-eln-db volume
+#   docker compose down        stop it; data stays in the ehr-rwe-eln-pg18 volume
 #   docker compose down -v     stop it and delete the data
 services:
   db:
-    # PostgreSQL 17 with pgvector 0.8.7. Pinned exactly; bump deliberately.
-    image: pgvector/pgvector:0.8.7-pg17-trixie
+    # PostgreSQL 18 with pgvector 0.8.7. Pinned exactly; bump deliberately. A new major version
+    # cannot read the old one's data, so a bump also needs a new volume.
+    image: pgvector/pgvector:0.8.7-pg18-trixie
     environment:
       POSTGRES_DB: ehr_rwe_eln
       POSTGRES_USER: postgres
@@ -14,7 +15,8 @@ services:
     ports:
       - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
-      - db:/var/lib/postgresql/data
+      # Postgres 18 images keep data in /var/lib/postgresql/18/docker, so mount the parent.
+      - db:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d ehr_rwe_eln"]
       interval: 2s
@@ -43,4 +45,4 @@ services:
 
 volumes:
   db:
-    name: ehr-rwe-eln-db
+    name: ehr-rwe-eln-pg18

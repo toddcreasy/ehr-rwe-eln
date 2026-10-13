@@ -1,7 +1,8 @@
 # DataQualityDashboard comparison
 
 Module 7's data quality checks (`src/ehr_rwe_eln/dq/`) checked against OHDSI DataQualityDashboard
-(DQD), the reference implementation, on the same databases. Run on 2026-10-13.
+(DQD), the reference implementation, on the same databases. Run on 2026-10-13, last on
+PostgreSQL 18.6 after the ETL fixes in #35 and #36.
 
 **Reference:** DQD v2.9.0 in R (`data/r-lib`), `executeDqChecks` with `cdmVersion = "5.4"`,
 all three check levels (TABLE, FIELD, CONCEPT), default thresholds and default excluded tables.
@@ -29,15 +30,15 @@ ids themselves, including concept checks on two concepts (`..._4090861,4025213`)
 |---|---:|---:|
 | Checks, ours and DQD | 2,384 | 2,384 |
 | Checks with any field different | 0 | 0 |
-| Failed | 12 | 28 |
+| Failed | 9 | 28 |
 | Queries that errored (`countErrorFailed`) | 0 | 75 |
 | Scored as errors (`isError`) | 0 | 59 |
-| Not applicable | 1,134 | 1,733 |
-| DQD `percentPassed` | 99.50 | 98.83 |
+| Not applicable | 1,139 | 1,733 |
+| DQD `percentPassed` | 99.62 | 98.83 |
 
 No concept check fails on the local CDM: Synthea writes no records for the wrong sex and no lab
-in an unlisted unit. 400 of the 472 concept checks are not applicable there, because the
-concept never appears.
+in an unlisted unit. 395 of the 472 concept checks are not applicable there, because the
+concept (or, for unit checks, a mapped unit) never appears.
 
 On the planted CDM both sides fail the same 28 checks. They include `cdmTable` for the missing
 SPECIMEN table (scored as failed, not as an error, because the error says the table does not
@@ -49,7 +50,7 @@ condition with no era, and all three concept checks: `plausibleGender` (1 of 1),
 errored queries are on SPECIMEN: `cdmTable` (failed), 15 `cdmField` checks (not applicable,
 since the table itself is missing), and 59 other checks, scored as errors and not applicable.
 
-Run time on the local CDM: about 18 s for ours, 68 s for DQD.
+Run time on the local CDM: about 20 s for ours, 60 s for DQD.
 
 ## Differences that are not differences
 

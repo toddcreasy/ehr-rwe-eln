@@ -1,6 +1,6 @@
 # ehr-rwe-eln
 
-Real world evidence from synthetic electronic health records, linked to electronic lab notebook data. One OMOP CDM v5.4 database feeds four modules: a cohort pipeline, an ELN to EHR bridge, a target trial emulation toolkit, and a data quality dashboard. Runs entirely on your machine in Docker Compose: PostgreSQL 17 with pgvector, plus one app container. No cloud account needed; the agent calls the Anthropic API with your own key.
+Real world evidence from synthetic electronic health records, linked to electronic lab notebook data. One OMOP CDM v5.4 database feeds four modules: a cohort pipeline, an ELN to EHR bridge, a target trial emulation toolkit, and a data quality dashboard. Runs entirely on your machine in Docker Compose: PostgreSQL 18 with pgvector, plus one app container. No cloud account needed; the agent calls the Anthropic API with your own key.
 
 > **Synthetic data only.** This project uses Synthea output, the MIMIC-IV demo, and synthetic ELN entries. It contains no real patient data and makes no clinical claims. Outputs are for research and demonstration.
 
@@ -59,7 +59,7 @@ Build order: 1, then 7, then 4, then 2. Every module reads the OMOP tables modul
 ## Stack
 
 - **Python 3.14+** with uv, ruff, pytest, pre-commit
-- **Data**: OMOP CDM v5.4 on PostgreSQL 17 with pgvector, in Docker Compose; schema changes with Alembic
+- **Data**: OMOP CDM v5.4 on PostgreSQL 18 with pgvector, in Docker Compose; schema changes with Alembic
 - **Analysis**: scikit-learn, statsmodels, lifelines
 - **Interoperability**: FHIR R4 via `fhir.resources`
 - **LLM**: Claude on the Anthropic API, through the Anthropic Python SDK's tool runner

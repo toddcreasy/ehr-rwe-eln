@@ -25,7 +25,7 @@ Build order after the platform: 1, then 7, then 4, then 2. Each module depends o
 
 Goal: anyone can clone the repo, install it, and run every module on their own machine without an AWS account. This comes before module 7 and changes the platform the remaining modules build on.
 
-Decided 2026-10-12: PostgreSQL 17 with pgvector replaces both DuckDB and Aurora. The app will have concurrent writers and large vector search (RAG), which DuckDB's single-writer file does not fit. It runs locally from `docker-compose.yml`, and tests run against that database.
+Decided 2026-10-12: PostgreSQL with pgvector replaces both DuckDB and Aurora (17 at first, to match Aurora; 18 since 2026-10-13). The app will have concurrent writers and large vector search (RAG), which DuckDB's single-writer file does not fit. It runs locally from `docker-compose.yml`, and tests run against that database.
 
 - [x] `docker-compose.yml` with the database service
 - [x] Port module 1 from DuckDB to Postgres. The 1,325,353-row reconciliation, the counts in `docs/etl_synthea_comparison.md`, and both cohorts reproduce exactly
@@ -48,7 +48,7 @@ Domain stack (additions to the platform stack below):
 | Slot | Tool | Why |
 |---|---|---|
 | Synthetic EHR source | Synthea (CSV output) | Open standard synthetic patient generator. |
-| Common data model | OMOP CDM v5.4 on PostgreSQL 17 + pgvector | The model is an OHDSI standard; Postgres hosts it in Docker Compose. |
+| Common data model | OMOP CDM v5.4 on PostgreSQL 18 + pgvector | The model is an OHDSI standard; Postgres hosts it in Docker Compose. |
 | Interoperability format | FHIR R4 via `fhir.resources` | Language-level library; no FHIR server needed at this scale. |
 | Causal inference and survival | scikit-learn, statsmodels, lifelines | Language-level libraries. |
 | ELN source | Synthetic entries; eLabFTW API optional | Open-source ELN with a REST API. |
@@ -118,7 +118,7 @@ Local-first: everything runs on one machine in Docker Compose, with no cloud acc
 |---|---|---|
 | Models | Claude on the Anthropic API | Each user brings `ANTHROPIC_API_KEY`. Replaced Bedrock 2026-10-12. |
 | Agent framework | Anthropic Python SDK, `client.beta.messages.tool_runner` | Runs the tool loop and returns typed output with no extra framework. Replaced Strands Agents, which pulled in boto3. |
-| Relational + vector DB | PostgreSQL 17 + pgvector, in Docker Compose | Runs anywhere Docker does. Concurrent writes and pgvector for RAG. Replaced DuckDB and Aurora Serverless v2. |
+| Relational + vector DB | PostgreSQL 18 + pgvector, in Docker Compose | Runs anywhere Docker does. Concurrent writes and pgvector for RAG. Replaced DuckDB and Aurora Serverless v2. |
 | Secrets and settings | `.env` read by `pydantic-settings` | One gitignored file; `.env.example` lists every variable. |
 | Auth | None; every port binds to 127.0.0.1 | Single-user local app. Replaced Cognito. |
 | App hosting | One `app` container in Docker Compose | FastAPI serves the API under `/api` and the static frontend at `/`. |
@@ -172,6 +172,6 @@ Do not re-ask. Rationale and history in `docs/SETUP.md`.
 |---|---|
 | API key and spend limit | Personal key scoped to the `ehr-rwe-eln` workspace in the Claude Console, which carries the monthly spend limit. The key lives only in `.env` as `ANTHROPIC_API_KEY`. No macOS Keychain, no shell export: an exported variable would override `.env` |
 | Python | 3.14, pinned in `.python-version` |
-| Database | PostgreSQL 17 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg17-trixie`, defined in `docker-compose.yml` |
+| Database | PostgreSQL 18 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg18-trixie`, defined in `docker-compose.yml`. Moved from 17 on 2026-10-13: 17 only matched the retired Aurora cluster |
 | `MODEL_SMALL` | `claude-haiku-5-5` on the Anthropic API. Probed 2026-10-12: works (all 12 evals pass) |
 | `MODEL_LARGE` | `claude-sonnet-5-5` on the Anthropic API. Probed 2026-10-12: works. Final synthesis only |

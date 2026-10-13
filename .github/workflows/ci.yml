@@ -13,7 +13,7 @@ jobs:
     # Same image as docker-compose.yml. The password exists only inside this job.
     services:
       db:
-        image: pgvector/pgvector:0.8.7-pg17-trixie
+        image: pgvector/pgvector:0.8.7-pg18-trixie
         env:
           POSTGRES_DB: ehr_rwe_eln
           POSTGRES_PASSWORD: ci-only
