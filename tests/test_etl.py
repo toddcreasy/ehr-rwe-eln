@@ -164,6 +164,10 @@ def etl(pg_module, tmp_path_factory):
             "DATE '2099-12-31', NULL)",
             [cid, code, domain, vocab, standard, code],
         )
+    con.execute(
+        "INSERT INTO cdm.vocabulary VALUES ('None', 'OMOP Standardized Vocabularies', NULL, "
+        "'v5.0 TEST', 0)"
+    )
     for source, target in MAPS_TO:
         con.execute(
             "INSERT INTO cdm.concept_relationship VALUES (%s, %s, 'Maps to', DATE '1970-01-01', "
@@ -241,6 +245,14 @@ def test_values_and_units(con):
     assert one(
         con, "SELECT value_as_string FROM cdm.observation WHERE observation_source_value = 'L-TEXT'"
     ) == [("Never smoked",)]
+
+
+def test_cdm_source_describes_the_build(con):
+    assert one(
+        con,
+        "SELECT cdm_version, cdm_version_concept_id, vocabulary_version, source_release_date, "
+        "cdm_release_date = CURRENT_DATE FROM cdm.cdm_source",
+    ) == [("5.4", 902983, "v5.0 TEST", datetime.date(2024, 4, 2), True)]
 
 
 def test_every_source_row_lands(etl):

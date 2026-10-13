@@ -27,6 +27,24 @@ SOURCES = (
     "devices",
 )
 
+# OMOP CDM Version 5.4.3: the CommonDataModel tag the DDL comes from.
+CDM_VERSION_CONCEPT = 902983
+
+# One row describing this database. DQD reads it to label its results. The vocabulary version
+# is the one Athena stamps on the "None" vocabulary row. The source release date is the last
+# day any patient is observed, the closest thing Synthea output has to a release date.
+CDM_SOURCE_SQL = f"""
+INSERT INTO cdm.cdm_source
+SELECT
+    'ehr-rwe-eln Synthea', 'ehr_rwe_eln', 'ehr-rwe-eln',
+    'Synthetic patients from Synthea. No real patient data.',
+    'https://github.com/synthetichealth/synthea',
+    'https://github.com/toddcreasy/ehr-rwe-eln',
+    (SELECT max(observation_period_end_date) FROM cdm.observation_period),
+    CURRENT_DATE, '5.4', {CDM_VERSION_CONCEPT},
+    (SELECT vocabulary_version FROM cdm.vocabulary WHERE vocabulary_id = 'None')
+"""
+
 EHR = 32817
 EHR_ENCOUNTER_RECORD = 32827
 EHR_PRESCRIPTION = 32838
@@ -255,7 +273,9 @@ def run_etl(con: psycopg.Connection, synthea_csv: Path) -> dict:
             [domain],
         )
 
-    tables = ["person", "death", "visit_occurrence", "observation_period"]
+    con.execute(CDM_SOURCE_SQL)
+
+    tables = ["cdm_source", "person", "death", "visit_occurrence", "observation_period"]
     tables += [table for table, *_ in DOMAIN_TABLES.values()]
     counts = {t: con.execute(f"SELECT count(*) FROM cdm.{t}").fetchone()[0] for t in tables}
     # Mapped to a domain with no target table here (Note, Specimen, ...): counted, not loaded.
