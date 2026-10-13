@@ -56,7 +56,7 @@ Treats the OMOP build as if it were a controlled-access source and releases synt
 - A fixed 30% of people held out of every release (by a hash of `person_id`), to evaluate against
 - Fidelity and utility reports per release: total variation distance per column and per pair of columns, KS statistics, the correlation gap, and train-on-synthetic, test-on-real AUC, each read against the noise floor of the real holdout against the real training set
 - Downstream parity: a second spec synthesizes the analysis table of module 4's lisinopril versus amlodipine trial, and each release is run through the trial's own propensity-weighted Cox analysis, once and over 20 more draws, counting how often the interval covers the real hazard ratio and how often it shows an effect the real data does not
-- Next: privacy attack reports
+- Privacy risk reports per release: distance to closest record, a membership inference attack, and attribute inference through quasi-identifiers, each comparing training people with held-out people and read against the same attacks on a plain copy of the training data, plus a plain-language summary
 
 ## How the modules fit
 
@@ -90,7 +90,7 @@ The platform was first built and deployed on AWS, then moved to this local stack
 | Module 1: cohort pipeline | Done |
 | Module 7: data quality | Done: all DQD v2.9.0 checks, scoring, and dashboard, matched against DQD itself ([comparison](docs/dqd_comparison.md)) |
 | Module 4: target trial emulation | Done: protocols, propensity scores, survival estimates, bias report with negative controls, and its page |
-| Synthetic data | In progress: DP Bayesian network synthesizer, DP-SGD variational autoencoder, and independent baseline, with versioned releases, provenance, fidelity and utility reports, and trial parity |
+| Synthetic data | In progress: DP Bayesian network synthesizer, DP-SGD variational autoencoder, and independent baseline, with versioned releases, provenance, fidelity and utility reports, trial parity, and privacy risk reports |
 | Module 2: ELN to EHR bridge | Done: synthetic ELN entries (default and hard), batch extraction on MODEL_SMALL with a per-trap precision and recall eval, written to OMOP specimen and measurement rows and a FHIR R4 bundle of Specimen and Observation resources |
 
 ## Setup

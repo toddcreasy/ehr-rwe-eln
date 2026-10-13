@@ -7,7 +7,9 @@ Rebuilds each release's source and split from the spec stored with it, so it mus
 the database the release was made from. The noise floor is the same report for the real
 holdout against the real training set: no release can be expected to do better.
 
-Releases of a module 4 trial's analysis table also get a trial report: the trial rerun on the
+Releases with a holdout also get a privacy report: three attacks, read against the same
+attacks on a plain copy of the training data. Releases of a module 4 trial's analysis table
+also get a trial report: the trial rerun on the
 release, and on 20 more draws of its method and epsilon (a few minutes for the VAE).
 """
 
@@ -15,6 +17,7 @@ from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.synth import bayes_net, vae
 from ehr_rwe_eln.synth.fidelity import fidelity_report, utility_auc
 from ehr_rwe_eln.synth.parity import load_trial, parity_report, repeated_draws, trial_estimate
+from ehr_rwe_eln.synth.privacy import privacy_report
 from ehr_rwe_eln.synth.release import load_release, save_report
 from ehr_rwe_eln.synth.source import build_source, split
 from ehr_rwe_eln.synth.spec import Spec
@@ -54,12 +57,22 @@ def trial_row(label: str, report: dict) -> str:
     )
 
 
+def privacy_row(label: str, report: dict) -> str:
+    dcr = report["distance_to_closest_record"]
+    attrs = report["attribute_inference"]
+    return (
+        f"{label:<24}{dcr['closer_to_member']:>9.1%}{dcr['exact_match_member']:>9.1%}"
+        f"{dcr['exact_match_non_member']:>9.1%}{report['membership_inference']['auc']:>9.3f}"
+        f"{attrs['gap_mean']:>+10.1%}{attrs['gap_max']:>+9.1%}  {attrs['gap_worst']}"
+    )
+
+
 def main() -> None:
     with DatabaseSettings().connect() as con:
         releases = con.execute(
             "SELECT release_id, method, epsilon, spec FROM synth.release ORDER BY release_id"
         ).fetchall()
-        sources, trial_lines = {}, []
+        sources, trial_lines, privacy_lines, summaries = {}, [], [], []
         print(
             f"{'':<24}{'column TVD':>14}{'pair TVD':>14}  {'worst pair':<34}{'corr gap':>7}"
             f"   TSTR / TRTR AUC\n{'':<24}{'mean':>7}{'max':>7}{'mean':>7}{'max':>7}"
@@ -92,6 +105,17 @@ def main() -> None:
             save_report(con, release_id, "fidelity", report)
             con.commit()
             print(row(f"{release_id}: {method} {epsilon:g}", report, tstr, trtr))
+            if len(holdout):
+                copy_key = ("copy", key)
+                if copy_key not in sources:
+                    sources[copy_key] = True
+                    copied = privacy_report(train, holdout, train, spec)
+                    privacy_lines.append(privacy_row(f"{spec.name}: copy", copied))
+                privacy = privacy_report(train, holdout, synthetic, spec)
+                save_report(con, release_id, "privacy", privacy)
+                con.commit()
+                privacy_lines.append(privacy_row(f"{release_id}: {method} {epsilon:g}", privacy))
+                summaries.append(f"{release_id}: {method} {epsilon:g}. {privacy['summary']}")
             if spec.protocol is not None:
                 protocol = load_trial(spec.protocol)
                 real_key = ("trial", key)
@@ -111,6 +135,14 @@ def main() -> None:
                 save_report(con, release_id, "trial", trial)
                 con.commit()
                 trial_lines.append(trial_row(f"{release_id}: {method} {epsilon:g}", trial))
+        if privacy_lines:
+            print(
+                f"\n{'':<24}{'nearer':>9}{'exact match':>18}{'member':>9}"
+                f"{'attribute gap':>19}\n{'':<24}{'member':>9}{'member':>9}{'non':>9}"
+                f"{'AUC':>9}{'mean':>10}{'max':>9}  worst"
+            )
+            print("\n".join(privacy_lines))
+            print("\n" + "\n\n".join(summaries))
         if trial_lines:
             print(
                 f"\n{'':<24}{'events':>7}  {'release HR (95% CI)':<24}{'estimable':>9}{'covers':>9}"
