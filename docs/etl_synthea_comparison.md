@@ -68,6 +68,21 @@ not yet.
 whose reason code maps to a SNOMED condition, and records that as the cause of death. 12 deceased
 patients do not meet that and are dropped. We take every `DEATHDATE` but record no cause.
 
+## Field values that differ on purpose
+
+Found by module 7's data quality checks (2026-10-13); row counts are unaffected.
+
+- **Units.** ETL-Synthea writes `unit_concept_id = 0` for every observation and for any
+  measurement unit it cannot match. We follow the OMOP convention: NULL when the source has no
+  unit, 0 only for a unit that does not map. Synthea's annotations on categorical results and
+  scores (`{nominal}`, `{presence}`, `n/a`, `{score}`) are not units, so both
+  `unit_concept_id` and `unit_source_value` load NULL: DQD counts a NULL unit next to unit text
+  as missing, and expects scores to carry no unit. Synthea also spells 10 UCUM units
+  differently from OMOP's codes (`U/L` for `[U]/L`, `/a` for `/y`); `etl.UNIT_CODES`
+  translates them. `{#}`, `{count}`, `{SG}`, and `{T-score}` have no OMOP unit and stay 0.
+- **Visits.** ETL-Synthea writes `admitted_from_concept_id` and `discharged_to_concept_id` as 0,
+  which OMOP defines as "home". Synthea records neither, so we leave them NULL.
+
 ## Gaps this exposed in our ETL
 
 - Allergies are not converted (ETL-Synthea writes 993 observation rows from them).

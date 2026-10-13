@@ -121,6 +121,36 @@ SYNTHEA = {
             "UNITS": "",
             "TYPE": "text",
         },
+        {
+            "DATE": "2020-01-01T09:00:00Z",
+            "PATIENT": P1,
+            "ENCOUNTER": E1,
+            "CATEGORY": "laboratory",
+            "CODE": "L-LAB",
+            "VALUE": "12",
+            "UNITS": "U/L",
+            "TYPE": "numeric",
+        },
+        {
+            "DATE": "2020-01-01T09:00:00Z",
+            "PATIENT": P1,
+            "ENCOUNTER": E1,
+            "CATEGORY": "laboratory",
+            "CODE": "L-LAB",
+            "VALUE": "Positive",
+            "UNITS": "{nominal}",
+            "TYPE": "numeric",
+        },
+        {
+            "DATE": "2020-01-01T09:00:00Z",
+            "PATIENT": P1,
+            "ENCOUNTER": E1,
+            "CATEGORY": "laboratory",
+            "CODE": "L-LAB",
+            "VALUE": "3",
+            "UNITS": "{#}",
+            "TYPE": "numeric",
+        },
     ],
     "devices": [],
 }
@@ -144,6 +174,8 @@ CONCEPTS = [
     (910006, "LOINC", "L-LAB", "Measurement", "S"),
     (910007, "LOINC", "L-TEXT", "Observation", "S"),
     (910008, "UCUM", "mg/dL", "Unit", "S"),
+    # Synthea writes U/L; OMOP's code for the same unit is [U]/L.
+    (910009, "UCUM", "[U]/L", "Unit", "S"),
 ]
 MAPS_TO = [(910003, 910001)] + [(c, c) for c, *_, s in CONCEPTS if s == "S"]
 
@@ -202,6 +234,12 @@ def test_visits_and_observation_periods(con):
     assert one(
         con, "SELECT visit_source_value, visit_concept_id FROM cdm.visit_occurrence ORDER BY 1"
     ) == [("ambulatory", 9202), ("virtual", 722455)]
+    # Synthea records neither, and 0 would mean "home".
+    assert one(
+        con,
+        "SELECT DISTINCT admitted_from_concept_id, discharged_to_concept_id"
+        " FROM cdm.visit_occurrence",
+    ) == [(None, None)]
     assert one(
         con,
         "SELECT observation_period_start_date, observation_period_end_date "
@@ -239,9 +277,18 @@ def test_unmapped_codes_are_kept_with_concept_zero(con):
 
 
 def test_values_and_units(con):
+    assert set(
+        one(con, "SELECT unit_source_value, value_as_number, unit_concept_id FROM cdm.measurement")
+    ) == {
+        ("U/L", Decimal("12"), 910009),  # spelled differently in OMOP, still mapped
+        ("mg/dL", Decimal("0.0045"), 910008),
+        ("{#}", Decimal("3"), 0),  # a unit with no OMOP concept: unmapped
+        (None, None, None),  # {nominal} on a categorical result: no unit at all
+    }
+    # No unit in the source: NULL, not 0.
     assert one(
-        con, "SELECT value_as_number, unit_concept_id, unit_source_value FROM cdm.measurement"
-    ) == [(Decimal("0.0045"), 910008, "mg/dL")]
+        con, "SELECT unit_concept_id FROM cdm.observation WHERE observation_source_value = 'L-TEXT'"
+    ) == [(None,)]
     assert one(
         con, "SELECT value_as_string FROM cdm.observation WHERE observation_source_value = 'L-TEXT'"
     ) == [("Never smoked",)]

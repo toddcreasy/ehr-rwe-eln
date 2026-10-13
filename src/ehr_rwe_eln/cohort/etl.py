@@ -6,11 +6,18 @@ periods, with three deliberate differences:
   drops them, which loses every dental procedure (CDT is not in the free Athena download).
 - One visit per encounter. ETL-Synthea merges overlapping encounters.
 - Visit classes and races that ETL-Synthea leaves at 0 get their standard concept.
+- A missing unit loads as unit_concept_id NULL, per the OMOP convention, not 0; Synthea's
+  shorthand UCUM spellings (U/L for [U]/L) map to OMOP's codes. ETL-Synthea writes 0.
+- Synthea's non-unit annotations ({nominal}, {score}, ...) load as no unit at all: both
+  unit_concept_id and unit_source_value NULL.
+- Visits have admitted_from and discharged_to NULL. ETL-Synthea writes 0, which OMOP reads as
+  "home"; Synthea does not record either.
 
 Not converted yet: allergies, care plans, imaging studies, supplies, and the billing files.
 """
 
 import csv
+import json
 from pathlib import Path
 
 import psycopg
@@ -116,6 +123,25 @@ LEFT JOIN cdm.concept src
 LEFT JOIN targets ON targets.concept_id_1 = src.concept_id
 """
 
+# Synthea writes some UCUM units in shorthand that OMOP stores under another code. Units still
+# resolve through the vocabulary, so a code missing from the download loads as 0 (unmapped).
+UNIT_CODES = {
+    "U/L": "[U]/L",
+    "kU/L": "10*3.[U]/L",
+    "m[IU]/L": "10*-3.[iU]/L",
+    "K/uL": "10*3/uL",
+    "ng/dl": "ng/dL",
+    "mL/min/{1.73_m2}": "mL/min/(173.10*-2.m2)",
+    "/a": "/y",
+    "[pH]": "pH",
+    "{INR}": "{ratio}",
+    "ratio": "{ratio}",
+}
+# Annotations Synthea puts on categorical results and scores. No unit applies, so both the unit
+# concept and the unit source value load NULL: DQD counts a NULL unit next to unit text as
+# missing, and wants scores (a plausible unit list of -1) to carry no unit.
+NO_UNIT = ("{nominal}", "{presence}", "n/a", "{score}")
+
 MAPPED_SQL = """
 CREATE TEMP TABLE mapped AS
 SELECT coalesce(m.domain_id, e.default_domain) AS domain_id,
@@ -125,14 +151,18 @@ SELECT coalesce(m.domain_id, e.default_domain) AS domain_id,
        m.concept_id, m.source_concept_id, e.code AS source_value,
        CASE WHEN pg_input_is_valid(e.value_text, 'numeric') THEN e.value_text::numeric END
            AS value_as_number,
-       e.value_text, e.units, coalesce(u.concept_id, 0) AS unit_concept_id,
+       e.value_text,
+       CASE WHEN e.units <> ALL(%(no_unit)s) THEN e.units END AS units,
+       CASE WHEN e.units <> ALL(%(no_unit)s) THEN coalesce(u.concept_id, 0) END
+           AS unit_concept_id,
        e.type_concept_id
 FROM events e
 JOIN person_map p ON p.patient = e.PATIENT
 LEFT JOIN visit_map v ON v.encounter = e.ENCOUNTER
 JOIN code_map m ON m.vocabulary_id = e.vocabulary_id AND m.code = e.code
 LEFT JOIN cdm.concept u
-  ON u.vocabulary_id = 'UCUM' AND u.concept_code = e.units AND u.standard_concept = 'S'
+  ON u.vocabulary_id = 'UCUM' AND u.standard_concept = 'S'
+  AND u.concept_code = coalesce((%(unit_codes)s::jsonb)->>e.units, e.units)
 """
 
 # Columns beyond the shared ones, per target table. Text is cut to the CDM column width:
@@ -235,7 +265,7 @@ def run_etl(con: psycopg.Connection, synthea_csv: Path) -> dict:
                    ELSE 0 END,
                CAST(e.START AS DATE), CAST(e.START AS TIMESTAMP),
                CAST(e.STOP AS DATE), CAST(e.STOP AS TIMESTAMP),
-               {EHR_ENCOUNTER_RECORD}, e.ENCOUNTERCLASS, 0, 0, 0,
+               {EHR_ENCOUNTER_RECORD}, e.ENCOUNTERCLASS, 0, NULL, NULL,
                lag(v.visit_occurrence_id) OVER (PARTITION BY p.person_id ORDER BY e.START, e.Id)
         FROM src_encounters e
         JOIN visit_map v ON v.encounter = e.Id
@@ -252,7 +282,7 @@ def run_etl(con: psycopg.Connection, synthea_csv: Path) -> dict:
 
     con.execute(EVENTS_SQL)
     con.execute(CODE_MAP_SQL)
-    con.execute(MAPPED_SQL)
+    con.execute(MAPPED_SQL, {"no_unit": list(NO_UNIT), "unit_codes": json.dumps(UNIT_CODES)})
     for domain, (table, prefix, id_column, date_prefix) in DOMAIN_TABLES.items():
         columns = {
             id_column: "row_number() OVER "
