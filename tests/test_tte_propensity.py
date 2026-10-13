@@ -39,7 +39,6 @@ def test_propensity_model_recovers_the_assignment_and_weighting_balances():
     assert balance["smd_after"].abs().max() < 0.05
     # Stabilized weights average near 1.
     assert abs(result.diagnostics["weight_mean"] - 1) < 0.05
-    assert result.diagnostics["model_converged"]
 
 
 def test_stabilized_weights_and_truncation():
@@ -54,18 +53,71 @@ def test_stabilized_weights_and_truncation():
 
 
 def test_missing_measurement_becomes_the_mean_plus_an_indicator():
-    table = simulated(n=6)
-    table.loc[[0, 1], "lab"] = np.nan
-    x = design_matrix(table, protocol())
+    table = simulated(n=20)
+    table.loc[:5, "lab"] = np.nan
+    x, _ = design_matrix(table, protocol())
     observed = table["lab"].dropna().mean()
-    assert x.loc[[0, 1], "lab"].tolist() == [observed, observed]
-    assert x["lab_missing"].tolist() == [1, 1, 0, 0, 0, 0]
+    assert x.loc[:5, "lab"].tolist() == [observed] * 6
+    assert x["lab_missing"].tolist() == [1] * 6 + [0] * 14
+
+
+def test_measurements_can_share_a_missing_indicator():
+    table = simulated(n=20).assign(bp=120.0)
+    table.loc[:5, "lab"] = np.nan
+    table.loc[4:9, "bp"] = np.nan
+    shared = PROTOCOL.covariates.model_validate(
+        {
+            "measurements": [
+                {
+                    "name": n,
+                    "measurements": {"concept_ids": [1]},
+                    "missing_indicator": "vitals_missing",
+                }
+                for n in ("lab", "bp")
+            ]
+        }
+    )
+    x, _ = design_matrix(table, PROTOCOL.model_copy(update={"covariates": shared}))
+    assert x["vitals_missing"].tolist() == [1] * 10 + [0] * 10
+    assert "lab_missing" not in x and "bp_missing" not in x
+
+
+def test_rare_and_duplicate_columns_are_dropped():
+    table = simulated(n=200).assign(lab_copy=0.0)
+    table["lab_copy"] = table["lab"]
+    table.loc[:3, "lab"] = np.nan  # 4 persons missing: too few to estimate
+    table.loc[:3, "lab_copy"] = np.nan
+    table.loc[100:129, "lab_copy"] = np.nan
+    both = PROTOCOL.covariates.model_validate(
+        {
+            "measurements": [
+                {"name": "lab", "measurements": {"concept_ids": [1]}},
+                {"name": "lab_copy", "measurements": {"concept_ids": [1]}},
+            ]
+        }
+    )
+    x, dropped = design_matrix(table, PROTOCOL.model_copy(update={"covariates": both}))
+    assert set(dropped) == {"lab_missing"}
+    assert "lab_copy_missing" in x
+
+    table["lab_copy"] = table["lab"]
+    x, dropped = design_matrix(table, PROTOCOL.model_copy(update={"covariates": both}))
+    assert dropped["lab_copy"] == "same values as an earlier column"
+    assert "lab" in x and "lab_copy" not in x
 
 
 def test_a_covariate_that_decides_the_arm_is_not_estimable():
     table = simulated(n=200)
     table["male"] = table["arm"]
     with pytest.raises(NotEstimable, match="male"):
+        fit_propensity(table, protocol())
+
+
+def test_a_covariate_that_nearly_decides_the_arm_is_not_estimable():
+    table = simulated(n=200)
+    table["male"] = table["arm"]
+    table.loc[table.index[table.arm == 0][:5], "male"] = 1
+    with pytest.raises(NotEstimable, match="nearly"):
         fit_propensity(table, protocol())
 
 

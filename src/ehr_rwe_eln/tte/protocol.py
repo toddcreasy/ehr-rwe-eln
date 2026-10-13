@@ -67,6 +67,9 @@ class MeasurementCovariate(Strict):
     # The latest value within lookback_days up to and including time zero.
     measurements: ConceptSet
     lookback_days: int = Field(default=365, gt=0)
+    # The 0/1 column marking a missing value; defaults to <name>_missing. Measurements taken
+    # together (vitals) can share one, which is 1 when any of them is missing.
+    missing_indicator: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]*$")
 
 
 class Covariates(Strict):

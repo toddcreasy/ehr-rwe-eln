@@ -20,6 +20,9 @@ from statsmodels.tools.sm_exceptions import ConvergenceWarning, PerfectSeparatio
 from ehr_rwe_eln.tte.protocol import Protocol
 
 BALANCED = 0.1
+# A 0/1 covariate whose less common value fewer people than this have, across both arms, is
+# dropped: the model cannot estimate its effect and chases it toward infinity instead.
+MIN_PERSONS = 5
 
 
 class NotEstimable(Exception):
@@ -39,18 +42,35 @@ class Propensity:
     diagnostics: dict
 
 
-def design_matrix(table: pd.DataFrame, protocol: Protocol) -> pd.DataFrame:
-    """The covariates as model inputs. A missing measurement becomes the mean of the observed
-    values plus a 0/1 column saying it was missing, so missingness itself can carry information."""
+def design_matrix(table: pd.DataFrame, protocol: Protocol) -> tuple[pd.DataFrame, dict[str, str]]:
+    """The covariates as model inputs, and the columns dropped with the reason. A missing
+    measurement becomes the mean of the observed values plus a 0/1 column saying it was missing,
+    so missingness itself can carry information."""
     columns = ["age", "male", *(c.name for c in protocol.covariates.conditions)]
     x = table[columns].astype(float)
+    missing = {}
     for covariate in protocol.covariates.measurements:
         values = table[covariate.name]
         x[covariate.name] = values.fillna(values.mean())
-        if values.isna().any():
-            x[f"{covariate.name}_missing"] = values.isna().astype(float)
+        indicator = covariate.missing_indicator or f"{covariate.name}_missing"
+        missing[indicator] = missing.get(indicator, False) | values.isna()
+    for indicator, isna in missing.items():
+        if isna.any():
+            x[indicator] = isna.astype(float)
+
+    dropped = {}
     # A column with one value carries no information and makes the model unsolvable.
-    return x.loc[:, x.nunique() > 1]
+    for c in x.columns[x.nunique() <= 1]:
+        dropped[c] = "one value"
+    binary = [c for c in x.columns if c not in dropped and set(x[c].unique()) <= {0, 1}]
+    for c in binary:
+        if min((x[c] == 1).sum(), (x[c] == 0).sum()) < MIN_PERSONS:
+            dropped[c] = f"fewer than {MIN_PERSONS} persons with one of its values"
+    # Two identical columns make the model unsolvable too; keep the first.
+    kept = x.drop(columns=list(dropped))
+    for c in kept.columns[kept.T.duplicated()]:
+        dropped[c] = "same values as an earlier column"
+    return x.drop(columns=list(dropped)), dropped
 
 
 def smd(x: pd.Series, arm: pd.Series, weights: pd.Series | None = None) -> float:
@@ -70,7 +90,7 @@ def effective_sample_size(weights: pd.Series) -> float:
 
 
 def fit_propensity(table: pd.DataFrame, protocol: Protocol) -> Propensity:
-    x = design_matrix(table, protocol)
+    x, dropped = design_matrix(table, protocol)
     arm = table["arm"]
     # A covariate with one value in each arm, different between them, predicts the arm exactly.
     separating = [
@@ -85,11 +105,14 @@ def fit_propensity(table: pd.DataFrame, protocol: Protocol) -> Propensity:
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", PerfectSeparationWarning)
-            # Recorded in the diagnostics instead, where the bias report shows it.
+            # Checked below, so the message names the cause.
             warnings.simplefilter("ignore", ConvergenceWarning)
             model = sm.Logit(arm, sm.add_constant(x)).fit(disp=False)
     except (PerfectSeparationWarning, np.linalg.LinAlgError) as exc:
         raise NotEstimable(f"the covariates together predict the arm exactly ({exc})") from exc
+    if not model.mle_retvals["converged"]:
+        # Some coefficient keeps growing to push a group of people toward a score of 0 or 1.
+        raise NotEstimable("the covariates together nearly predict the arm (no convergence)")
     ps = model.predict(sm.add_constant(x))
 
     share = arm.mean()
@@ -109,7 +132,6 @@ def fit_propensity(table: pd.DataFrame, protocol: Protocol) -> Propensity:
         {"coefficient": model.params, "std_error": model.bse, "p_value": model.pvalues}
     )
     diagnostics = {
-        "model_converged": bool(model.mle_retvals["converged"]),
         "ps_range_treatment": (float(ps[arm == 1].min()), float(ps[arm == 1].max())),
         "ps_range_comparator": (float(ps[arm == 0].min()), float(ps[arm == 0].max())),
         # Near 0 or 1, a person has almost no chance of the other arm: positivity is strained.
@@ -120,5 +142,6 @@ def fit_propensity(table: pd.DataFrame, protocol: Protocol) -> Propensity:
         "effective_n_treatment": effective_sample_size(weight[arm == 1]),
         "effective_n_comparator": effective_sample_size(weight[arm == 0]),
         "covariates_unbalanced_after": int((balance["smd_after"].abs() >= BALANCED).sum()),
+        "covariates_dropped": dropped,
     }
     return Propensity(out, coefficients, balance, diagnostics)

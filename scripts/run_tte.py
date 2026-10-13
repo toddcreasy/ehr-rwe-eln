@@ -46,9 +46,10 @@ def main() -> None:
                 f"  propensity outside 0.05-0.95: {d['share_ps_outside_0.05_0.95']:.0%};"
                 f" weights {d['weight_min']:.2f} to {d['weight_max']:.2f};"
                 f" effective n {d['effective_n_treatment']:.0f}"
-                f" vs {d['effective_n_comparator']:.0f};"
-                f" model converged: {d['model_converged']}"
+                f" vs {d['effective_n_comparator']:.0f}"
             )
+            for column, reason in d["covariates_dropped"].items():
+                print(f"  dropped {column}: {reason}")
             survival = analyze(table, protocol)
             ci = survival.bootstrap
             print("  risk by day, crude / weighted; 95% bootstrap CI for the weighted difference:")

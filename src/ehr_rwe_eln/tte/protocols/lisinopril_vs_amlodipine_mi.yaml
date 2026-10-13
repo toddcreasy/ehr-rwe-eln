@@ -37,9 +37,9 @@ covariates:
     - {name: ckd_stage_1_or_2, conditions: {concept_ids: [443614, 443601]}}
     - {name: heart_failure, conditions: {concept_ids: [4229440]}}
   measurements:
-    - {name: systolic_bp, measurements: {concept_ids: [3004249]}} # mmHg
+    - {name: systolic_bp, measurements: {concept_ids: [3004249]}, missing_indicator: vitals_missing} # mmHg
     - {name: egfr, measurements: {concept_ids: [46236952]}} # MDRD, mL/min/1.73 m2
-    - {name: bmi, measurements: {concept_ids: [3038553]}}
+    - {name: bmi, measurements: {concept_ids: [3038553]}, missing_indicator: vitals_missing}
     - {name: hba1c, measurements: {concept_ids: [3004410]}} # hemoglobin A1c, percent
 analysis:
   truncate_percentile: 1
