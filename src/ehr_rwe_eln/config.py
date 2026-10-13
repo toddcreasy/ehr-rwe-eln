@@ -26,8 +26,7 @@ class DatabaseSettings(BaseSettings):
 
 
 class Settings(DatabaseSettings):
-    """Locally these come from .env. Deployed, ECS injects them from the Secrets Manager secret."""
+    """Locally these come from .env. Docker Compose adds the app service's environment."""
 
     log_level: str = "INFO"
-    cognito_user_pool_id: str
-    cognito_client_id: str
+    frontend_dir: str = "frontend/out"

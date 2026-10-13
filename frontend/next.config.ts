@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Static files only: Amplify serves manual (non-Git) deployments without a server.
+  // Static files only: FastAPI serves frontend/out at /.
   output: "export",
   turbopack: {
     rules: {

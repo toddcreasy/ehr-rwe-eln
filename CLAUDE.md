@@ -32,7 +32,7 @@ Decided 2026-10-12: PostgreSQL 17 with pgvector replaces both DuckDB and Aurora.
 - [x] CI runs the tests against a Postgres service container
 - [x] Plan the move (agreed 2026-10-12): Anthropic API replaces Bedrock (each user brings `ANTHROPIC_API_KEY`); no auth, the app binds to 127.0.0.1; everything runs in Docker Compose (`db` plus one `app` container serving the API, agent, and static frontend). Dropped: Guardrail, AgentCore (Runtime, Gateway, Observability, Evaluations), S3, Secrets Manager, Cognito, Budgets, CDK. Work in four PRs:
   - [x] 1. Agent on the Anthropic API, served at `POST /agent`; evals run against it
-  - [ ] 2. Remove auth; FastAPI serves the frontend; `app` service in Compose
+  - [x] 2. Remove auth; FastAPI serves the frontend; `app` service in Compose
   - [ ] 3. Delete `infra/`, the AWS scripts and dependencies; migrations run with plain Alembic
 - [ ] Rewrite "Stack decisions", "Conventions", and the README install steps for the local stack
 - [x] Tear down the deployed AWS stacks (2026-10-12, README runbook). `deploy.yml` and the `cdk-diff` CI job are gone; `lint-test` is the only required check

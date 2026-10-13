@@ -7,7 +7,9 @@
 .ruff_cache
 data
 infra
-frontend
+frontend/node_modules
+frontend/out
+frontend/.next
 evals
 tests
 scripts

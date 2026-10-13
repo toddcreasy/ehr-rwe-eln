@@ -1,5 +1,5 @@
-# Local stack. Today: the database only.
-#   docker compose up -d       start it (reads DB_PASSWORD, DB_PORT from .env)
+# Local stack: Postgres (db) and the API plus frontend (app) on http://127.0.0.1:8000.
+#   docker compose up -d --build   build and start both (reads .env)
 #   docker compose down        stop it; data stays in the ehr-rwe-eln-db volume
 #   docker compose down -v     stop it and delete the data
 services:
@@ -17,6 +17,28 @@ services:
       - db:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d ehr_rwe_eln"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: .
+    env_file: .env
+    environment:
+      # Inside Compose the database is the db service, not localhost.
+      DB_HOST: db
+      DB_PORT: 5432
+      # From your shell if exported there, otherwise from .env. Only POST /api/agent needs it.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    # Localhost only, like the database. No auth, so never expose this port.
+    ports:
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    # The slim image has no curl, so probe with Python.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 2s
       timeout: 3s
       retries: 30

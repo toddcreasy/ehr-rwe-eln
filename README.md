@@ -116,8 +116,20 @@ uv run python scripts/db_check.py   # pgvector round trip, leaves nothing behind
 The deployed API talks to Aurora; locally it talks to Postgres 17 with pgvector from `docker-compose.yml`. `.env` needs `DB_HOST=localhost` and a `DB_PASSWORD` of your choice (see `.env.example`).
 
 ```bash
-docker compose up -d --wait   # Postgres on 127.0.0.1:5432; data persists in the ehr-rwe-eln-db volume
-uv run fastapi dev            # http://localhost:8000/health and /health/db, reloads on save
+docker compose up -d --build --wait   # Postgres on 127.0.0.1:5432, app on http://127.0.0.1:8000
+curl localhost:8000/api/health/db
+curl -X POST localhost:8000/api/agent -H 'Content-Type: application/json' \
+  -d '{"prompt": "Is the database reachable?"}'
+```
+
+The `app` service serves the API under `/api` and the built frontend at `/`. There is no sign-in, so both ports bind to 127.0.0.1 only. `POST /api/agent` needs `ANTHROPIC_API_KEY`, from your shell or `.env`.
+
+For a reload-on-save loop, run the database in Compose and the API on the host:
+
+```bash
+docker compose up -d --wait db
+(cd frontend && npm ci && npm run build)   # once, and after frontend changes
+uv run fastapi dev                         # http://localhost:8000, reloads on save
 ```
 
 ### Run the agent locally

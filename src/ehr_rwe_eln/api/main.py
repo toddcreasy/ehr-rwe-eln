@@ -1,11 +1,9 @@
 import logging
 import time
-from typing import Annotated
 
-import jwt
 import psycopg
-from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
 
 from ehr_rwe_eln.agents.app import AgentRequest, invoke
 from ehr_rwe_eln.api.log_config import configure_logging
@@ -17,28 +15,7 @@ log = logging.getLogger("ehr_rwe_eln.api")
 
 app = FastAPI(title="ehr-rwe-eln")
 
-# Pool IDs start with their region, e.g. us-east-1_AbC123.
-cognito_issuer = (
-    f"https://cognito-idp.{settings.cognito_user_pool_id.split('_')[0]}.amazonaws.com/"
-    f"{settings.cognito_user_pool_id}"
-)
-# Fetches Cognito's public signing keys once and caches them.
-jwks_client = jwt.PyJWKClient(f"{cognito_issuer}/.well-known/jwks.json")
-bearer = HTTPBearer()
-
-
-def current_user(credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer)]) -> dict:
-    """Verify a Cognito access token: signature, expiry, issuer, and our app client."""
-    token = credentials.credentials
-    try:
-        key = jwks_client.get_signing_key_from_jwt(token)
-        claims = jwt.decode(token, key, algorithms=["RS256"], issuer=cognito_issuer)
-    except jwt.PyJWTError as exc:
-        raise HTTPException(status_code=401, detail="invalid token") from exc
-    # Access tokens carry client_id, not aud, so check it by hand.
-    if claims.get("token_use") != "access" or claims.get("client_id") != settings.cognito_client_id:
-        raise HTTPException(status_code=401, detail="invalid token")
-    return claims
+api = APIRouter(prefix="/api")
 
 
 @app.middleware("http")
@@ -59,17 +36,12 @@ async def log_requests(request: Request, call_next):
     return response
 
 
-@app.get("/health")
+@api.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/me")
-def me(claims: Annotated[dict, Depends(current_user)]) -> dict[str, str]:
-    return {"username": claims["username"], "sub": claims["sub"]}
-
-
-@app.get("/health/db")
+@api.get("/health/db")
 def health_db() -> dict[str, str]:
     # A fresh connection per call, no pool: idle pooled connections would stop Aurora pausing.
     # connect_timeout covers the ~15 s Aurora takes to resume from 0 ACU and stays under the
@@ -93,6 +65,11 @@ def health_db() -> dict[str, str]:
     return {"status": "ok", "database": "reachable"}
 
 
-@app.post("/agent")
+@api.post("/agent")
 def agent(request: AgentRequest) -> dict:
     return invoke(request)
+
+
+app.include_router(api)
+# Mounted last so it never shadows /api. html=True serves index.html for /.
+app.mount("/", StaticFiles(directory=settings.frontend_dir, html=True, check_dir=False))
