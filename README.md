@@ -76,7 +76,7 @@ The platform was first built and deployed on AWS, then moved to this local stack
 | Module 1: cohort pipeline | Done |
 | Module 7: data quality | Done: all DQD v2.9.0 checks, scoring, and dashboard, matched against DQD itself ([comparison](docs/dqd_comparison.md)) |
 | Module 4: target trial emulation | Done: protocols, propensity scores, survival estimates, bias report with negative controls, and its page |
-| Module 2: ELN to EHR bridge | In progress: synthetic ELN entries, batch extraction on MODEL_SMALL stored in the `eln` schema, with a precision and recall eval; OMOP writes next |
+| Module 2: ELN to EHR bridge | In progress: synthetic ELN entries, batch extraction on MODEL_SMALL with a precision and recall eval, written to OMOP specimen and measurement rows; FHIR resources next |
 
 ## Setup
 
@@ -118,7 +118,7 @@ uv run fastapi dev                         # http://localhost:8000, reloads on s
 
 `uv run python scripts/run_tte.py` runs each target trial protocol in `src/ehr_rwe_eln/tte/protocols/`, prints its bias report, and stores the run in the `tte` schema (about 1 minute on 23,420 patients). The page at http://127.0.0.1:8000/tte/ shows it. The 1,172-patient default has too few outcome events for estimates; module 4 uses a 20,000-patient build in its own database, `DB_NAME=ehr_rwe_eln_tte` (see `scripts/generate_synthea.py` and `scripts/build_omop.py`). The app shows runs from whichever database `DB_NAME` names.
 
-`uv run python scripts/generate_eln.py` writes 300 synthetic ELN entries on 200 hypertension subjects to `data/eln/`, each with the extraction it should produce, plus the registry linking study codes (`HTN-0001`) to OMOP persons. `uv run python scripts/extract_eln.py` loads them into the `eln` schema and extracts every entry with `MODEL_SMALL` through the Message Batches API (half price; about 8 minutes for 300 entries), then scores the extractions against the known answers.
+`uv run python scripts/generate_eln.py` writes 300 synthetic ELN entries on 200 hypertension subjects to `data/eln/`, each with the extraction it should produce, plus the registry linking study codes (`HTN-0001`) to OMOP persons. `uv run python scripts/extract_eln.py` loads them into the `eln` schema and extracts every entry with `MODEL_SMALL` through the Message Batches API (half price; about 8 minutes for 300 entries), then scores the extractions against the known answers. `uv run python scripts/write_eln_omop.py` writes them to OMOP `specimen` and `measurement` rows, linked through `fact_relationship`, and can be rerun.
 
 ```bash
 docker compose down      # stop; data stays in the ehr-rwe-eln-db volume
