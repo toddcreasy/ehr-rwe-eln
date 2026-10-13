@@ -12,7 +12,7 @@ import psycopg
 from ehr_rwe_eln.tte.protocol import ConceptSet, Protocol
 
 
-def _concepts(concept_set: ConceptSet) -> tuple[str, list]:
+def concept_set_sql(concept_set: ConceptSet) -> tuple[str, list]:
     sql = "SELECT unnest(%s::integer[])"
     params: list = [concept_set.concept_ids]
     if concept_set.include_descendants:
@@ -28,10 +28,10 @@ def build_analysis_table(
     con: psycopg.Connection, protocol: Protocol
 ) -> tuple[list[tuple[str, int]], pd.DataFrame]:
     """Returns the attrition table, (rule, persons remaining) pairs, and the analysis table."""
-    treatment, treatment_params = _concepts(protocol.strategies.treatment.drugs)
-    comparator, comparator_params = _concepts(protocol.strategies.comparator.drugs)
-    diagnosis, diagnosis_params = _concepts(protocol.eligibility.diagnosis)
-    outcome, outcome_params = _concepts(protocol.outcome.conditions)
+    treatment, treatment_params = concept_set_sql(protocol.strategies.treatment.drugs)
+    comparator, comparator_params = concept_set_sql(protocol.strategies.comparator.drugs)
+    diagnosis, diagnosis_params = concept_set_sql(protocol.eligibility.diagnosis)
+    outcome, outcome_params = concept_set_sql(protocol.outcome.conditions)
 
     con.execute("DROP TABLE IF EXISTS tte_candidates")
     con.execute(

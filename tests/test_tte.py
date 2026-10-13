@@ -1,9 +1,11 @@
 import datetime
 
+import pandas as pd
 import pytest
 
 from ehr_rwe_eln.cohort.cdm import create_cdm
 from ehr_rwe_eln.tte.cohort import build_analysis_table
+from ehr_rwe_eln.tte.covariates import add_covariates
 from ehr_rwe_eln.tte.protocol import PROTOCOLS, ConceptSet, Protocol, load_protocol
 
 D = datetime.date
@@ -187,6 +189,61 @@ def test_follow_up_ends_at_the_first_of_outcome_death_records_or_max(con):
 
 def test_shipped_protocols_load():
     protocols = [load_protocol(p) for p in sorted(PROTOCOLS.glob("*.yaml"))]
-    assert [p.name for p in protocols] == ["metformin_vs_insulin_ckd", "metformin_vs_insulin_mi"]
+    assert [p.name for p in protocols] == [
+        "lisinopril_vs_amlodipine_ckd",
+        "lisinopril_vs_amlodipine_mi",
+        "metformin_vs_insulin_ckd",
+        "metformin_vs_insulin_mi",
+    ]
     assert len({p.id for p in protocols}) == len(protocols)
     assert all(isinstance(p.outcome.conditions, ConceptSet) for p in protocols)
+
+
+def test_covariates_use_only_what_is_known_at_time_zero(con):
+    lab, history = 920040, 920050
+    protocol = PROTOCOL.model_copy(
+        update={
+            "covariates": PROTOCOL.covariates.model_validate(
+                {
+                    "conditions": [{"name": "history", "conditions": {"concept_ids": [history]}}],
+                    "measurements": [
+                        {
+                            "name": "lab",
+                            "measurements": {"concept_ids": [lab]},
+                            "lookback_days": 365,
+                        }
+                    ],
+                }
+            )
+        }
+    )
+    # Person 1 starts on 2020-01-01; person 2 too.
+    facts = [
+        ("condition", 1, history, D(2019, 1, 1), None),  # before time zero: counts
+        ("condition", 2, history, D(2020, 2, 1), None),  # after: does not
+        ("measurement", 1, lab, D(2019, 3, 1), 6.0),
+        ("measurement", 1, lab, D(2019, 12, 1), 7.5),  # latest in the window wins
+        ("measurement", 1, lab, D(2020, 1, 2), 9.9),  # after time zero: ignored
+        ("measurement", 2, lab, D(2018, 6, 1), 8.0),  # older than 365 days: missing
+    ]
+    for i, (kind, person, concept, date, value) in enumerate(facts, 100):
+        if kind == "condition":
+            con.execute(
+                "INSERT INTO cdm.condition_occurrence (condition_occurrence_id, person_id,"
+                " condition_concept_id, condition_start_date, condition_type_concept_id)"
+                " VALUES (%s, %s, %s, %s, 32817)",
+                [i, person, concept, date],
+            )
+        else:
+            con.execute(
+                "INSERT INTO cdm.measurement (measurement_id, person_id, measurement_concept_id,"
+                " measurement_date, measurement_type_concept_id, value_as_number)"
+                " VALUES (%s, %s, %s, %s, 32817, %s)",
+                [i, person, concept, date, value],
+            )
+    _, table = build_analysis_table(con, protocol)
+    table = add_covariates(con, protocol, table).set_index("person_id")
+    assert table.loc[[1, 2], "history"].tolist() == [1, 0]
+    assert table.loc[1, "lab"] == 7.5
+    assert pd.isna(table.loc[2, "lab"])
+    assert table.loc[1, "male"] == 1

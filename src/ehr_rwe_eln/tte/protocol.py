@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from ehr_rwe_eln.cohort.spec import Strict
 
@@ -56,6 +56,37 @@ class FollowUp(Strict):
     max_days: int = Field(gt=0)
 
 
+class ConditionCovariate(Strict):
+    name: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    # 1 if any of these conditions is recorded on or before time zero.
+    conditions: ConceptSet
+
+
+class MeasurementCovariate(Strict):
+    name: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    # The latest value within lookback_days up to and including time zero.
+    measurements: ConceptSet
+    lookback_days: int = Field(default=365, gt=0)
+
+
+class Covariates(Strict):
+    # Baseline characteristics the propensity score adjusts for. Age and sex are always included.
+    conditions: list[ConditionCovariate] = []
+    measurements: list[MeasurementCovariate] = []
+
+    @model_validator(mode="after")
+    def names_are_unique(self) -> Covariates:
+        names = [c.name for c in self.conditions + self.measurements]
+        if len(names) != len(set(names)) or {"age", "male"} & set(names):
+            raise ValueError("covariate names must be unique and not age or male")
+        return self
+
+
+class Analysis(Strict):
+    # Weights below this percentile, and above 100 minus it, are set to those percentiles.
+    truncate_percentile: float = Field(default=1, ge=0, lt=50)
+
+
 class Protocol(Strict):
     id: int = Field(gt=0)
     name: str
@@ -66,6 +97,8 @@ class Protocol(Strict):
     follow_up: FollowUp
     # Intention to treat: people stay in the arm they started in, whatever they take later.
     causal_contrast: Literal["intention_to_treat"] = "intention_to_treat"
+    covariates: Covariates = Covariates()
+    analysis: Analysis = Analysis()
 
 
 def load_protocol(path: Path) -> Protocol:

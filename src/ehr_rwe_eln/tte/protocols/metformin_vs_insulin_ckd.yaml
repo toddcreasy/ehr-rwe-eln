@@ -32,3 +32,18 @@ outcome:
 follow_up:
   max_days: 1825
 causal_contrast: intention_to_treat
+covariates:
+  conditions:
+    - {name: hypertension, conditions: {concept_ids: [320128]}}
+    - {name: hyperlipidemia, conditions: {concept_ids: [432867]}}
+    - {name: obesity, conditions: {concept_ids: [4060985]}} # body mass index 30+
+    - {name: ischemic_heart_disease, conditions: {concept_ids: [4185932]}}
+    - {name: ckd_stage_1_or_2, conditions: {concept_ids: [443614, 443601]}}
+    - {name: diabetic_kidney_disorder, conditions: {concept_ids: [192279]}}
+    - {name: heart_failure, conditions: {concept_ids: [4229440]}}
+  measurements:
+    - {name: hba1c, measurements: {concept_ids: [3004410]}} # hemoglobin A1c, percent
+    - {name: egfr, measurements: {concept_ids: [46236952]}} # MDRD, mL/min/1.73 m2
+    - {name: bmi, measurements: {concept_ids: [3038553]}}
+analysis:
+  truncate_percentile: 1
