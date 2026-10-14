@@ -60,6 +60,16 @@ Treats the OMOP build as if it were a controlled-access source and releases synt
 - A data card per release: what it is, how it was made, its privacy spend per mechanism, fidelity against the noise floor, trial parity, privacy risk against a copy of the training data, intended use, and limitations
 - For reviewers: the [methodology](docs/synthetic_data_methodology.md) (threat model, mechanisms, evaluation, results, limits) and a [NIST AI RMF mapping](docs/nist_ai_rmf.md) with its gaps
 
+### Synthetic genomics (`ehr_rwe_eln.genomics`)
+
+A dbGaP-style genotyping study for adults in the OMOP build, made with no real genome, to prototype genomic pipelines against.
+
+- Genotypes simulated with msprime (the coalescent with recombination), so allele frequencies and linkage disequilibrium look like real data's
+- Laid out as dbGaP distributes a study: a VCF per chromosome, one PLINK binary set, subject phenotypes from OMOP, sample attributes, and a subject-to-sample mapping keyed by study codes
+- A known effect planted on a phenotype by assigning whole simulated genomes to people, which keeps linkage disequilibrium intact
+- A GWAS (score test for every variant, adjusted for age and sex; full model on each lead variant) that is checked against the planted effect: found, nothing else found, and genomic inflation on the chromosomes without it
+- Next: the same study in Hail, as a MatrixTable, in its own container
+
 ## How the modules fit
 
 ```
@@ -93,6 +103,7 @@ The platform was first built and deployed on AWS, then moved to this local stack
 | Module 7: data quality | Done: all DQD v2.9.0 checks, scoring, and dashboard, matched against DQD itself ([comparison](docs/dqd_comparison.md)) |
 | Module 4: target trial emulation | Done: protocols, propensity scores, survival estimates, bias report with negative controls, and its page |
 | Synthetic data | In progress: DP Bayesian network synthesizer, DP-SGD variational autoencoder, and independent baseline, with versioned releases, provenance, fidelity and utility reports, trial parity, privacy risk reports, and a data card per release |
+| Synthetic genomics | In progress: msprime study with VCF, PLINK, and dbGaP-style tables, a planted effect, and a GWAS that recovers it; Hail next |
 | Module 2: ELN to EHR bridge | Done: synthetic ELN entries (default, hard, and adversarial with prompt injections), batch extraction on MODEL_SMALL with a per-trap precision and recall eval, written to OMOP specimen and measurement rows and a FHIR R4 bundle of Specimen and Observation resources |
 
 ## Setup
@@ -136,6 +147,8 @@ uv run fastapi dev                         # http://localhost:8000, reloads on s
 `uv run python scripts/run_tte.py` runs each target trial protocol in `src/ehr_rwe_eln/tte/protocols/`, prints its bias report, and stores the run in the `tte` schema (about 1 minute on 23,420 patients). The page at http://127.0.0.1:8000/tte/ shows it. The 1,172-patient default has too few outcome events for estimates; module 4 uses a 20,000-patient build in its own database, `DB_NAME=ehr_rwe_eln_tte` (see `scripts/generate_synthea.py` and `scripts/build_omop.py`). The app shows runs from whichever database `DB_NAME` names.
 
 `uv run python scripts/generate_eln.py` writes 300 synthetic ELN entries on 200 hypertension subjects to `data/eln/`, each with the extraction it should produce, plus the registry linking study codes (`HTN-0001`) to OMOP persons. `uv run python scripts/extract_eln.py` loads them into the `eln` schema and extracts every entry with `MODEL_SMALL` through the Message Batches API (half price; about 8 minutes for 300 entries), then scores the extractions against the known answers. `uv run python scripts/write_eln_omop.py` writes them to OMOP `specimen` and `measurement` rows, linked through `fact_relationship`, and can be rerun. `uv run python scripts/export_eln_fhir.py` writes the same samples and results to `data/eln/fhir_bundle.json` as FHIR R4 `Specimen` and `Observation` resources; samples without a stated collection date carry none there.
+
+`DB_NAME=ehr_rwe_eln_tte uv run python scripts/generate_genomics.py` simulates 5,000 adults on three 3 Mb chromosomes with an odds ratio of 1.4 planted on hypertension, and writes the study to `data/genomics/` (about 2 minutes, 16,080 variants). `uv run python scripts/run_gwas.py` then tests every variant and checks the result against the planted effect: on the default study, the planted variant at p 2.3e-15, its locus the only one, and genomic inflation 1.06 on the chromosomes without it. On a genome this small, genomic inflation per chromosome is noisy (standard deviation about 0.06 over random phenotypes with no effect).
 
 `DB_NAME=ehr_rwe_eln_tte uv run python scripts/synthesize.py` makes every release in `src/ehr_rwe_eln/synth/specs/person_summary.yaml` from the 20,000-patient build (under a minute; the VAE releases train on CPU) and stores each in the `synth` schema. The spec is seeded because its source is synthetic; a spec over real data must leave `seed` null, so the noise comes from a secure generator and cannot be regenerated. Each release trains on 70% of people; `DB_NAME=ehr_rwe_eln_tte uv run python scripts/evaluate_synth.py` scores every release against the 30% held out, stores the reports in `synth.report`, and prints them under the noise floor. `--spec src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml` on `synthesize.py` makes trial-table releases, which the same evaluation also reruns the trial on (about a minute in all). The reports read real data and are for internal review, not for release: they are not differentially private. `DB_NAME=ehr_rwe_eln_tte uv run python scripts/synth_cards.py` then writes a data card per release to `data/synth/cards/`.
 

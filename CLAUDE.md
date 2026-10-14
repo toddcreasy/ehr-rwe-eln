@@ -10,7 +10,7 @@ and the expected cost table live in `docs/SETUP.md`; runbooks are in the README.
 
 ## Project scope
 
-Real world evidence from synthetic EHR data, linked to lab notebook records. Five modules, one OMOP CDM v5.4 database:
+Real world evidence from synthetic EHR data, linked to lab notebook records. Six modules, one OMOP CDM v5.4 database:
 
 | Module | Package | What it does |
 |---|---|---|
@@ -18,6 +18,7 @@ Real world evidence from synthetic EHR data, linked to lab notebook records. Fiv
 | 2. ELN to EHR bridge | `ehr_rwe_eln.eln` | LLM extraction of samples, assays, biomarkers, and results from ELN entries into typed models, then OMOP `specimen` and `measurement` rows plus FHIR `Specimen` and `Observation` resources |
 | 4. Target trial emulation toolkit | `ehr_rwe_eln.tte` | Protocol spec in YAML (eligibility, strategies, time zero, outcomes) to cohort SQL, propensity score analysis, survival estimates, and a bias diagnostics report |
 | 7. RWE data quality dashboard | `ehr_rwe_eln.dq` | Conformance, completeness, and plausibility checks (Kahn framework) over the OMOP tables, scored and shown in the frontend |
+| Synthetic genomics | `ehr_rwe_eln.genomics` | A dbGaP-style genotyping study simulated with msprime for OMOP persons (VCF, PLINK, phenotype and sample tables), a planted genetic effect, and a GWAS checked against it |
 | Synthetic data | `ehr_rwe_eln.synth` | Differentially private synthetic releases of the OMOP data (statistical and generative synthesizers), with fidelity, utility, and privacy risk reports and a provenance record per release |
 
 Build order after the platform: 1, then 7, then 4, then 2. Each module depends on the OMOP tables from module 1.
@@ -147,6 +148,7 @@ How each piece was built, verified, and what it costs: see `docs/SETUP.md`.
 │   ├── eln/               # module 2: ELN extraction to OMOP and FHIR
 │   ├── tte/               # module 4: target trial emulation
 │   ├── dq/                # module 7: data quality checks
+│   ├── genomics/          # synthetic genotypes and GWAS
 │   └── synth/             # privacy-preserving synthetic data releases
 ├── tests/                 # fast tests; local services only (the Compose Postgres), nothing off the machine
 ├── migrations/            # Alembic versioned schema changes
