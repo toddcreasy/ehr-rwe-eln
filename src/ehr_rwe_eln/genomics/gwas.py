@@ -158,3 +158,16 @@ def check_truth(results: pl.DataFrame, summary: dict, truth: dict) -> dict:
         "other_loci": len(summary["loci"]) - len(hits),
         "genomic_inflation_null_chromosomes": inflation(null) if len(null) else None,
     }
+
+
+def compare_with_hail(results: pl.DataFrame, path: Path) -> dict:
+    """Agreement with Hail's score test on the same study (scripts/hail_gwas.py's output)."""
+    hail = pl.read_csv(path, separator="\t")
+    joined = results.join(hail, on="id", how="inner")
+    difference = (joined["chi2"] - joined["chi_sq_stat"]).abs()
+    return {
+        "variants": len(results),
+        "matched": len(joined),
+        "chi2_max_difference": float(difference.max()),
+        "chi2_correlation": float(np.corrcoef(joined["chi2"], joined["chi_sq_stat"])[0, 1]),
+    }

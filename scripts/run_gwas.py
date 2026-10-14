@@ -4,13 +4,14 @@ Usage: uv run python scripts/run_gwas.py
 
 Run scripts/generate_genomics.py first. Writes data/genomics/gwas.parquet (one row per
 variant) and prints the loci, the genomic inflation, and whether the planted variant was found.
+If the Hail container has run (docker compose run --rm --build hail), also compares the two.
 """
 
 import json
 import time
 from pathlib import Path
 
-from ehr_rwe_eln.genomics.gwas import SIGNIFICANCE, check_truth, run_gwas
+from ehr_rwe_eln.genomics.gwas import SIGNIFICANCE, check_truth, compare_with_hail, run_gwas
 
 DIRECTORY = Path(__file__).resolve().parent.parent / "data" / "genomics"
 
@@ -41,6 +42,13 @@ def main() -> None:
         f" genomic inflation without its chromosome"
         f" {check['genomic_inflation_null_chromosomes']:.3f}"
     )
+    if (DIRECTORY / "hail_gwas.tsv").exists():
+        hail = compare_with_hail(results, DIRECTORY / "hail_gwas.tsv")
+        print(
+            f"Hail: {hail['matched']:,} of {hail['variants']:,} variants matched; score"
+            f" statistics agree to {hail['chi2_max_difference']:.1e} at most (correlation"
+            f" {hail['chi2_correlation']:.6f})"
+        )
 
 
 if __name__ == "__main__":

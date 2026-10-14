@@ -7,7 +7,7 @@ import polars as pl
 import pytest
 from bed_reader import open_bed
 
-from ehr_rwe_eln.genomics.gwas import check_truth, run_gwas, score_test
+from ehr_rwe_eln.genomics.gwas import check_truth, compare_with_hail, run_gwas, score_test
 from ehr_rwe_eln.genomics.simulate import assign_genomes
 from ehr_rwe_eln.genomics.study import build_study, write_study
 
@@ -92,3 +92,15 @@ def test_score_test_matches_a_planted_null():
     genotypes = rng.binomial(2, 0.3, (n, 2000)).astype(np.float32)
     statistics = score_test(genotypes, y, covariates)
     assert np.median(statistics) / 0.4549 == pytest.approx(1.0, abs=0.1)
+
+
+def test_compare_with_hail_joins_on_variant_id(tmp_path):
+    results = pl.DataFrame(
+        {"id": ["chr1:5:A:C", "chr1:9:G:T", "chr2:3:T:A"], "chi2": [1.0, 4.0, 9.0]}
+    )
+    pl.DataFrame(
+        {"id": ["chr1:5:A:C", "chr1:9:G:T"], "chi_sq_stat": [1.001, 3.999], "p_value": [0.3, 0.05]}
+    ).write_csv(tmp_path / "hail_gwas.tsv", separator="\t")
+    comparison = compare_with_hail(results, tmp_path / "hail_gwas.tsv")
+    assert comparison["variants"] == 3 and comparison["matched"] == 2
+    assert comparison["chi2_max_difference"] == pytest.approx(0.001)
