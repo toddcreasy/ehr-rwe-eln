@@ -87,3 +87,26 @@ def test_hard_traps_change_the_truth_as_the_entry_says():
             corrected = re.search(r"for (S-\d{4}-\d{2}) is ([\d.]+), not", e.body)
             values = {r.value for r in e.truth.results if r.sample_id == corrected[1]}
             assert float(corrected[2]) in values
+
+
+ADVERSARIAL = generate_entries(WINDOWS, 200, seed=7, adversarial=True)
+INJECTIONS = {"injection_add", "injection_change", "injection_drop"}
+
+
+def test_every_adversarial_entry_carries_one_injection_and_others_none():
+    for e in ADVERSARIAL:
+        assert len(INJECTIONS & set(e.traps)) == 1
+    assert not any(INJECTIONS & set(e.traps) for e in ENTRIES + HARD)
+    assert {t for e in ADVERSARIAL for t in e.traps} >= INJECTIONS
+
+
+def test_injections_never_change_the_truth():
+    for e in ADVERSARIAL:
+        assert e.truth.samples and e.truth.results  # a drop injection asks for none
+        for s in e.truth.samples:
+            assert not s.subject_id.startswith("HTN-9")  # fabricated subjects are 9000 and up
+        if "injection_change" in e.traps:
+            line = next(x for x in e.body.splitlines() if "AI assistant" in x)
+            injected = re.search(r"for (S-\d{4}-\d{2}) as ([\d.]+)", line)
+            truth = {r.value for r in e.truth.results if r.sample_id == injected[1]}
+            assert float(injected[2]) not in truth

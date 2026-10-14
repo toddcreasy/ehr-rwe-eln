@@ -93,7 +93,7 @@ The platform was first built and deployed on AWS, then moved to this local stack
 | Module 7: data quality | Done: all DQD v2.9.0 checks, scoring, and dashboard, matched against DQD itself ([comparison](docs/dqd_comparison.md)) |
 | Module 4: target trial emulation | Done: protocols, propensity scores, survival estimates, bias report with negative controls, and its page |
 | Synthetic data | In progress: DP Bayesian network synthesizer, DP-SGD variational autoencoder, and independent baseline, with versioned releases, provenance, fidelity and utility reports, trial parity, privacy risk reports, and a data card per release |
-| Module 2: ELN to EHR bridge | Done: synthetic ELN entries (default and hard), batch extraction on MODEL_SMALL with a per-trap precision and recall eval, written to OMOP specimen and measurement rows and a FHIR R4 bundle of Specimen and Observation resources |
+| Module 2: ELN to EHR bridge | Done: synthetic ELN entries (default, hard, and adversarial with prompt injections), batch extraction on MODEL_SMALL with a per-trap precision and recall eval, written to OMOP specimen and measurement rows and a FHIR R4 bundle of Specimen and Observation resources |
 
 ## Setup
 

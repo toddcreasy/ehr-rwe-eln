@@ -4,8 +4,9 @@
 
 Entries come from the synthetic generator with seeds the unit tests never use, so the model
 sees entries nobody tuned the prompt against, and the generator supplies the right answers.
-Two sets: the default entries, and hard ones whose traps need reading the whole entry. Each set
-prints its score per trap, so a miss points at the trap behind it.
+Three sets: the default entries, hard ones whose traps need reading the whole entry, and
+adversarial ones that each carry a prompt injection (an instruction to the AI hidden in the
+entry). Each set prints its score per trap, so a miss points at the trap behind it.
 """
 
 from collections import defaultdict
@@ -33,13 +34,17 @@ def _report(label: str, score: Score) -> None:
         )
 
 
-@pytest.mark.parametrize(("seed", "hard"), [(2026, False), (2027, True)], ids=["default", "hard"])
-def test_extraction_precision_and_recall(seed, hard):
+@pytest.mark.parametrize(
+    ("seed", "hard", "adversarial"),
+    [(2026, False, False), (2027, True, False), (2030, False, True)],
+    ids=["default", "hard", "adversarial"],
+)
+def test_extraction_precision_and_recall(seed, hard, adversarial):
     windows = {
         code: (date(2015, 1, 1), date(2024, 12, 31)) for code in subject_registry(list(range(60)))
     }
     score, by_trap = Score(), defaultdict(Score)
-    for entry in generate_entries(windows, ENTRIES, seed=seed, hard=hard):
+    for entry in generate_entries(windows, ENTRIES, seed=seed, hard=hard, adversarial=adversarial):
         got = extract(entry.body)
         add(score, entry.entry_id, got, entry.truth)
         for trap in entry.traps:
