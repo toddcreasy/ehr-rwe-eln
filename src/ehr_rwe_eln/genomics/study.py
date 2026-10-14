@@ -10,7 +10,7 @@ specimen genotyped from them. Here:
 - subject_phenotypes.tsv, sample_attributes.tsv, subject_sample_mapping.tsv.
 - subject_registry.tsv: subject code to OMOP person_id. A real study keeps this link with the
   data holder and never distributes it; it is written here so the genotypes can be joined back
-  to the OMOP records for testing.
+  to the OMOP records for testing. Codes are assigned in a random order, never by person_id.
 - truth.json: the simulation settings and the planted variant, the answer key for the GWAS.
 """
 
@@ -50,6 +50,9 @@ def build_study(
     frequency 0.2 to 0.3, common enough to find."""
     rng = np.random.default_rng(seed)
     n = len(people)
+    # Study codes go to people in a random order, so a code says nothing about the person (the
+    # GDS policy's "random, unique codes"; HIPAA 164.514(c): not derived from their data).
+    people = people.iloc[rng.permutation(n)]
     simulated = [
         simulate_chromosome(f"chr{c}", n, length, seed + c, min_maf)
         for c in range(1, chromosomes + 1)

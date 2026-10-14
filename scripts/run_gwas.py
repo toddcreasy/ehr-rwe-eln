@@ -42,8 +42,11 @@ def main() -> None:
         f" genomic inflation without its chromosome"
         f" {check['genomic_inflation_null_chromosomes']:.3f}"
     )
-    if (DIRECTORY / "hail_gwas.tsv").exists():
-        hail = compare_with_hail(results, DIRECTORY / "hail_gwas.tsv")
+    hail_path = DIRECTORY / "hail_gwas.tsv"
+    if hail_path.exists() and hail_path.stat().st_mtime < (DIRECTORY / "study.bed").stat().st_mtime:
+        print("Hail: its results predate this study; rerun docker compose run --rm hail")
+    elif hail_path.exists():
+        hail = compare_with_hail(results, hail_path)
         print(
             f"Hail: {hail['matched']:,} of {hail['variants']:,} variants matched; score"
             f" statistics agree to {hail['chi2_max_difference']:.1e} at most (correlation"

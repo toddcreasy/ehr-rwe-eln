@@ -45,7 +45,9 @@ def test_files_follow_the_dbgap_layout(study):
     assert phenotypes.columns == ["subject_id", "sex", "age", "hypertension"]
     assert "person_id" not in phenotypes.columns  # the OMOP link stays in the registry
     registry = pl.read_csv(out / "subject_registry.tsv", separator="\t")
-    assert registry["person_id"].to_list() == list(range(100, 1600))
+    person_ids = registry["person_id"].to_list()
+    assert sorted(person_ids) == list(range(100, 1600))
+    assert person_ids != sorted(person_ids)  # codes do not follow person_id order
     truth = json.loads((out / "truth.json").read_text())
     assert truth["variant"]["chromosome"] == "chr1" and truth["people"] == 1500
 

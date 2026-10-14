@@ -130,6 +130,7 @@ The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.26) fo
 - The Bayesian network keeps only declared relationships, with at most two parents per column.
 - The VAE's training settings were not tuned. Tuning on a separate public stand-in would likely improve it.
 - On real data only the Bayesian network can run here: the VAE needs a seed, because secure noise for it is not installable (section 3).
+- Ages are not top-coded: ages over 89 are released in their own bins, where HIPAA Safe Harbor allows only "90 or older." See [nih_hhs_requirements.md](nih_hhs_requirements.md).
 - Fidelity is not yet measured by subgroup. DP noise is the same size for every count, so small groups (99 people of 23,420 are recorded as Native American) are distorted most.
 - One spec per table kind and one trial protocol; results on other cohorts will differ.
 
