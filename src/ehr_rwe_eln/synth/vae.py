@@ -103,7 +103,8 @@ def synthesize(table: pd.DataFrame, spec: Spec, release: Release) -> tuple[pd.Da
                         "Full backward hook is firing"):  # fmt: skip
             warnings.filterwarnings("ignore", message=f".*{message}.*")
         # secure_mode draws noise from a cryptographic generator; seeded runs on synthetic
-        # sources skip it so they can be remade. A run on real data needs it on. The RDP
+        # sources skip it so they can be remade. A run on real data needs it on, which the spec
+        # refuses here (see Spec: torchcsprng does not install on this stack). The RDP
         # accountant's epsilon is a guaranteed upper bound; the default (PRV) is tighter but
         # rests on numerical integration, which warned of divergence on this data.
         engine = PrivacyEngine(accountant="rdp", secure_mode=False)

@@ -58,6 +58,7 @@ Treats the OMOP build as if it were a controlled-access source and releases synt
 - Downstream parity: a second spec synthesizes the analysis table of module 4's lisinopril versus amlodipine trial, and each release is run through the trial's own propensity-weighted Cox analysis, once and over 20 more draws, counting how often the interval covers the real hazard ratio and how often it shows an effect the real data does not
 - Privacy risk reports per release: distance to closest record, a membership inference attack, and attribute inference through quasi-identifiers, each comparing training people with held-out people and read against the same attacks on a plain copy of the training data, plus a plain-language summary
 - A data card per release: what it is, how it was made, its privacy spend per mechanism, fidelity against the noise floor, trial parity, privacy risk against a copy of the training data, intended use, and limitations
+- For reviewers: the [methodology](docs/synthetic_data_methodology.md) (threat model, mechanisms, evaluation, results, limits) and a [NIST AI RMF mapping](docs/nist_ai_rmf.md) with its gaps
 
 ## How the modules fit
 

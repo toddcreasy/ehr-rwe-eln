@@ -50,3 +50,8 @@ def test_same_seed_same_release():
 def test_vae_settings_are_validated():
     with pytest.raises(ValueError, match="less than 1"):
         spec(AGE).model_validate({**spec(AGE).model_dump(), "vae": {"delta": 2}})
+
+
+def test_unseeded_vae_releases_are_refused():
+    with pytest.raises(ValueError, match="vae releases need a seed"):
+        spec(AGE, seed=None, releases=[{"method": "vae", "epsilon": 1}])

@@ -1,0 +1,72 @@
+# NIST AI RMF mapping
+
+How this repository's practices line up with the NIST AI Risk Management Framework (AI RMF 1.0, 2023), and where they fall short. Category names are quoted from NIST's AI RMF Core at airc.nist.gov; NIST notes that a revision of the framework is in progress, so this maps to 1.0.
+
+The framework has four functions. **Govern** sets the policies and culture for managing AI risk. **Map** establishes context and identifies risks. **Measure** analyzes and tracks them. **Manage** acts on them. Each function has numbered categories (GOVERN 1, MAP 3, and so on), used below.
+
+Scope: the two parts of this repository that are AI systems.
+
+- **Synthetic data releases** (`src/ehr_rwe_eln/synth/`): a differentially private Bayesian network and a variational autoencoder that produce synthetic copies of the OMOP data for testing other systems. Method and results: [synthetic_data_methodology.md](synthetic_data_methodology.md).
+- **ELN extraction** (`src/ehr_rwe_eln/eln/`): Claude (`MODEL_SMALL`) extracting samples and results from lab notebook text into typed records.
+
+This is a single-maintainer project on synthetic data. Some categories are about organizations (roles, workforce, outside stakeholders); for those, the mapping says what exists and what an organization would add.
+
+## Govern
+
+| Category | In place | Gap |
+|---|---|---|
+| GOVERN 1: policies, processes, procedures, and practices | Written data rules (`CLAUDE.md`): synthetic or openly licensed data only, no patient-level data or vocabularies committed, no clinical claims, every LLM extraction validated against a typed model and scored. Synthesis rules enforced in code: domains fixed in the spec, seeds only for synthetic sources, budgets enforced by an accountant. | No written policy for choosing epsilon on a real source. |
+| GOVERN 2: accountability structures | Every change goes through a pull request that the maintainer approves; branch protection requires the `lint-test` check. | One person holds every role. An organization would separate who builds, who reviews releases, and who approves sharing. |
+| GOVERN 3: workforce diversity, equity, inclusion, and accessibility | Not applicable to a one-person project. | An organization would document who took part in mapping and measuring risk. |
+| GOVERN 4: a culture that considers and communicates AI risk | Negative findings are reported as plainly as positive ones: the VAE's weak fidelity, spurious trial effects at 40% to 55% of draws, the eval that caught two prompt gaps. The frontend shows a synthetic-data, no-clinical-use disclaimer (`frontend/app/disclaimer.tsx`). | None specific. |
+| GOVERN 5: engagement with relevant AI actors | The methodology document and data cards are written for a Data Access Committee. | No outside reviewer has seen them. Engagement would mean a real DAC review and red-team exercise. |
+| GOVERN 6: third-party software and data | Dependencies locked in `uv.lock`. scikit-learn held below 1.9 because diffprivlib uses its private names. VAE releases without a seed are refused, because the secure-noise package Opacus needs (`torchcsprng`) cannot be installed. OHDSI vocabularies used under their licenses, never committed. Model IDs fixed in settings and checked by evals before a change. | No automated dependency vulnerability scanning. |
+
+## Map
+
+| Category | In place | Gap |
+|---|---|---|
+| MAP 1: context established and understood | Purpose, users, and setting are written down: synthetic test and development data so teams can build and red-team systems without the source; a local stack with no real data (methodology sections 1 and 2). | None for this setting. |
+| MAP 2: categorization of the AI system | Synthesizers categorized by method (statistical, generative, baseline) in each release record and card. ELN extraction categorized as structured extraction on a small model. | None. |
+| MAP 3: capabilities, goals, benefits, and costs compared with benchmarks | Every synthetic release is read against benchmarks from real data: a real-against-real noise floor, a model trained on real data (TRTR AUC 0.809), and the real trial hazard ratio (0.97). ELN extraction has a 0.95 precision and recall bar. | None. |
+| MAP 4: risks and benefits mapped for all components, including third-party | Component risks found and recorded: diffprivlib's zero-truncated noise inflates sparse counts (70 events against 26); Opacus's default accountant warned of divergent integration, so the RDP accountant is used; the LLM missed replicate and dilution rules until the hard eval caught them. | None found unrecorded. |
+| MAP 5: impacts on individuals, groups, communities, organizations, and society | Threat model for individuals: membership, attribute, and identity disclosure (methodology section 2). Impact of misuse: synthetic trial tables produce effects that are not there, so cards forbid reporting estimates from them. | Impact on small groups not measured (see MEASURE 2, fair). |
+
+## Measure
+
+| Category | In place | Gap |
+|---|---|---|
+| MEASURE 1: appropriate methods and metrics identified and applied | Fidelity (total variation distance per column and pair, KS, correlation gap), utility (train on synthetic, test on real), trial parity over 20 draws, three privacy attacks, quasi-identifier uniqueness; ELN precision and recall per trap. Each metric defined in its module and in the methodology. | None. |
+| MEASURE 2: evaluated for trustworthy characteristics | See the table below. | Fairness. |
+| MEASURE 3: tracking identified risks over time | Every release and every report records the code version it came from; data cards are regenerated from them. The data quality module keeps every run. | `synth.report` keeps only the latest report per release and kind; history is in git, not the database. No scheduled re-evaluation. |
+| MEASURE 4: feedback about the efficacy of measurement | The measurements are themselves checked: the noise floor and the copy of the training data show what the metrics read at their limits; the independent-columns baseline must score as useless and does (AUC 0.465); tests confirm a shuffled relationship is caught and a copy leaks. A weak copy result led to adding the uniqueness metric, which explained it. | None. |
+
+Trustworthy characteristics (MEASURE 2):
+
+| Characteristic | Evidence | Gap |
+|---|---|---|
+| Valid and reliable | Fidelity, utility, and trial parity per release; parity judged over repeated draws because one draw is unreliable on 26 events. ELN extraction scored at precision and recall 1.000 on default and hard sets, with the hard set's two misses fixed and confirmed on unseen seeds. | Synthesis checked on one source and one trial. |
+| Safe | No clinical claims in code, docs, or UI; cards state intended use and, for trial tables, the measured rate of spurious effects. | None. |
+| Secure and resilient | Differential privacy with enforced budgets; secure noise required off synthetic sources; every port bound to 127.0.0.1; the API key held as a `SecretStr` from a gitignored `.env`. | No authentication, by design for a single-user local app; a shared deployment would need it. |
+| Accountable and transparent | Provenance per release (spec as run, spend per mechanism, source, counts, seed, code version); data cards; methodology; PR history. | None. |
+| Explainable and interpretable | The Bayesian network's structure is declared and printed on each card; each privacy report has a plain-language summary. | The VAE is not interpretable beyond its metrics. |
+| Privacy-enhanced | DP at epsilon 0.25 to 4 on the person summary; all three attacks at chance on every release. | No location in the source, so linkage risk is understated. |
+| Fair, with harmful bias managed | Not measured. | DP noise is the same size for every count, so small groups are distorted most; 99 of 23,420 people are recorded as Native American. Needed: fidelity and utility by race, ethnicity, sex, and age group. |
+
+## Manage
+
+| Category | In place | Gap |
+|---|---|---|
+| MANAGE 1: risks prioritized and responded to | Findings become tracked items: give BMI age as a parent (worst pair everywhere), give the trial outcome a confounder as a parent, load location for linkage testing, tune the VAE on a public stand-in. | Prioritization is informal (a TODO list), not a risk register. |
+| MANAGE 2: strategies to maximize benefits and minimize negative impacts | Intended-use limits on every card; warnings where trial parity found spurious effects; a holdout kept out of every release; budgets enforced in code; unsafe configurations refused (unseeded VAE). | None. |
+| MANAGE 3: third-party risks and benefits | Version constraints and lockfile; the accountant switched after a numerical warning; model changes gated by evals. | No scanning or alerting on new dependency advisories. |
+| MANAGE 4: risk treatments, response and recovery, and communication | Data cards and the methodology communicate risk to reviewers. | No process to withdraw a release or notify its users if a flaw is found later; no monitoring after release. |
+
+## Gaps, in order of importance
+
+1. Fairness: measure fidelity and utility by subgroup (MEASURE 2).
+2. Release withdrawal and notification process (MANAGE 4).
+3. Location in the source, so the linkage attack reflects real risk (MEASURE 2, privacy-enhanced).
+4. Report history in the database, not only the latest report (MEASURE 3).
+5. Outside review by a DAC or red team (GOVERN 5), and separated roles (GOVERN 2), for any use beyond this project.
+6. A written policy for choosing epsilon on real data (GOVERN 1) and dependency advisory scanning (GOVERN 6, MANAGE 3).

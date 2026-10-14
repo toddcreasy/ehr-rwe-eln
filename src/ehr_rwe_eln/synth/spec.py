@@ -135,6 +135,14 @@ class Spec(Strict):
                 if parent not in seen:
                     raise ValueError(f"{column.name}: parent {parent} must be listed before it")
             seen.add(column.name)
+        if self.seed is None and any(r.method == "vae" for r in self.releases):
+            # Unseeded means real data, which needs Opacus's secure noise. That needs
+            # torchcsprng, last released in 2021 for torch 1.8 and Python 3.9: not installable
+            # here. Refuse rather than train on ordinary noise.
+            raise ValueError(
+                "vae releases need a seed: secure noise for real data needs torchcsprng,"
+                " which does not install on this stack"
+            )
         if any((c.analysis is not None) != (self.protocol is not None) for c in self.columns):
             raise ValueError("with a protocol every column is an analysis column; without, none")
         if self.utility_target is not None:
