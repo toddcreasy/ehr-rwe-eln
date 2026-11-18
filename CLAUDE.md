@@ -6,7 +6,7 @@ below. Claude Code loads this file every session.
 ## How Claude Code must use this file
 
 Follow the operating rules below. The infrastructure history, the build phases that produced it,
-and the expected cost table live in `docs/SETUP.md`; runbooks are in the README.
+and the expected cost table live in `docs/SETUP.md`; runbooks are in `docs/INSTALL.md`.
 
 ## Project scope
 

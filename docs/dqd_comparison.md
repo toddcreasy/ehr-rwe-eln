@@ -1,6 +1,6 @@
 # DataQualityDashboard comparison
 
-Module 7's data quality checks (`src/ehr_rwe_eln/dq/`) checked against OHDSI DataQualityDashboard
+The data quality checks (`src/ehr_rwe_eln/dq/`) checked against [OHDSI](https://www.ohdsi.org) [DataQualityDashboard](https://github.com/OHDSI/DataQualityDashboard)
 (DQD), the reference implementation, on the same databases. Run on 2026-10-13, last on
 PostgreSQL 18.6 after the ETL fixes in #35 and #36.
 
@@ -8,7 +8,7 @@ PostgreSQL 18.6 after the ETL fixes in #35 and #36.
 all three check levels (TABLE, FIELD, CONCEPT), default thresholds and default excluded tables.
 
 **Inputs:**
-- The local CDM: 1,172 Synthea patients, as built by modules 1 and 7's prerequisites (keys,
+- The local CDM: 1,172 [Synthea](https://github.com/synthetichealth/synthea) patients, as built by the cohort pipeline and the data quality module's prerequisites (keys,
   `cdm_source`, eras).
 - A planted CDM (`scripts/build_dq_edge_cdm.py`, schema `dq_edge` in the test database) with
   a missing table, a duplicate primary key, a dangling foreign key, an implausible birth year,

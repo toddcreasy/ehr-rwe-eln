@@ -6,7 +6,7 @@ The framework has four functions. **Govern** sets the policies and culture for m
 
 Scope: the two parts of this repository that are AI systems.
 
-- **Synthetic data releases** (`src/ehr_rwe_eln/synth/`): a differentially private Bayesian network and a variational autoencoder that produce synthetic copies of the OMOP data for testing other systems. Method and results: [synthetic_data_methodology.md](synthetic_data_methodology.md).
+- **Synthetic data releases** (`src/ehr_rwe_eln/synth/`): a differentially private Bayesian network and a variational autoencoder that produce synthetic copies of the [OMOP](https://ohdsi.github.io/CommonDataModel/cdm54.html) data for testing other systems. Method and results: [synthetic_data_methodology.md](synthetic_data_methodology.md).
 - **ELN extraction** (`src/ehr_rwe_eln/eln/`): Claude (`MODEL`, Opus 5.5) extracting samples and results from lab notebook text into typed records.
 
 This is a single-maintainer project on synthetic data. Some categories are about organizations (roles, workforce, outside stakeholders); for those, the mapping says what exists and what an organization would add.
@@ -20,7 +20,7 @@ This is a single-maintainer project on synthetic data. Some categories are about
 | GOVERN 3: workforce diversity, equity, inclusion, and accessibility | Not applicable to a one-person project. | An organization would document who took part in mapping and measuring risk. |
 | GOVERN 4: a culture that considers and communicates AI risk | Negative findings are reported as plainly as positive ones: the VAE's weak fidelity, spurious trial effects at 40% to 55% of draws, the eval that caught two prompt gaps. The frontend shows a synthetic-data, no-clinical-use disclaimer (`frontend/app/disclaimer.tsx`). | None specific. |
 | GOVERN 5: engagement with relevant AI actors | The methodology document and data cards are written for a Data Access Committee. | No outside reviewer has seen them. Engagement would mean a real DAC review and red-team exercise. |
-| GOVERN 6: third-party software and data | Dependencies locked in `uv.lock`. scikit-learn held below 1.9 because diffprivlib uses its private names. VAE releases without a seed are refused, because the secure-noise package Opacus needs (`torchcsprng`) cannot be installed. OHDSI vocabularies used under their licenses, never committed. Model IDs fixed in settings and checked by evals before a change. | No automated dependency vulnerability scanning. |
+| GOVERN 6: third-party software and data | Dependencies locked in `uv.lock`. [scikit-learn](https://scikit-learn.org) held below 1.9 because [diffprivlib](https://github.com/IBM/differential-privacy-library) uses its private names. VAE releases without a seed are refused, because the secure-noise package [Opacus](https://opacus.ai) needs (`torchcsprng`) cannot be installed. [OHDSI](https://www.ohdsi.org) vocabularies used under their licenses, never committed. Model IDs fixed in settings and checked by evals before a change. | No automated dependency vulnerability scanning. |
 
 ## Map
 

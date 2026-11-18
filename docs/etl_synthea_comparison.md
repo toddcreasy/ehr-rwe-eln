@@ -1,11 +1,11 @@
 # ETL-Synthea comparison
 
-Our Synthea to OMOP ETL (`src/ehr_rwe_eln/cohort/etl.py`) checked against OHDSI ETL-Synthea, the
+Our [Synthea](https://github.com/synthetichealth/synthea) to [OMOP](https://ohdsi.github.io/CommonDataModel/cdm54.html) ETL (`src/ehr_rwe_eln/cohort/etl.py`) checked against [OHDSI](https://www.ohdsi.org) [ETL-Synthea](https://github.com/OHDSI/ETL-Synthea), the
 reference implementation, on the same input. Run on 2026-10-12.
 
 **Inputs, identical on both sides:** 1,172 Synthea 3.3.0 patients (`scripts/generate_synthea.py`,
-seed 42, reference date 2026-01-01) and the same Athena vocabulary download (SNOMED 2026-03 US,
-LOINC 2.82, RxNorm 2026-06-01, CVX 2026-04, ICD10CM FY2027).
+seed 42, reference date 2026-01-01) and the same [Athena](https://athena.ohdsi.org) vocabulary download ([SNOMED](https://www.snomed.org) 2026-03 US,
+[LOINC](https://loinc.org) 2.82, [RxNorm](https://www.nlm.nih.gov/research/umls/rxnorm/index.html) 2026-06-01, [CVX](https://www2.cdc.gov/vaccines/iis/iisstandards/vaccines.asp?rpt=cvx) 2026-04, [ICD10CM](https://www.cdc.gov/nchs/icd/icd-10-cm/index.html) FY2027).
 
 **Reference:** ETL-Synthea commit `9ee6eb1` (ETLSyntheaBuilder 2.1), CDM 5.4, Synthea version
 3.3.0, on Postgres 16 in a throwaway local container. To rerun: `scripts/etl_synthea_reference.R`,
@@ -70,14 +70,14 @@ patients do not meet that and are dropped. We take every `DEATHDATE` but record 
 
 ## Field values that differ on purpose
 
-Found by module 7's data quality checks (2026-10-13); row counts are unaffected.
+Found by the data quality checks (2026-10-13); row counts are unaffected.
 
 - **Units.** ETL-Synthea writes `unit_concept_id = 0` for every observation and for any
   measurement unit it cannot match. We follow the OMOP convention: NULL when the source has no
   unit, 0 only for a unit that does not map. Synthea's annotations on categorical results and
   scores (`{nominal}`, `{presence}`, `n/a`, `{score}`) are not units, so both
   `unit_concept_id` and `unit_source_value` load NULL: DQD counts a NULL unit next to unit text
-  as missing, and expects scores to carry no unit. Synthea also spells 10 UCUM units
+  as missing, and expects scores to carry no unit. Synthea also spells 10 [UCUM](https://ucum.org) units
   differently from OMOP's codes (`U/L` for `[U]/L`, `/a` for `/y`); `etl.UNIT_CODES`
   translates them. `{#}`, `{count}`, `{SG}`, and `{T-score}` have no OMOP unit and stay 0.
 - **Visits.** ETL-Synthea writes `admitted_from_concept_id` and `discharged_to_concept_id` as 0,

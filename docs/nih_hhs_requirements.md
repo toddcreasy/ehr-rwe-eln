@@ -8,11 +8,11 @@ This is an engineering read of the rules, not legal advice. Whether a dataset is
 
 Nothing here binds this repository as it stands:
 
-- The data are Synthea output, synthetic lab notebook entries, and genotypes simulated with msprime. No living person is the source of any record, so the work is not human subjects research under the Common Rule (45 CFR 46).
+- The data are [Synthea](https://github.com/synthetichealth/synthea) output, synthetic lab notebook entries, and genotypes simulated with [msprime](https://tskit.dev/msprime/). No living person is the source of any record, so the work is not human subjects research under the Common Rule (45 CFR 46).
 - None of it is protected health information, so the HIPAA Privacy Rule does not apply.
 - The work is not NIH-funded, so the Genomic Data Sharing Policy does not apply.
 
-The point of this document is the next step: if the same process were pointed at a dbGaP study or another controlled-access source, what would each rule require, and how far does the repository already go?
+The point of this document is the next step: if the same process were pointed at a [dbGaP](https://www.ncbi.nlm.nih.gov/gap/) study or another controlled-access source, what would each rule require, and how far does the repository already go?
 
 ## 1. NIH Genomic Data Sharing Policy
 
@@ -39,7 +39,7 @@ The way to meet the requirement is not to retrofit a laptop: run the stack insid
 Source: 45 CFR 164.514(b) and (c). Health information is de-identified by one of two methods.
 
 - **Expert determination**: a person with appropriate statistical and scientific knowledge concludes that "the risk is very small" that the information could identify someone, alone or with other reasonably available information, and documents the methods and results.
-- **Safe Harbor**: remove 18 kinds of identifiers of the individual and their relatives, employers, and household members, and have no actual knowledge that what remains could identify them. Among them: geographic units smaller than a state (the first three ZIP digits may stay where that area holds more than 20,000 people); every element of a date except the year; and ages over 89, which may be kept only as "a single category of age 90 or older."
+- **[Safe Harbor](https://www.hhs.gov/hipaa/for-professionals/special-topics/de-identification/index.html)**: remove 18 kinds of identifiers of the individual and their relatives, employers, and household members, and have no actual knowledge that what remains could identify them. Among them: geographic units smaller than a state (the first three ZIP digits may stay where that area holds more than 20,000 people); every element of a date except the year; and ages over 89, which may be kept only as "a single category of age 90 or older."
 
 Re-identification codes (164.514(c)) are allowed only if the code is not derived from or related to information about the individual, and the means of re-identifying is not disclosed.
 
@@ -49,7 +49,7 @@ Re-identification codes (164.514(c)) are allowed only if the code is not derived
 
 - No names, contact details, record or account numbers, device identifiers, URLs, IP addresses, images, or biometric identifiers are released.
 - No calendar dates are released: the person summary has ages, and the trial table has follow-up lengths in days. Whether intervals derived from dates are acceptable is a question for the expert.
-- No geography is released (the source has none; the module 1 ETL does not load addresses).
+- No geography is released (the source has none; the cohort pipeline's ETL does not load addresses).
 - Ages are top-coded. The person summary and trial table release ages in ten-year bins, the last one "90 or older," as Safe Harbor allows; that bin decodes to 90.
 - Codes: genotype study codes and lab notebook subject codes are random (section 1).
 

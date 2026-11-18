@@ -1,0 +1,175 @@
+# Install and run
+
+Everything runs on one machine. There is no cloud account to set up; the only outside service is the [Anthropic API](https://docs.claude.com), on your own key, and only the ELN (electronic lab notebook) extraction and the agent call it.
+
+Terms are defined in the [glossary](GLOSSARY.md). A full build from a fresh clone takes about an hour, most of it [Synthea](https://github.com/synthetichealth/synthea) and the 20,000-patient load. One step needs you at a browser: the vocabulary download from [OHDSI Athena](https://athena.ohdsi.org).
+
+## Contents
+
+1. [Prerequisites](#prerequisites)
+2. [Clone and configure](#clone-and-configure)
+3. [Start the database](#start-the-database)
+4. [Get the vocabularies](#get-the-vocabularies)
+5. [Build the data](#build-the-data)
+6. [Run the modules](#run-the-modules)
+7. [Run the app](#run-the-app)
+8. [Tests and evals](#tests-and-evals)
+9. [Stop and clean up](#stop-and-clean-up)
+10. [Troubleshooting](#troubleshooting)
+
+## Prerequisites
+
+| Tool | Why | Check |
+|---|---|---|
+| [uv](https://docs.astral.sh/uv/) | Installs Python 3.14 and every dependency from `uv.lock` | `uv --version` |
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | Runs Postgres and the app | `docker compose version` |
+| Java 17 or newer | Synthea, the synthetic patient generator, is a Java program | `java -version` |
+| Node.js 24 | Builds the frontend; only needed outside Docker | `node --version` |
+| An Anthropic API key | ELN extraction, the agent, and the evals | [console.anthropic.com](https://console.anthropic.com) |
+
+On a Mac, `brew install openjdk@21` gives you Java. Homebrew installs it keg-only, so either put `/opt/homebrew/opt/openjdk@21/bin` on your `PATH` or prefix the Synthea commands with it.
+
+## Clone and configure
+
+```bash
+git clone https://github.com/toddcreasy/ehr-rwe-eln.git
+cd ehr-rwe-eln
+cp .env.example .env
+uv sync
+uv run pre-commit install
+```
+
+Open `.env` and set two values: `DB_PASSWORD` (any long random string; `openssl rand -hex 24` makes one) and `ANTHROPIC_API_KEY`. Leave the rest blank to take the defaults.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `DB_HOST`, `DB_PORT`, `DB_USER` | `localhost`, `5432`, `postgres` | Match `docker-compose.yml` |
+| `DB_NAME` | `ehr_rwe_eln` | Which database the scripts and the app use. Trial emulation, synthetic data, and genomics use `ehr_rwe_eln_tte` |
+| `DB_PASSWORD` | none | Required |
+| `ANTHROPIC_API_KEY` | none | Required for extraction, the agent, and evals |
+| `MODEL` | `claude-opus-5-5` | Every model call uses it |
+| `LOG_LEVEL`, `FRONTEND_DIR`, `APP_PORT` | `INFO`, `frontend/out`, `8000` | |
+
+`.env` is gitignored and is the only place secrets live. A variable exported in your shell overrides the one in `.env`, so don't export `ANTHROPIC_API_KEY` or the `DB_*` variables.
+
+## Start the database
+
+```bash
+docker compose up -d --wait db
+uv run alembic upgrade head
+uv run python scripts/db_check.py
+```
+
+Postgres 18 with [pgvector](https://github.com/pgvector/pgvector) listens on 127.0.0.1:5432. `alembic upgrade head` creates the `dq`, `tte`, `eln`, and `synth` schemas. `db_check.py` runs a pgvector round trip and leaves nothing behind.
+
+Trial emulation, the synthetic data, and genomics need a second, larger database. Create it once and migrate it:
+
+```bash
+docker compose exec -T db psql -U postgres -c "CREATE DATABASE ehr_rwe_eln_tte"
+DB_NAME=ehr_rwe_eln_tte uv run alembic upgrade head
+```
+
+## Get the vocabularies
+
+[OMOP](https://ohdsi.github.io/CommonDataModel/cdm54.html) stores every diagnosis, drug, and lab test as a numeric concept. The tables that define those concepts come from [OHDSI Athena](https://athena.ohdsi.org), under each vocabulary's own license, so they are never committed and you download them yourself. Make two downloads:
+
+1. **Clinical vocabularies**: tick [SNOMED](https://www.snomed.org), [LOINC](https://loinc.org), [RxNorm](https://www.nlm.nih.gov/research/umls/rxnorm/index.html), [CVX](https://www2.cdc.gov/vaccines/iis/iisstandards/vaccines.asp?rpt=cvx), and [ICD10CM](https://www.cdc.gov/nchs/icd/icd-10-cm/index.html), and nothing else. Athena adds the small ones the ETL also needs ([UCUM](https://ucum.org) units, Visit, Type Concept, CDM) on its own. Unzip into `data/vocab/`.
+2. **Demographics**: Gender, Race, and Ethnicity. Unzip into `data/vocab_extra/`.
+
+Leave [CPT4](https://www.ama-assn.org/practice-management/cpt) unticked. A download that includes it ships the CPT4 relationships without the CPT4 concepts, which Athena fills in only after you run its `cpt.sh` with a [UMLS](https://www.nlm.nih.gov/research/umls/index.html) key, and the build then fails adding foreign keys (`Key (concept_id_1)=(2102101) is not present in table "concept"`). This project uses no CPT4 codes.
+
+The published counts were built from SNOMED 2026-03 US, LOINC 2.82, RxNorm 2026-06-01, CVX 2026-04, and ICD10CM FY2027. Other versions work; the counts will differ slightly. `data/vocab/VOCABULARY.csv` lists what you got.
+
+## Build the data
+
+Two Synthea populations, each loaded into its own database:
+
+```bash
+uv run python scripts/generate_synthea.py
+uv run python scripts/generate_synthea.py --patients 20000 --output data/synthea_20k/output
+uv run python scripts/build_omop.py
+DB_NAME=ehr_rwe_eln_tte uv run python scripts/build_omop.py --synthea data/synthea_20k/output/csv
+uv run python scripts/build_cohorts.py
+```
+
+`generate_synthea.py` downloads Synthea 3.3.0, checks its SHA-256, and runs it with a fixed seed and reference date, so the same arguments always give the same people: 1,172 for the default (1,000 living plus those who died during the simulation) and 23,421 for the larger build. `build_omop.py` loads the vocabularies, runs the ETL (extract, transform, load), builds condition and drug eras, then adds keys and indices. The small build takes about a minute; the large one about five.
+
+## Run the modules
+
+Each module has its own page with what it does and how to read its output. The commands, in build order:
+
+```bash
+# Data quality, on the default database (about 20 s)
+uv run python scripts/run_dq.py
+
+# Target trial emulation, on the large database (about 1 minute)
+DB_NAME=ehr_rwe_eln_tte uv run python scripts/run_tte.py
+
+# ELN bridge, on the default database (extraction about 8 minutes, billed)
+uv run python scripts/generate_eln.py
+uv run python scripts/extract_eln.py
+uv run python scripts/write_eln_omop.py
+uv run python scripts/export_eln_fhir.py
+
+# Synthetic genomics, on the large database
+DB_NAME=ehr_rwe_eln_tte uv run python scripts/generate_genomics.py
+uv run python scripts/run_gwas.py
+docker compose run --rm --build hail      # optional: the same GWAS in Hail, a 2.4 GB image
+
+# Synthetic data, on the large database
+export SPEC=src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
+DB_NAME=ehr_rwe_eln_tte uv run python scripts/synthesize.py
+DB_NAME=ehr_rwe_eln_tte uv run python scripts/synthesize.py --spec $SPEC
+DB_NAME=ehr_rwe_eln_tte uv run python scripts/evaluate_synth.py
+DB_NAME=ehr_rwe_eln_tte uv run python scripts/synth_cards.py
+```
+
+Details: [cohort pipeline](modules/cohort.md), [data quality](modules/data_quality.md), [target trial emulation](modules/trial_emulation.md), [ELN bridge](modules/eln.md), [synthetic genomics](modules/genomics.md), [synthetic data](modules/synthetic_data.md).
+
+## Run the app
+
+```bash
+(cd frontend && npm ci && npm run build)   # once, and after frontend changes
+uv run fastapi dev                         # http://127.0.0.1:8000, reloads on save
+```
+
+The app reads one database, the one `DB_NAME` names. The data quality and ELN pages use the default; the trial and synthetic data pages need `DB_NAME=ehr_rwe_eln_tte uv run fastapi dev`.
+
+To run the app in Docker instead, `docker compose up -d --build --wait` builds the frontend into the image and serves everything on http://127.0.0.1:8000. Both ports bind to 127.0.0.1 only, because there is no sign-in.
+
+```bash
+curl localhost:8000/api/health/db
+curl -X POST localhost:8000/api/agent -H 'Content-Type: application/json' \
+  -d '{"prompt": "Is the database reachable?"}'
+```
+
+## Tests and evals
+
+```bash
+uv run ruff check .
+uv run pytest          # fast tests against the Compose Postgres, about 20 s
+uv run pytest evals    # golden cases against the real model, about 6 minutes, billed
+```
+
+Tests run in their own database, `ehr_rwe_eln_test`, and roll back everything they write. Plain `uv run pytest` never collects `evals/`.
+
+## Stop and clean up
+
+```bash
+docker compose down      # stop; data stays in the ehr-rwe-eln-db volume
+docker compose down -v   # stop and delete the databases
+```
+
+Generated files live under `data/`, which is gitignored: Synthea output, vocabularies, ELN entries, the genotype study, data cards, and the code-to-person registries in `data/registry/`.
+
+## Troubleshooting
+
+**`docker: command not found` after installing Docker Desktop.** In its user install mode, Docker Desktop puts its command-line links in `~/.docker/bin`. Add `export PATH="$HOME/.docker/bin:$PATH"` to `~/.zshrc`, or switch to the system install under Settings, Advanced.
+
+**`Unable to locate a Java Runtime`.** macOS ships a `java` stub with no runtime behind it. Install one (see [Prerequisites](#prerequisites)).
+
+**`schema cdm already exists`.** `build_omop.py` refuses to load over an existing build. Drop it first: `docker compose exec -T db psql -U postgres -d <database> -c "DROP SCHEMA cdm CASCADE"`.
+
+**`StaticFiles directory 'frontend/out' does not exist`.** The frontend has not been built in this checkout. Run `npm ci && npm run build` in `frontend/`.
+
+**The synthetic data page is empty.** The app is reading the default database; restart it with `DB_NAME=ehr_rwe_eln_tte`.

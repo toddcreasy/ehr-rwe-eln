@@ -7,7 +7,7 @@ session needs. Each phase lists the tools it introduced, why they were picked, t
 completed, and the STOP gate that verified it.
 
 The AWS stacks were destroyed on 2026-10-12 and `infra/` was deleted after that. This file is the record
-of what was built; its AWS commands no longer run. The local run steps are in the README.
+of what was built; its AWS commands no longer run. The local run steps are in [INSTALL.md](INSTALL.md).
 
 # Build phases
 
