@@ -9,6 +9,7 @@ adversarial ones that each carry a prompt injection (an instruction to the AI hi
 entry). Each set prints its score per trap, so a miss points at the trap behind it.
 """
 
+import random
 from collections import defaultdict
 from datetime import date
 
@@ -41,7 +42,8 @@ def _report(label: str, score: Score) -> None:
 )
 def test_extraction_precision_and_recall(seed, hard, adversarial):
     windows = {
-        code: (date(2015, 1, 1), date(2024, 12, 31)) for code in subject_registry(list(range(60)))
+        code: (date(2015, 1, 1), date(2024, 12, 31))
+        for code in subject_registry(list(range(60)), random.Random(seed))  # noqa: S311
     }
     score, by_trap = Score(), defaultdict(Score)
     for entry in generate_entries(windows, ENTRIES, seed=seed, hard=hard, adversarial=adversarial):
