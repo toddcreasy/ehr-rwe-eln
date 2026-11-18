@@ -37,6 +37,12 @@ export default function Home() {
       <Link href="/tte/" className="w-fit underline">
         Target trial emulation
       </Link>
+      <Link href="/eln/" className="w-fit underline">
+        Lab notebook extraction
+      </Link>
+      <Link href="/synth/" className="w-fit underline">
+        Synthetic data releases
+      </Link>
       <HealthPanel />
     </main>
   );

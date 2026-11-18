@@ -6,7 +6,7 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 
 from ehr_rwe_eln.agents.app import AgentRequest, invoke
-from ehr_rwe_eln.api import dq, tte
+from ehr_rwe_eln.api import dq, eln, synth, tte
 from ehr_rwe_eln.api.log_config import configure_logging
 from ehr_rwe_eln.config import Settings
 
@@ -70,6 +70,8 @@ def agent(request: AgentRequest) -> dict:
 
 api.include_router(dq.router)
 api.include_router(tte.router)
+api.include_router(eln.router)
+api.include_router(synth.router)
 app.include_router(api)
 # Mounted last so it never shadows /api. html=True serves index.html for /.
 app.mount("/", StaticFiles(directory=settings.frontend_dir, html=True, check_dir=False))
