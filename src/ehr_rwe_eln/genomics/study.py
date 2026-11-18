@@ -8,9 +8,10 @@ specimen genotyped from them. Here:
 - chr<N>.vcf.gz: phased genotypes per chromosome, one column per sample (VCF 4.2, gzip).
 - study.bed, study.bim, study.fam: the same genotypes as one PLINK binary set.
 - subject_phenotypes.tsv, sample_attributes.tsv, subject_sample_mapping.tsv.
-- subject_registry.tsv: subject code to OMOP person_id. A real study keeps this link with the
-  data holder and never distributes it; it is written here so the genotypes can be joined back
-  to the OMOP records for testing. Codes are assigned in a random order, never by person_id.
+- The registry, subject code to OMOP person_id, written to its own path outside the study
+  folder. A real study keeps this link with the data holder and never distributes it; it is
+  written here so the genotypes can be joined back to the OMOP records for testing. Codes are
+  assigned in a random order, never by person_id.
 - truth.json: the simulation settings and the planted variant, the answer key for the GWAS.
 """
 
@@ -146,8 +147,9 @@ def write_plink(path: Path, study: Study, phenotype: str) -> None:
     )
 
 
-def write_study(out: Path, study: Study) -> None:
+def write_study(out: Path, study: Study, registry: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
+    registry.parent.mkdir(parents=True, exist_ok=True)
     subjects, phenotype = study.subjects, study.truth["phenotype"]
     samples = subjects["sample_id"].tolist()
     for chromosome in study.chromosomes:
@@ -167,5 +169,5 @@ def write_study(out: Path, study: Study) -> None:
     table.select(
         "sample_id", pl.lit("Whole blood").alias("body_site"), pl.lit("DNA").alias("analyte_type")
     ).write_csv(out / "sample_attributes.tsv", separator="\t")
-    table.select("subject_id", "person_id").write_csv(out / "subject_registry.tsv", separator="\t")
+    table.select("subject_id", "person_id").write_csv(registry, separator="\t")
     (out / "truth.json").write_text(json.dumps(study.truth, indent=2) + "\n")

@@ -2,10 +2,13 @@
 
 Usage: uv run python scripts/generate_eln.py [--subjects 200] [--entries 300] [--seed 0]
 
-Subjects are adults with essential hypertension in the CDM, as study codes HTN-0001 and on.
+Subjects are adults with essential hypertension in the CDM, as study codes HTN-0001 and on,
+assigned in a random order.
 Each specimen is collected inside its subject's observation period, on or after their 18th
-birthday. Writes data/eln/subjects.csv (code, person_id) and data/eln/entries.jsonl (one entry
-per line, with its truth). The same arguments always give the same files. Synthetic only.
+birthday. Writes data/eln/entries.jsonl (one entry per line, with its truth) and the registry
+linking codes to persons, data/registry/eln_subjects.csv (code, person_id). The registry is the
+re-identification key, so it is kept out of data/eln/, the folder a study would share. The same
+arguments always give the same files. Synthetic only.
 """
 
 import argparse
@@ -17,7 +20,9 @@ from pathlib import Path
 from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.eln.synthetic import generate_entries, subject_registry
 
-OUT = Path(__file__).resolve().parent.parent / "data" / "eln"
+DATA = Path(__file__).resolve().parent.parent / "data"
+OUT = DATA / "eln"
+REGISTRY = DATA / "registry" / "eln_subjects.csv"
 
 # Adults with essential hypertension, and the part of their observation period from age 18 that
 # overlaps the years entries are dated in.
@@ -51,14 +56,15 @@ def main() -> None:
         raise SystemExit("no eligible subjects; build the CDM first (scripts/build_omop.py)")
     rng = random.Random(args.seed)  # noqa: S311  (seeded subject choice, not cryptography)
     chosen = sorted(rng.sample(windows, min(args.subjects, len(windows))))
-    registry = subject_registry([person_id for person_id, _, _ in chosen])
+    registry = subject_registry([person_id for person_id, _, _ in chosen], rng)
     subjects = {
         code: (start, stop) for code, (_, start, stop) in zip(registry, chosen, strict=True)
     }
     entries = generate_entries(subjects, args.entries, args.seed)
 
     OUT.mkdir(parents=True, exist_ok=True)
-    with (OUT / "subjects.csv").open("w", newline="") as f:
+    REGISTRY.parent.mkdir(parents=True, exist_ok=True)
+    with REGISTRY.open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["subject_id", "person_id"])
         writer.writerows(registry.items())
@@ -76,7 +82,7 @@ def main() -> None:
     samples = sum(len(e.truth.samples) for e in entries)
     results = sum(len(e.truth.results) for e in entries)
     print(f"{len(registry)} subjects, {len(entries)} entries, {samples} samples, {results} results")
-    print(f"written to {OUT}")
+    print(f"written to {OUT}; registry in {REGISTRY}")
 
 
 if __name__ == "__main__":

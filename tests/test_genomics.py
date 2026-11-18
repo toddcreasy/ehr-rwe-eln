@@ -28,7 +28,7 @@ def people(n=1500, seed=0) -> pd.DataFrame:
 def study(tmp_path_factory):
     out = tmp_path_factory.mktemp("genomics")
     s = build_study(people(), "hypertension", chromosomes=2, length=500_000, odds_ratio=3.0, seed=1)
-    write_study(out, s)
+    write_study(out, s, out.parent / "registry.tsv")
     return out, s
 
 
@@ -44,7 +44,8 @@ def test_files_follow_the_dbgap_layout(study):
     phenotypes = pl.read_csv(out / "subject_phenotypes.tsv", separator="\t")
     assert phenotypes.columns == ["subject_id", "sex", "age", "hypertension"]
     assert "person_id" not in phenotypes.columns  # the OMOP link stays in the registry
-    registry = pl.read_csv(out / "subject_registry.tsv", separator="\t")
+    assert not any("registry" in name for name in names)  # the key is not in the study folder
+    registry = pl.read_csv(out.parent / "registry.tsv", separator="\t")
     person_ids = registry["person_id"].to_list()
     assert sorted(person_ids) == list(range(100, 1600))
     assert person_ids != sorted(person_ids)  # codes do not follow person_id order

@@ -1,3 +1,4 @@
+import random
 import re
 from datetime import date
 
@@ -5,7 +6,7 @@ import pytest
 
 from ehr_rwe_eln.eln.synthetic import generate_entries, subject_registry
 
-REGISTRY = subject_registry(list(range(100, 140)))
+REGISTRY = subject_registry(list(range(100, 140)), random.Random(0))  # noqa: S311
 # Half the subjects are observed early, half late, so the windows matter.
 WINDOWS = {
     code: (date(2015, 1, 1), date(2019, 12, 31))
@@ -18,8 +19,12 @@ HARD = generate_entries(WINDOWS, 200, seed=7, hard=True)
 HARD_TRAPS = {"manifest", "units_once", "rejected_sample", "correction", "dilution", "replicates"}
 
 
-def test_registry_codes_follow_the_given_order():
-    assert list(subject_registry([5, 3]).items()) == [("HTN-0001", 5), ("HTN-0002", 3)]
+def test_registry_codes_are_random_and_keep_the_persons_order():
+    person_ids = list(range(100, 140))
+    assert list(REGISTRY.values()) == person_ids
+    assert sorted(REGISTRY) == [f"HTN-{i:04d}" for i in range(1, 41)]
+    assert list(REGISTRY) != sorted(REGISTRY)  # codes do not follow person_id order
+    assert subject_registry(person_ids, random.Random(0)) == REGISTRY  # noqa: S311
 
 
 def test_same_seed_same_entries():

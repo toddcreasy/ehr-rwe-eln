@@ -6,7 +6,9 @@ Usage: DB_NAME=ehr_rwe_eln_tte uv run python scripts/generate_genomics.py
            [--phenotype hypertension] [--seed 0]
 
 Writes data/genomics/ (gitignored): VCFs per chromosome, a PLINK set, subject and sample
-tables, and truth.json. The same arguments always give the same files. Synthetic only.
+tables, and truth.json; the registry linking study codes to persons goes to
+data/registry/genomics_subjects.tsv, outside the study folder. The same arguments always give
+the same files. Synthetic only.
 """
 
 import argparse
@@ -20,7 +22,9 @@ from ehr_rwe_eln.genomics.study import build_study, write_study
 from ehr_rwe_eln.synth.source import build_source
 from ehr_rwe_eln.synth.spec import SPECS, load_spec
 
-OUT = Path(__file__).resolve().parent.parent / "data" / "genomics"
+DATA = Path(__file__).resolve().parent.parent / "data"
+OUT = DATA / "genomics"
+REGISTRY = DATA / "registry" / "genomics_subjects.tsv"
 
 
 def main() -> None:
@@ -44,7 +48,7 @@ def main() -> None:
     study = build_study(
         people, args.phenotype, args.chromosomes, args.length, args.odds_ratio, args.seed
     )
-    write_study(OUT, study)
+    write_study(OUT, study, REGISTRY)
     truth = study.truth
     print(
         f"{truth['people']:,} people ({truth['cases']:,} with {args.phenotype}),"
@@ -56,7 +60,7 @@ def main() -> None:
         f"planted {v['id']}: alternate allele frequency {v['alt_frequency_cases']:.3f} in"
         f" cases, {v['alt_frequency_controls']:.3f} in controls (odds ratio {args.odds_ratio})"
     )
-    print(f"written to {OUT}")
+    print(f"written to {OUT}; registry in {REGISTRY}")
 
 
 if __name__ == "__main__":

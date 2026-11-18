@@ -103,9 +103,15 @@ class Entry:
     traps: list[str] = field(default_factory=list)
 
 
-def subject_registry(person_ids: list[int], prefix: str = "HTN") -> dict[str, int]:
-    """Study subject codes for the given persons, in order: HTN-0001, HTN-0002, ..."""
-    return {f"{prefix}-{i:04d}": person_id for i, person_id in enumerate(person_ids, start=1)}
+def subject_registry(
+    person_ids: list[int], rng: random.Random, prefix: str = "HTN"
+) -> dict[str, int]:
+    """Study subject codes HTN-0001, HTN-0002, ... for the given persons, keyed in their order.
+    Codes go to persons in a random order, so a code says nothing about the person (HIPAA
+    164.514(c): a re-identification code is not derived from their data)."""
+    codes = [f"{prefix}-{i:04d}" for i in range(1, len(person_ids) + 1)]
+    rng.shuffle(codes)
+    return dict(zip(codes, person_ids, strict=True))
 
 
 def _date_text(rng: random.Random, day: date) -> str:

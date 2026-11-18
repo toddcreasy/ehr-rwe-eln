@@ -2,11 +2,11 @@
 
 Usage: uv run python scripts/extract_eln.py [--batch-id msgbatch_...]
 
-Loads data/eln/subjects.csv and entries.jsonl (scripts/generate_eln.py) into eln.subject and
-eln.entry, sends one batch for the entries with no extraction yet (or a failed one), waits for
-it, and stores each result in eln.extraction. Prints precision and recall against the truth in
-entries.jsonl. Batches cost half of single calls and usually finish within minutes; if this
-script stops while waiting, rerun it with the printed --batch-id instead of paying again.
+Loads data/registry/eln_subjects.csv and data/eln/entries.jsonl (scripts/generate_eln.py) into
+eln.subject and eln.entry, sends one batch for the entries with no extraction yet (or a failed
+one), waits for it, and stores each result in eln.extraction. Prints precision and recall against
+the truth in entries.jsonl. Batches cost half of single calls and usually finish within minutes;
+if this script stops while waiting, rerun it with the printed --batch-id instead of paying again.
 
 Needs migrations applied (uv run alembic upgrade head) and ANTHROPIC_API_KEY in .env.
 """
@@ -46,7 +46,7 @@ def main() -> None:
     client = anthropic.Anthropic(api_key=key.get_secret_value() if key else None)
     model = settings.model
 
-    with (DATA / "subjects.csv").open() as f:
+    with (DATA.parent / "registry" / "eln_subjects.csv").open() as f:
         registry = {row["subject_id"]: int(row["person_id"]) for row in csv.DictReader(f)}
     rows = [json.loads(line) for line in (DATA / "entries.jsonl").open()]
     truth = {r["entry_id"]: Extraction.model_validate(r["truth"]) for r in rows}
