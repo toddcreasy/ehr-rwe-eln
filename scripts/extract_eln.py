@@ -44,7 +44,7 @@ def main() -> None:
     settings = AgentSettings()
     key = settings.anthropic_api_key
     client = anthropic.Anthropic(api_key=key.get_secret_value() if key else None)
-    model = settings.model_small
+    model = settings.model
 
     with (DATA / "subjects.csv").open() as f:
         registry = {row["subject_id"]: int(row["person_id"]) for row in csv.DictReader(f)}

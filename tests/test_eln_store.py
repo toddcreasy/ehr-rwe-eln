@@ -17,7 +17,7 @@ def succeeded(text: str, stop_reason: str = "end_turn") -> NS:
 
 
 def test_batch_requests_carry_the_entry_id_and_the_schema():
-    request = batch_requests({"ELN-00001": "body"}, "claude-haiku-5-5")[0]
+    request = batch_requests({"ELN-00001": "body"}, "claude-opus-5-5")[0]
     assert request["custom_id"] == "ELN-00001"
     assert request["params"]["output_config"]["format"] == OUTPUT_FORMAT
     assert request["params"]["messages"] == [{"role": "user", "content": "body"}]

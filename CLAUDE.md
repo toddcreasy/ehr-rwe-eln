@@ -166,7 +166,7 @@ What each directory is for, which of these are real conventions and which are ch
 ## Conventions
 
 - Everything runs in `docker-compose.yml`. Bind every published port to 127.0.0.1; there is no auth.
-- Model tiering: default to `MODEL_SMALL` (Haiku class) for extraction, filtering, and routing. Use `MODEL_LARGE` only for final synthesis. Prompt caching on for any repeated prefix. Batch API for offline jobs.
+- One model: every call uses `MODEL` (Claude Opus 5.5). Prompt caching on for any repeated prefix. Batch API for offline jobs.
 
 ## Settled decisions
 
@@ -177,5 +177,4 @@ Do not re-ask. Rationale and history in `docs/SETUP.md`.
 | API key and spend limit | Personal key scoped to the `ehr-rwe-eln` workspace in the Claude Console, which carries the monthly spend limit. The key lives only in `.env` as `ANTHROPIC_API_KEY`. No macOS Keychain, no shell export: an exported variable would override `.env` |
 | Python | 3.14, pinned in `.python-version` |
 | Database | PostgreSQL 18 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg18-trixie`, defined in `docker-compose.yml`. Moved from 17 on 2026-10-13: 17 only matched the retired Aurora cluster |
-| `MODEL_SMALL` | `claude-haiku-5-5` on the Anthropic API. Probed 2026-10-12: works (all 12 evals pass) |
-| `MODEL_LARGE` | `claude-sonnet-5-5` on the Anthropic API. Probed 2026-10-12: works. Final synthesis only |
+| `MODEL` | `claude-opus-5-5` on the Anthropic API, for every call. Replaced Haiku 5.5 / Sonnet 5.5 tiering on 2026-11-18 |

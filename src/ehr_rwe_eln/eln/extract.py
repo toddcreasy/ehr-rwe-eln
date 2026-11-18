@@ -1,6 +1,6 @@
 """Extract samples and results from one ELN entry with Claude, as a validated Extraction.
 
-Extraction is a filtering job, so it runs on MODEL_SMALL. The reply is constrained to the
+It runs on MODEL. The reply is constrained to the
 Extraction schema (structured outputs) and parsed into the Pydantic model, so a malformed reply
 raises instead of reaching the database.
 """
@@ -50,7 +50,7 @@ def extract(
         # None makes the SDK read ANTHROPIC_API_KEY from the environment.
         client = anthropic.Anthropic(api_key=key.get_secret_value() if key else None)
     response = client.messages.parse(
-        model=model or settings.model_small,
+        model=model or settings.model,
         max_tokens=8192,
         # Cached once the prompt passes the model's minimum cacheable length.
         system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],

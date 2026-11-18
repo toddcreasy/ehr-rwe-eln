@@ -53,7 +53,8 @@ def run_agent(
     client = anthropic.Anthropic(api_key=api_key)
     runner = client.beta.messages.tool_runner(
         model=model_id,
-        max_tokens=1024,
+        # Opus 5.5 always thinks, and thinking counts against max_tokens.
+        max_tokens=16000,
         system=SYSTEM_PROMPT,
         tools=[current_time, check_database_health],
         messages=[{"role": "user", "content": prompt}],

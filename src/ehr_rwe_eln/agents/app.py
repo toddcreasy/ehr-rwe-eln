@@ -1,7 +1,6 @@
 """Agent entry point. The API serves it at POST /agent; evals call invoke directly."""
 
 import logging
-from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -14,11 +13,10 @@ log = logging.getLogger("ehr_rwe_eln.agents")
 
 class AgentRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=4000)
-    tier: Literal["small", "large"] = "small"
 
 
 def invoke(request: AgentRequest) -> dict:
-    model_id = settings.model_large if request.tier == "large" else settings.model_small
+    model_id = settings.model
     api_key = settings.anthropic_api_key
     responses = run_agent(model_id, request.prompt, api_key.get_secret_value() if api_key else None)
     tools_called = [
