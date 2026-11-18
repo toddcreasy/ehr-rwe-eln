@@ -51,7 +51,7 @@ Trustworthy characteristics (MEASURE 2):
 | Accountable and transparent | Provenance per release (spec as run, spend per mechanism, source, counts, seed, code version); data cards; methodology; PR history. | None. |
 | Explainable and interpretable | The Bayesian network's structure is declared and printed on each card; each privacy report has a plain-language summary. | The VAE is not interpretable beyond its metrics. |
 | Privacy-enhanced | DP at epsilon 0.25 to 4 on the person summary; all three attacks at chance on every release. | No location in the source, so linkage risk is understated. |
-| Fair, with harmful bias managed | Not measured. | DP noise is the same size for every count, so small groups are distorted most; 99 of 23,420 people are recorded as Native American. Needed: fidelity and utility by race, ethnicity, sex, and age group. |
+| Fair, with harmful bias managed | Not measured. | DP noise is the same size for every count, so small groups are distorted most; 99 of 23,421 people are recorded as Native American. Needed: fidelity and utility by race, ethnicity, sex, and age group. |
 
 ## Manage
 

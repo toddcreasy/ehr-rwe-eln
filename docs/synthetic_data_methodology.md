@@ -2,13 +2,13 @@
 
 How this repository makes differentially private synthetic copies of an OMOP database, how it checks them, and what the checks found. Written for a reviewer such as a Data Access Committee (DAC): someone who decides whether a dataset may be shared and needs to know what it protects, what it costs in accuracy, and what it should not be used for.
 
-The source here is Synthea output, not real patients. It stands in for a controlled-access source so the whole process can be run and inspected in the open. The methods carry over to real data; the numbers describe this source only. Code: `src/ehr_rwe_eln/synth/`. Every figure below comes from the reports stored in the `synth.report` table of the 23,420-patient build and from the per-release data cards (`scripts/synth_cards.py`).
+The source here is Synthea output, not real patients. It stands in for a controlled-access source so the whole process can be run and inspected in the open. The methods carry over to real data; the numbers describe this source only. Code: `src/ehr_rwe_eln/synth/`. Every figure below comes from the reports stored in the `synth.report` table of the 23,421-patient build and from the per-release data cards (`scripts/synth_cards.py`).
 
 ## 1. What is released
 
 Two kinds of table, each defined by a YAML spec in `src/ehr_rwe_eln/synth/specs/`.
 
-- **Person summary** (`person_summary.yaml`): one row per person, 21 columns. Age at the end of observation, sex, race, ethnicity; whether each of eight conditions and four drugs was ever recorded; the latest of four measurements (systolic blood pressure, BMI, eGFR, HbA1c); and death. 23,420 people.
+- **Person summary** (`person_summary.yaml`): one row per person, 21 columns. Age at the end of observation, sex, race, ethnicity; whether each of eight conditions and four drugs was ever recorded; the latest of four measurements (systolic blood pressure, BMI, eGFR, HbA1c); and death. 23,421 people.
 - **Trial table** (`trial_lisinopril_amlodipine_ckd.yaml`): the analysis table of module 4's target trial of lisinopril against amlodipine, with chronic kidney disease stage 3 or worse as the outcome. One row per eligible person: treatment arm, age, sex, six condition and four measurement covariates, follow-up days, and outcome. 1,890 people, 26 outcome events.
 
 Neither table carries a direct identifier. `person_id` is used to build and split the source and never reaches a synthesizer. Dates are not released; ages and follow-up lengths are.
@@ -29,7 +29,7 @@ Synthetic rows are not real people, so a match between a synthetic row and a rea
 
 **Differential privacy (DP).** A mechanism is epsilon-differentially private if, for any two sources that differ by one person, the probability of any output changes by at most a factor of e^epsilon. Smaller epsilon means more noise and stronger protection. Spending privacy more than once adds up: running mechanisms with epsilon 1 and epsilon 2 on the same people costs epsilon 3 (sequential composition). Anything computed only from a DP output costs nothing more (post-processing).
 
-**Fixed domains.** Every category list and every numeric range and bin is written in the spec before the data is read. A range taken from the data would leak on its own: the top bin edge would be the oldest person's age. Values outside a range are clamped into its end bins.
+**Fixed domains.** Every category list and every numeric range and bin is written in the spec before the data is read. A range taken from the data would leak on its own: the top bin edge would be the oldest person's age. Values outside a range are clamped into its end bins. Age's last bin is open: it means 90 or older and decodes to 90, never to an age inside it, as HIPAA Safe Harbor requires.
 
 **Declared structure.** For the Bayesian network, each column's parents (the columns its distribution is measured against) are declared in the spec from domain knowledge, so choosing the structure costs no privacy. Example: lisinopril depends on hypertension; diabetes on age and obesity; in the trial table, treatment on diabetes and early kidney disease, following public prescribing guidance.
 
@@ -68,35 +68,35 @@ A failed attack shows only that this attack failed. These checks bound risk from
 
 ## 5. Results
 
-### Person summary (16,384 training people, 7,036 held out)
+### Person summary (16,385 training people, 7,036 held out)
 
 | Release | Column TVD mean | Pair TVD mean | Worst pair (TVD) | Correlation gap | TSTR AUC |
 |---|---|---|---|---|---|
-| Noise floor (real against real) | 0.006 | 0.013 | 0.046 | 0.014 | 0.809 (TRTR) |
-| Independent columns, epsilon 1 | 0.005 | 0.071 | age x BMI (0.332) | 0.232 | 0.465 |
-| Bayesian network, epsilon 0.25 | 0.020 | 0.056 | age x BMI (0.266) | 0.108 | 0.668 |
-| Bayesian network, epsilon 1 | 0.007 | 0.037 | age x BMI (0.254) | 0.087 | 0.685 |
-| Bayesian network, epsilon 4 | 0.003 | 0.032 | age x BMI (0.245) | 0.082 | 0.712 |
-| VAE, epsilon 1 | 0.046 | 0.082 | age x BMI (0.382) | 0.223 | 0.711 |
-| VAE, epsilon 4 | 0.038 | 0.067 | age x BMI (0.272) | 0.122 | 0.733 |
+| Noise floor (real against real) | 0.006 | 0.012 | 0.050 | 0.015 | 0.804 (TRTR) |
+| Independent columns, epsilon 1 | 0.005 | 0.071 | age x BMI (0.333) | 0.232 | 0.497 |
+| Bayesian network, epsilon 0.25 | 0.015 | 0.049 | age x BMI (0.258) | 0.099 | 0.689 |
+| Bayesian network, epsilon 1 | 0.006 | 0.035 | age x BMI (0.247) | 0.084 | 0.698 |
+| Bayesian network, epsilon 4 | 0.004 | 0.032 | age x BMI (0.244) | 0.079 | 0.686 |
+| VAE, epsilon 1 | 0.038 | 0.073 | age x BMI (0.386) | 0.210 | 0.730 |
+| VAE, epsilon 4 | 0.046 | 0.077 | age x BMI (0.270) | 0.128 | 0.724 |
 
 - The Bayesian network matches single columns at the noise floor from epsilon 1 up. Relationships fall short of the floor at every epsilon.
 - The worst pair in every release is age x BMI. The spec makes BMI depend only on obesity, and the source includes children, whose BMI depends strongly on age. A declared structure keeps only what it declares.
-- The VAE matches single columns worse (DP noise on 63,357 network weights trained from 16,384 people) but predicts death slightly better, because in the Bayesian network death depends on age alone.
+- The VAE matches single columns worse (DP noise on 63,100 network weights trained from 16,385 people) but predicts death better, because in the Bayesian network death depends on age alone.
 - The independent-columns baseline keeps every column and loses every relationship, and predicts death no better than guessing: the checks can tell a useless release from a useful one.
 
 | Release | Nearer a member | Exact match, member / non-member | Membership AUC | Attribute gap, mean / max |
 |---|---|---|---|---|
-| Copy of the training data | 62.2% | 68.2% / 45.4% | 0.642 | +0.4% / +1.1% |
-| Independent columns, epsilon 1 | 51.1% | 2.7% / 2.6% | 0.504 | 0.0% / +0.7% |
-| Bayesian network, epsilon 0.25 | 50.3% | 16.1% / 15.7% | 0.506 | 0.0% / +0.6% |
-| Bayesian network, epsilon 1 | 51.8% | 20.0% / 18.7% | 0.505 | 0.0% / +0.8% |
-| Bayesian network, epsilon 4 | 50.5% | 20.2% / 20.0% | 0.504 | 0.0% / +0.9% |
-| VAE, epsilon 1 | 49.7% | 8.7% / 8.8% | 0.502 | 0.0% / +0.7% |
-| VAE, epsilon 4 | 50.1% | 19.1% / 19.3% | 0.504 | 0.0% / +0.8% |
+| Copy of the training data | 62.9% | 68.7% / 44.4% | 0.650 | +0.5% / +1.6% |
+| Independent columns, epsilon 1 | 50.0% | 2.0% / 2.1% | 0.512 | +0.2% / +1.2% |
+| Bayesian network, epsilon 0.25 | 50.8% | 17.4% / 17.5% | 0.504 | +0.1% / +1.1% |
+| Bayesian network, epsilon 1 | 51.0% | 19.2% / 18.9% | 0.507 | +0.1% / +1.4% |
+| Bayesian network, epsilon 4 | 50.1% | 20.8% / 21.3% | 0.500 | +0.2% / +1.3% |
+| VAE, epsilon 1 | 50.9% | 9.4% / 8.8% | 0.509 | +0.2% / +1.2% |
+| VAE, epsilon 4 | 50.4% | 19.6% / 19.5% | 0.506 | +0.2% / +1.3% |
 
 - Every release is at chance on every attack; the copy shows the attacks detect leakage when it exists.
-- The copy's own numbers are modest because the encoding is coarse: 45% of held-out people have an exact twin among training people on all 21 binned columns. In the source, 2.3% of people are unique on exact age, sex, race, and ethnicity, and 0.1% with age in ten-year groups. With these quasi-identifiers, a linkage attack has almost no one to single out.
+- The copy's own numbers are modest because the encoding is coarse: 44% of held-out people have an exact twin among training people on all 21 binned columns. In the source, 2.4% of people are unique on exact age, sex, race, and ethnicity, and 0.2% with age in ten-year groups (the last one 90 or older). With these quasi-identifiers, a linkage attack has almost no one to single out.
 
 ### Trial table (1,890 people, 26 events)
 
@@ -104,15 +104,16 @@ The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.26) fo
 
 | Release | Events | Release HR (95% CI) | Estimable | Covers real HR | Spurious effect | Median HR, 20 draws |
 |---|---|---|---|---|---|---|
-| Bayesian network, epsilon 1 | 70 | 1.45 (0.85 to 2.47) | 85% | 30% | 55% | 0.67 |
-| Bayesian network, epsilon 4 | 34 | 2.54 (1.05 to 6.18) | 90% | 45% | 40% | 0.85 |
-| Bayesian network, epsilon 16 | 35 | 4.21 (1.49 to 11.89) | 95% | 90% | 5% | 1.41 |
-| Bayesian network, epsilon 1000 (no real privacy) | 26 | 0.63 (0.29 to 1.37) | 100% | 95% | 0% | 1.57 |
-| VAE, epsilon 4 | 29 | 2.66 (1.02 to 6.96) | 95% | 95% | 0% | 0.91 |
+| Bayesian network, epsilon 1 | 118 | 5.47 (2.85 to 10.52) | 100% | 50% | 55% | 0.75 |
+| Bayesian network, epsilon 4 | 46 | 12.22 (2.96 to 50.40) | 95% | 75% | 20% | 0.86 |
+| Bayesian network, epsilon 16 | 35 | 4.38 (1.55 to 12.37) | 100% | 95% | 5% | 1.21 |
+| Bayesian network, epsilon 1000 (no real privacy) | 26 | 0.63 (0.29 to 1.37) | 100% | 95% | 0% | 1.59 |
+| VAE, epsilon 4 | 27 | 1.62 (0.69 to 3.81) | 100% | 100% | 0% | 1.08 |
 
-- With 26 events, DP synthetic tables give confident wrong answers often: more than half of the draws at epsilon 1, and 40% at epsilon 4, show an effect the real data does not.
-- Noise is clipped at zero, which can only raise sparse counts: the epsilon 1 release has 70 events against 26 real ones.
-- The VAE does well over repeated draws; its stored release happens to be one of the unlucky ones. A single release is not enough to judge a method on a cohort this small.
+- With 26 events, DP synthetic tables give confident wrong answers often: more than half of the draws at epsilon 1, and 20% at epsilon 4, show an effect the real data does not.
+- Noise is clipped at zero, which can only raise sparse counts: the epsilon 1 release has 118 events against 26 real ones.
+- The VAE does best: every draw covers the real hazard ratio and none shows a spurious effect.
+- A single release is not enough to judge a method on a cohort this small. The stored epsilon 4 release gives a hazard ratio of 12.22, though 75% of draws at that setting cover the real one.
 - Without real privacy (epsilon 1000), the Bayesian network's median drifts above 1. The spec makes the outcome depend only on arm and follow-up, so propensity weighting has nothing to adjust and the synthetic estimate follows the crude association. This is a structure limit, not a privacy one.
 
 ## 6. Recommended use
@@ -130,8 +131,7 @@ The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.26) fo
 - The Bayesian network keeps only declared relationships, with at most two parents per column.
 - The VAE's training settings were not tuned. Tuning on a separate public stand-in would likely improve it.
 - On real data only the Bayesian network can run here: the VAE needs a seed, because secure noise for it is not installable (section 3).
-- Ages are not top-coded: ages over 89 are released in their own bins, where HIPAA Safe Harbor allows only "90 or older." See [nih_hhs_requirements.md](nih_hhs_requirements.md).
-- Fidelity is not yet measured by subgroup. DP noise is the same size for every count, so small groups (99 people of 23,420 are recorded as Native American) are distorted most.
+- Fidelity is not yet measured by subgroup. DP noise is the same size for every count, so small groups (99 people of 23,421 are recorded as Native American) are distorted most.
 - One spec per table kind and one trial protocol; results on other cohorts will differ.
 
 ## 8. Reproducing and provenance

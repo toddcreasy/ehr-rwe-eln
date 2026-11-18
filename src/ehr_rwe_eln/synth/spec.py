@@ -28,6 +28,10 @@ class Numeric(Strict):
     bins: int = Field(gt=0)
     # Whole numbers when decoded (age in years).
     integer: bool = False
+    # The last bin means "its low edge or more" and decodes to that edge, never a value
+    # inside it: age 90 stands for 90 or older, as HIPAA Safe Harbor allows (45 CFR
+    # 164.514(b)(2)(i)(C)).
+    open_top: bool = False
 
     @model_validator(mode="after")
     def _ordered(self) -> Numeric:

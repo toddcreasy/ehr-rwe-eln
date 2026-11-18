@@ -20,6 +20,8 @@ def _column(c: Column) -> str:
     if c.numeric is not None:
         n = c.numeric
         domain = f"{n.low:g} to {n.high:g} in {n.bins} bins"
+        if n.open_top:
+            domain += f", the last {n.high - (n.high - n.low) / n.bins:g} or older"
         if c.missing_allowed:
             domain += ", or missing"
     else:

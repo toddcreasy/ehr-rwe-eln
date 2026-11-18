@@ -18,7 +18,7 @@ releases:
 # 1,890 people: batches of 128 give the VAE more steps per epoch than the default 512.
 vae: {batch_size: 128}
 columns:
-  - {name: age, analysis: age, numeric: {low: 0, high: 110, bins: 11, integer: true}}
+  - {name: age, analysis: age, numeric: {low: 0, high: 100, bins: 10, integer: true, open_top: true}}
   - {name: male, analysis: male, categories: [0, 1]}
   - {name: obesity, analysis: obesity, categories: [0, 1], parents: [age]}
   - {name: diabetes, analysis: diabetes, categories: [0, 1], parents: [age, obesity]}

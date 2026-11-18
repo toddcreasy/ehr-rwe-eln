@@ -21,7 +21,7 @@ utility_target: deceased
 vae: {hidden: 128, latent: 16, epochs: 20, batch_size: 512, learning_rate: 0.001, max_grad_norm: 1.0, delta: 0.00001}
 columns:
   # Demographics. Age is at the end of the person's observation period.
-  - {name: age, demographic: age, numeric: {low: 0, high: 110, bins: 11, integer: true}}
+  - {name: age, demographic: age, numeric: {low: 0, high: 100, bins: 10, integer: true, open_top: true}}
   - {name: sex, demographic: sex, categories: [female, male]}
   - {name: race, demographic: race, categories: [white, black, asian, hawaiian, native, other]}
   - {name: ethnicity, demographic: ethnicity, categories: [hispanic, nonhispanic], parents: [race]}

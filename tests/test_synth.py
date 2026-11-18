@@ -85,6 +85,23 @@ def test_decode_draws_inside_the_bin():
     assert out.systolic_bp.isna().all()
 
 
+def test_open_top_bin_decodes_to_its_edge():
+    numeric = {**AGE["numeric"], "integer": True, "open_top": True}
+    columns = spec({**AGE, "numeric": numeric}).columns
+    codes = encode(pd.DataFrame({"age": [85, 90, 104]}), columns)
+    assert codes[:, 0].tolist() == [8, 9, 9]
+    out = decode(np.array([[8]] * 200 + [[9]] * 200), columns, np.random.default_rng(0))
+    assert out.age[:200].between(80, 89).all()
+    assert (out.age[200:] == 90).all()
+
+
+def test_shipped_specs_top_code_age_at_90():
+    for name in ("person_summary.yaml", "trial_lisinopril_amlodipine_ckd.yaml"):
+        age = next(c for c in load_spec(SPECS / name).columns if c.name == "age")
+        assert age.numeric is not None and age.numeric.open_top
+        assert age.numeric.high - (age.numeric.high - age.numeric.low) / age.numeric.bins == 90
+
+
 def toy(n=20_000, seed=1) -> pd.DataFrame:
     """Hypertension rises with age; lisinopril goes almost only to people with hypertension."""
     rng = np.random.default_rng(seed)

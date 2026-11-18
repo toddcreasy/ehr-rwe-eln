@@ -50,7 +50,7 @@ Re-identification codes (164.514(c)) are allowed only if the code is not derived
 - No names, contact details, record or account numbers, device identifiers, URLs, IP addresses, images, or biometric identifiers are released.
 - No calendar dates are released: the person summary has ages, and the trial table has follow-up lengths in days. Whether intervals derived from dates are acceptable is a question for the expert.
 - No geography is released (the source has none; the module 1 ETL does not load addresses).
-- Ages are not top-coded. The person summary and trial table release ages in ten-year bins up to 110, so 90 to 99 and 100 and over appear as separate groups. Safe Harbor allows only "90 or older."
+- Ages are top-coded. The person summary and trial table release ages in ten-year bins, the last one "90 or older," as Safe Harbor allows; that bin decodes to 90.
 - Codes: genotype study codes are random; lab notebook subject codes are not (section 1).
 
 **Genomic data.** A genome is identifying in itself, which is why genomic data sit behind controlled access. Homer and colleagues showed in 2008 that a person's presence in a study can be detected even from summary allele frequencies, and NIH responded by removing aggregate genomic data from its public websites (Zerhouni and Nabel, Science, 2008). The genotypes here are simulated and belong to no one. A version trained on real genotypes would need its own risk assessment, including membership inference on the genotype data.
@@ -59,7 +59,7 @@ Re-identification codes (164.514(c)) are allowed only if the code is not derived
 
 In order of importance:
 
-1. **Top-code age at 90.** Make the last age bin "90 or older" in both specs. This changes every synthetic release, so the releases, reports, data cards, and methodology figures would be remade.
+1. **Top-code age at 90.** Done 2026-11-18: the last age bin is "90 or older" in both specs, and every release, report, data card, and methodology figure was remade.
 2. **Approval before attacks.** On a real controlled-access source, list the privacy attacks in the data access request and run them only once approved.
 3. **Data use limitations in the spec.** Add a field that records the source's data use limitations and print it on every data card.
 4. **Random codes for lab notebook subjects.** Assign `HTN-` codes in a random order, as the genotype codes now are. The stored extractions would be remade.

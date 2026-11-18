@@ -13,7 +13,8 @@ changes one cell of each histogram by 1 (the sensitivity), so noise on that scal
    diffprivlib's BudgetAccountant refuses to spend more than that.
 3. Sample: draw each column in spec order from its noisy counts given its parents' codes. This
    uses only the noisy histograms, never the source, so it costs no privacy (post-processing).
-4. Decode: codes back to values; a number is drawn uniformly inside its bin.
+4. Decode: codes back to values; a number is drawn uniformly inside its bin, except in an
+   open top bin, which decodes to its low edge.
 """
 
 from dataclasses import asdict, dataclass
@@ -73,6 +74,8 @@ def decode(codes: np.ndarray, columns: list[Column], rng: np.random.Generator) -
             values = np.floor(start + rng.random(len(codes)) * width).astype(float)
         else:
             values = start + rng.random(len(codes)) * width
+        if n.open_top:
+            values = np.where(codes[:, j] == n.bins - 1, n.high - width, values)
         out[column.name] = np.where(codes[:, j] == n.bins, np.nan, values)
     frame = pd.DataFrame(out)
     for column in columns:
