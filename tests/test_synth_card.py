@@ -49,6 +49,7 @@ def test_card_has_every_section_and_the_provenance():
     for heading in (
         "# Data card: synthetic release 7",
         "## Intended use",
+        "## Data use limitations",
         "## How it was made",
         "## Privacy spend",
         "## Fidelity",
@@ -57,6 +58,7 @@ def test_card_has_every_section_and_the_provenance():
     ):
         assert heading in card
     assert "`test_db` at code version `abc1234`" in card
+    assert "None: synthetic test data." in card
     assert "| lisinopril | drug, concepts 2 | 0, 1 | hypertension |" in card
     assert "| Histogram of age x hypertension (20 cells) | epsilon 0.3333 |" in card
     assert "anyone with the seed can regenerate the noise" in card

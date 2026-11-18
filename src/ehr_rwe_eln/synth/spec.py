@@ -112,6 +112,11 @@ class VaeSettings(Strict):
 class Spec(Strict):
     name: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     description: str
+    # The source's data use limitations: the consent-based terms that say what its data may be
+    # used for (dbGaP's "general research use", "disease-specific", and so on). A synthetic
+    # release is derived data and inherits them, so they are required and printed on every
+    # data card. For a source with none, say so and why.
+    data_use_limitations: str = Field(min_length=1)
     # Seeds the noise and the sampling, so a release can be remade exactly. Only for sources
     # that are already synthetic: anyone who knows the seed can regenerate the noise and
     # subtract it. Leave it null for real data, and the noise comes from a secure generator.

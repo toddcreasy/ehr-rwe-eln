@@ -26,6 +26,7 @@ def spec(*columns, seed=0, releases=None) -> Spec:
     return Spec(
         name="t",
         description="t",
+        data_use_limitations="None: synthetic test data.",
         seed=seed,
         releases=releases or [{"method": "bayes_net", "epsilon": 1}],
         columns=list(columns),
@@ -53,6 +54,16 @@ def test_the_shipped_spec_loads():
 def test_bad_specs_are_refused(columns, message):
     with pytest.raises(ValidationError, match=message):
         spec(*columns)
+
+
+def test_data_use_limitations_are_required():
+    fields = spec(AGE).model_dump()
+    for value in (None, ""):
+        with pytest.raises(ValidationError, match="data_use_limitations"):
+            Spec.model_validate({**fields, "data_use_limitations": value})
+    del fields["data_use_limitations"]
+    with pytest.raises(ValidationError, match="data_use_limitations"):
+        Spec.model_validate(fields)
 
 
 def test_flags_default_to_zero_and_one():

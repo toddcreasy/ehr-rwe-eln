@@ -194,6 +194,13 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
             else ""
         ),
         "",
+        "## Data use limitations",
+        "",
+        "Inherited from the source: a synthetic release is derived from it and may be used only"
+        " within these terms.",
+        "",
+        spec.data_use_limitations,
+        "",
         "## How it was made",
         "",
         "Every category list and numeric range below is fixed in the spec, never read from the"
