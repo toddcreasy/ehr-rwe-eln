@@ -136,7 +136,7 @@ Local-first: everything runs on one machine in Docker Compose, with no cloud acc
 | DB migrations | Alembic | Versioned schema changes; `uv run alembic upgrade head` against the Compose Postgres. |
 | Dev-loop evals | pydantic-evals golden set in pytest | Scores the agent against the real model in seconds. |
 | Frontend framework | Next.js + React + Tailwind, static export | Builds to plain files, so no Node server at runtime. |
-| Code host + CI runner | GitHub + GitHub Actions | `lint-test` runs ruff and pytest against a Postgres service container. |
+| Code host + CI runner | GitHub + GitHub Actions | `lint-test` runs ruff and pytest against a Postgres service container. `secrets` runs gitleaks (pinned, checksum verified) over every commit and file for keys, tokens, passwords, usernames, and email addresses, with the rules in `.gitleaks.toml`. Both are required to merge; the same scan runs in pre-commit. |
 | Containers | Docker + Docker Compose | Open standard; the whole stack starts with one command. |
 
 Excluded on purpose (wrong scale for a personal project): Kubernetes, Terraform, Snowflake, Databricks, A2A, LiteLLM, dedicated vector databases, WAF-heavy perimeter builds.
