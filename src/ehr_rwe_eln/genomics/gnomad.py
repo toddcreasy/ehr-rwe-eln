@@ -12,6 +12,7 @@ PM2 criterion is about variants absent from population databases.
 
 import json
 import time
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
@@ -19,6 +20,10 @@ from pathlib import Path
 API = "https://gnomad.broadinstitute.org/api"
 BATCH = 10
 WAIT = 7.0  # seconds between requests, to stay under 10 a minute
+RETRIES = 5
+BACKOFF = 30.0  # seconds before the first retry, doubling each time
+# Answers that mean "busy, ask again later", not "this query is wrong".
+TRANSIENT = ("overloaded", "rate limit", "too many requests")
 FIELDS = "exome { ac an } genome { ac an }"
 
 
@@ -43,6 +48,28 @@ def _frequency(found: dict | None) -> dict | None:
     return {"ac": ac, "an": an, "af": ac / an if an else None}
 
 
+def _ask(post: Callable[[str, dict], dict], query: str, variables: dict, backoff: float) -> dict:
+    """One batch's data. "Variant not found" is an answer; an overloaded or rate-limited
+    service is retried with backoff; anything else (a bad query) raises. None of these is ever
+    cached as absent."""
+    for attempt in range(RETRIES):
+        try:
+            answer = post(query, variables)
+        except urllib.error.HTTPError as e:
+            if e.code not in (429, 502, 503, 504) or attempt == RETRIES - 1:
+                raise
+            time.sleep(backoff * 2**attempt)
+            continue
+        other = [e for e in answer.get("errors", []) if e.get("message") != "Variant not found"]
+        if not other and answer.get("data") is not None:
+            return answer["data"]
+        busy = all(any(w in str(e.get("message", "")).lower() for w in TRANSIENT) for e in other)
+        if not (other and busy) or attempt == RETRIES - 1:
+            raise RuntimeError(f"gnomAD API: {other or answer}")
+        time.sleep(backoff * 2**attempt)
+    raise AssertionError("unreachable")
+
+
 def _cached(
     ids: list[str],
     cache: Path,
@@ -51,6 +78,7 @@ def _cached(
     dataset: str,
     post: Callable[[str, dict], dict],
     wait: float,
+    backoff: float = BACKOFF,
 ) -> dict[str, dict | None]:
     """Ask gnomAD for fields of each variant, BATCH per request, caching parse(answer) per id.
     Reads the cache first and fetches only what it lacks."""
@@ -70,13 +98,7 @@ def _cached(
             )
             + " }"
         )
-        answer = post(query, dict(zip(names, batch, strict=True)))
-        # "Variant not found" is an answer; anything else (a rate limit, a bad query) is not,
-        # and must not be cached as absent.
-        other = [e for e in answer.get("errors", []) if e.get("message") != "Variant not found"]
-        if other or answer.get("data") is None:
-            raise RuntimeError(f"gnomAD API: {other or answer}")
-        data = answer["data"]
+        data = _ask(post, query, dict(zip(names, batch, strict=True)), backoff)
         for name, variant_id in zip(names, batch, strict=True):
             known[variant_id] = parse(data.get(name))
         cache.parent.mkdir(parents=True, exist_ok=True)

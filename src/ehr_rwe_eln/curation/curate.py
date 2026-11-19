@@ -28,6 +28,10 @@ TIERS = {
     "Likely_benign": "B/LB",
     "Benign": "B/LB",
     "Benign/Likely_benign": "B/LB",
+    # The Evidence Repository's spelling.
+    "Likely Pathogenic": "P/LP",
+    "Uncertain Significance": "VUS",
+    "Likely Benign": "B/LB",
 }
 ORDER = ["P/LP", "VUS", "B/LB"]
 
@@ -60,7 +64,8 @@ def curate(
                 "gene": vep["gene"],
                 "hgvsc": vep["hgvsc"],
                 "hgvsp": vep["hgvsp"],
-                "evidence": {"gnomad": frequency, "vep": vep},
+                "evidence": {"gnomad": frequency, "vep": vep}
+                | ({"expert": v["expert"]} if v.get("expert") else {}),
                 "expected": v.get("expected"),
             }
             | result

@@ -115,7 +115,11 @@ def test_enigma_table_sets_pvs1_and_pm5_by_exon():
     assert early["classification"] == "Pathogenic"  # 8 + 4 + 1
     # BRCA1 exon 9: the natural isoform skipping exons 8 and 9 rescues function.
     rescued = assess(
-        "BRCA1", brca1, None, vep("frameshift_variant", "p.Thr208AsnfsTer29", exon="9/23"), []
+        "BRCA1",
+        brca1,
+        None,
+        vep("frameshift_variant", "p.Thr208AsnfsTer29", exon="9/23", hgvsc="c.623_624del"),
+        [],
     )
     assert labels(rescued) == ["PM2_Supporting"]
     assert (
@@ -131,7 +135,9 @@ def test_enigma_table_sets_splice_sites_by_the_exact_change():
     brca1, brca2 = RULES.genes["BRCA1"], RULES.genes["BRCA2"]
     splice = lambda hgvsc: vep("splice_donor_variant", intron="5/22", exon=None, hgvsc=hgvsc)  # noqa: E731
     small = assess("BRCA1", brca1, freq(), splice("c.301+1G>T"), [])
-    assert labels(small) == ["PVS1_Supporting"] and "Small in-frame" in small["met"][0]["reason"]
+    # Table 4 rates the site Supporting; Table 9's calibrated assays found normal function.
+    assert labels(small) == ["BS3", "PVS1_Supporting"]
+    assert small["classification"] == "Likely benign"  # 1 - 4
     rescued = assess("BRCA2", brca2, freq(), splice("c.425+1G>A"), [])
     assert labels(rescued) == [] and rescued["not_assessed"][0]["decided"]
     deleted = assess("BRCA1", brca1, freq(), splice("c.302-2del"), [])
@@ -142,6 +148,18 @@ def test_enigma_table_sets_splice_sites_by_the_exact_change():
     assert labels(disputed) == [] and not disputed["not_assessed"][0]["decided"]
     unlisted = assess("BRCA1", brca1, freq(), splice("c.999+5G>A"), [])
     assert labels(unlisted) == [] and not unlisted["not_assessed"][0]["decided"]
+
+
+def test_enigma_functional_table_adds_ps3_or_bs3():
+    brca1 = RULES.genes["BRCA1"]
+    missense = lambda hgvsc: vep("missense_variant", "p.X", hgvsc=hgvsc)  # noqa: E731
+    damaging = assess("BRCA1", brca1, None, missense("c.100C>T"), [])  # p.(Pro34Ser), LOF
+    assert labels(damaging) == ["PM2_Supporting", "PS3"]
+    normal = assess("BRCA1", brca1, freq(), missense("c.100C>G"), [])  # p.(Pro34Ala), FUNC
+    assert labels(normal) == ["BS3"] and normal["classification"] == "Likely benign"
+    unclear = assess("BRCA1", brca1, freq(), missense("c.100C>A"), [])  # p.(Pro34Thr), INT
+    assert labels(unclear) == [] and unclear["not_assessed"][-1]["code"] == "PS3/BS3"
+    assert assess("LDLR", RULES.genes["LDLR"], freq(), missense("c.100C>T"), [])["met"] == []
 
 
 def test_apc_pvs1_counts_truncations_by_codon_not_exon():
@@ -298,3 +316,56 @@ def test_a_run_is_stored_with_its_sources(pg, dq_schema):
         [run_id],
     ).fetchone()
     assert row == ("Pathogenic", "Pathogenic", "116")  # PVS1, PM5_Strong, PM2_Supporting
+
+
+def test_erepo_codes_parse_with_their_strength():
+    from ehr_rwe_eln.curation.erepo import parse_code
+
+    assert parse_code("PM2_Supporting") == ("PM2", "supporting")
+    assert parse_code("PVS1") == ("PVS1", "very_strong")
+    assert parse_code(" BS3 ") == ("BS3", "strong")
+    assert parse_code("PP4_Strong") == ("PP4", "strong")
+
+
+def test_erepo_export_is_read_by_variation_id(tmp_path):
+    from ehr_rwe_eln.curation.erepo import read_erepo
+
+    header = [
+        "#Variation", "ClinVar Variation Id", "HGNC Gene Symbol", "Assertion",
+        "Applied Evidence Codes (Met)", "Applied Evidence Codes (Not Met)", "PubMed Articles",
+        "Guideline", "Retracted",
+    ]  # fmt: skip
+    rows = [
+        ["v1", "37404", "BRCA1", "Pathogenic", "PS3, PVS1", "BA1, PM2", "123, 456", "g", "false"],
+        ["v2", "11", "BRCA1", "Benign", "BA1", "", "", "g", "true"],  # retracted
+        ["v3", "12", "TP53", "Benign", "BA1", "", "", "g", "false"],  # not a panel gene
+        ["v4", "-", "LDLR", "Benign", "BA1", "", "", "g", "false"],  # no ClinVar id
+    ]
+    path = tmp_path / "erepo.tsv"
+    path.write_text("\n".join("\t".join(r) for r in [header, *rows]) + "\n")
+    found = read_erepo(path, {"BRCA1", "LDLR"})
+    assert list(found) == [37404]
+    assert found[37404]["met"] == ["PS3", "PVS1"] and found[37404]["pmids"] == ["123", "456"]
+
+
+def test_criteria_are_scored_against_the_panel_codes():
+    from ehr_rwe_eln.curation.erepo import score_criteria
+
+    def a(ours, met, not_met):
+        criteria = [{"code": c, "strength": s} for c, s in ours]
+        return {"met": criteria, "evidence": {"expert": {"met": met, "not_met": not_met}}}
+
+    scored = score_criteria(
+        [
+            a([("PVS1", "very_strong"), ("PM2", "supporting")], ["PVS1", "PM2_Supporting"], []),
+            a([("PVS1", "very_strong")], ["PVS1_Strong"], []),  # agreed, other strength
+            a([("PM2", "supporting")], [], ["PM2"]),  # extra, the panel said not met
+            a([("BS1", "strong")], [], []),  # extra, the panel did not list it
+            a([], ["PS3"], []),  # missed
+            {"met": [], "evidence": {}},  # not an ERepo variant: ignored
+        ]
+    )
+    assert scored["PVS1"]["agreed"] == 2 and scored["PVS1"]["same_strength"] == 1
+    assert scored["PM2"]["extra_marked_not_met"] == 1 and scored["PM2"]["precision"] == 0.5
+    assert scored["BS1"]["extra_not_listed"] == 1 and scored["BS1"]["recall"] is None
+    assert scored["PS3"]["missed"] == 1 and scored["PS3"]["recall"] == 0.0
