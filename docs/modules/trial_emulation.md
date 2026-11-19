@@ -39,10 +39,10 @@ The full file adds the covariates to adjust for (conditions and the latest measu
 ## Run it
 
 ```bash
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/run_tte.py
+uv run python scripts/run_tte.py
 ```
 
-It runs on the 23,421-person build, because the 1,172-person one has too few outcome events. It takes about a minute, prints each protocol's bias report, and stores the run in the `tte` schema. The page at http://127.0.0.1:8000/tte/ shows it (start the app with the same `DB_NAME`).
+It needs the full 23,421-person build; 1,172 people give too few outcome events for an estimate. It takes about a minute, prints each protocol's bias report, and stores the run in the `tte` schema. The page at http://127.0.0.1:8000/tte/ shows it.
 
 ## Results
 

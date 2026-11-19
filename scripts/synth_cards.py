@@ -1,6 +1,6 @@
 """Write a data card for every synthetic release, from its record and stored reports.
 
-Usage: DB_NAME=ehr_rwe_eln_tte uv run python scripts/synth_cards.py
+Usage: uv run python scripts/synth_cards.py
 
 Run scripts/evaluate_synth.py first so the reports exist. Writes data/synth/cards/
 release_<id>.md (gitignored, like all local data), replacing what is there.

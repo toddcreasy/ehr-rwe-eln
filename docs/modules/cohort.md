@@ -39,22 +39,20 @@ uv run python scripts/build_omop.py
 uv run python scripts/build_cohorts.py
 ```
 
-The larger population for trial emulation is the same commands with `--patients 20000 --output data/synthea_20k/output` and `DB_NAME=ehr_rwe_eln_tte`; see [INSTALL.md](../INSTALL.md#build-the-data).
-
 ## Results
 
-On the 1,172-person build:
+On the 23,421-person build:
 
 | Table | Rows |
 |---|---:|
-| person | 1,172 |
-| visit_occurrence | 80,726 |
-| condition_occurrence | 20,484 |
-| drug_exposure | 87,009 |
-| measurement | 748,974 |
-| observation | 368,834 |
+| person | 23,421 |
+| visit_occurrence | 1,719,208 |
+| condition_occurrence | 418,421 |
+| drug_exposure | 1,877,146 |
+| measurement | 16,330,385 |
+| observation | 7,942,852 |
 
-The two cohorts end with 41 people (new type 2 diabetes diagnoses since 2015) and 60 (new metformin users).
+The two cohorts end with 550 people (new type 2 diabetes diagnoses since 2015) and 885 (new metformin users). The measurement count includes the ELN bridge's lab results.
 
 ## Checked against ETL-Synthea
 

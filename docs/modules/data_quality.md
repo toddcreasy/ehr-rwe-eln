@@ -28,11 +28,13 @@ A check fails when its share of violating rows passes its threshold. It is not a
 uv run python scripts/run_dq.py
 ```
 
-About 20 seconds on the 1,172-person build. Each run is stored in the `dq` schema with every check's counts and SQL, and the dashboard at http://127.0.0.1:8000/dq/ shows the latest. The API serves runs as JSON at `/api/dq/runs`.
+About 2 minutes on the 23,421-person build. Each run is stored in the `dq` schema with every check's counts and SQL, and the dashboard at http://127.0.0.1:8000/dq/ shows the latest. The API serves runs as JSON at `/api/dq/runs`.
 
 ## Results
 
-On the 1,172-person build, 99.62% of checks pass (DQD's `percentPassed`, which counts not-applicable checks as passing), with no errors. Nine checks fail, all from how [Synthea](https://github.com/synthetichealth/synthea) data maps to OMOP: procedure and device codes with no standard concept, observation rows with no unit, start dates earlier than DQD's plausible lower bound, and 28 of 209,849 drug strength rows whose ingredient is not classed as one.
+On the 23,421-person build, 99.41% of checks pass (DQD's `percentPassed`, which counts not-applicable checks as passing), with no errors. Fourteen checks fail, all from [Synthea](https://github.com/synthetichealth/synthea) data. Eleven come from how it maps to OMOP: procedure and device codes with no standard concept, observation rows with no unit, start and end dates earlier than DQD's plausible lower bound, and 28 of 209,849 drug strength rows whose ingredient is not classed as one. Three are conditions Synthea gave the wrong sex: prostate cancer in 12 women, ovarian cancer in 4 men, and uterine fibroids in 1 man.
+
+The [DQD comparison](../dqd_comparison.md) ran on an earlier 1,172-person build, where 99.62% passed; the five extra failures here appear only in the larger population.
 
 ## Checked against DataQualityDashboard
 

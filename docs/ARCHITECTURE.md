@@ -20,14 +20,13 @@ Click the diagram for [the interactive version](https://toddcreasy.github.io/ehr
 
 Every module reads or writes one [OMOP CDM v5.4](https://ohdsi.github.io/CommonDataModel/cdm54.html) database (the Observational Medical Outcomes Partnership Common Data Model, the standard schema [OHDSI](https://www.ohdsi.org) tools expect). OMOP gives every diagnosis, drug, and lab test a standard concept, so a cohort definition, a data quality check, or a trial protocol written against it runs on any OMOP database.
 
-Postgres holds two databases built the same way from different [Synthea](https://github.com/synthetichealth/synthea) runs:
+The database is `ehr_rwe_eln`, built from a 23,421-person [Synthea](https://github.com/synthetichealth/synthea) run. That size gives trial emulation enough outcome events for an estimate. A schema is a named group of tables inside the database. The OMOP tables are in `cdm`, and each module keeps its results in its own schema: `dq`, `tte`, `eln`, and `synth`. [Alembic](https://alembic.sqlalchemy.org) migrations create the module schemas; `scripts/build_omop.py` builds `cdm`. A second patient population would go in a second CDM schema here, not a second database.
 
-| Database | People | Used by |
-|---|---|---|
-| `ehr_rwe_eln` | 1,172 | Cohorts, data quality, the ELN bridge |
-| `ehr_rwe_eln_tte` | 23,421 | Target trial emulation, synthetic data, synthetic genomics |
+<a href="https://toddcreasy.github.io/ehr-rwe-eln/schema.svg"><img src="schema.svg" alt="The ehr_rwe_eln database. Left, the cdm schema: clinical tables keyed to person (person, observation_period, death, visit_occurrence, condition_occurrence, drug_exposure, procedure_occurrence, measurement, observation, device_exposure, specimen, fact_relationship), derived tables (condition_era, drug_era, cohort, cdm_source), and Athena vocabulary tables keyed to concept. Right, the module schemas with their foreign keys: dq.result to dq.run, tte.report to tte.run, eln.extraction to eln.entry, eln.subject, and synth.row and synth.report to synth.release. Below, outside the database: the ehr_rwe_eln_test database and the files under data/ for genomics, registries, ELN entries and FHIR, and synthetic data cards." width="100%"></a>
 
-The second exists because the small one has too few outcome events for a trial estimate. Each database has the OMOP tables in `cdm` and one schema per module for its own results: `dq`, `tte`, `eln`, and `synth`. [Alembic](https://alembic.sqlalchemy.org) migrations create the module schemas; `scripts/build_omop.py` builds `cdm`.
+Click the diagram for [the interactive version](https://toddcreasy.github.io/ehr-rwe-eln/schema.svg): hover a table for what it holds, and click it for its OMOP definition or the migration that creates it.
+
+`ehr_rwe_eln_test` is the one other database. It has the same schemas and no patients; pytest writes there and rolls back, so tests never touch your data. The ETL-Synthea and DataQualityDashboard comparisons were run on a separate 1,172-person Synthea run from the same fixed seed.
 
 ## How data moves
 
@@ -90,7 +89,6 @@ OHDSI's reference tools (ETL-Synthea, [DataQualityDashboard](https://github.com/
 
 ## Known gaps
 
-- **One database at a time.** The app reads the database `DB_NAME` names, so the ELN and data quality pages need the default database and the trial and synthetic data pages need the large one.
 - **GWAS calibration.** On the current build the GWAS finds the planted effect, but genomic inflation on the chromosomes without it is 0.80, below what chance allows. See [genomics](modules/genomics.md#results).
 - **Synthetic data fairness.** Fidelity is not measured by subgroup, and small groups are distorted most. See the [NIST AI RMF mapping](nist_ai_rmf.md#gaps-in-order-of-importance).
 - **Release withdrawal.** There is no process to withdraw a synthetic release or notify its users.

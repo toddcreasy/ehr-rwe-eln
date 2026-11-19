@@ -8,7 +8,7 @@ PostgreSQL 18.6 after the ETL fixes in #35 and #36.
 all three check levels (TABLE, FIELD, CONCEPT), default thresholds and default excluded tables.
 
 **Inputs:**
-- The local CDM: 1,172 [Synthea](https://github.com/synthetichealth/synthea) patients, as built by the cohort pipeline and the data quality module's prerequisites (keys,
+- The local CDM: 1,172 [Synthea](https://github.com/synthetichealth/synthea) patients (`scripts/generate_synthea.py --patients 1000`; the project now builds 23,421 by default), as built by the cohort pipeline and the data quality module's prerequisites (keys,
   `cdm_source`, eras).
 - A planted CDM (`scripts/build_dq_edge_cdm.py`, schema `dq_edge` in the test database) with
   a missing table, a duplicate primary key, a dangling foreign key, an implausible birth year,

@@ -1,7 +1,7 @@
 """Score every synthetic release for fidelity and utility, store each report, and print them
 next to the noise floor.
 
-Usage: DB_NAME=ehr_rwe_eln_tte uv run python scripts/evaluate_synth.py
+Usage: uv run python scripts/evaluate_synth.py
 
 Rebuilds each release's source and split from the spec stored with it, so it must run against
 the database the release was made from. The noise floor is the same report for the real

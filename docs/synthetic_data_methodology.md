@@ -137,10 +137,10 @@ The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.26) fo
 ## 8. Reproducing and provenance
 
 ```bash
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/synthesize.py
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/synthesize.py --spec src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/evaluate_synth.py
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/synth_cards.py
+uv run python scripts/synthesize.py
+uv run python scripts/synthesize.py --spec src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
+uv run python scripts/evaluate_synth.py
+uv run python scripts/synth_cards.py
 ```
 
 Each release in `synth.release` records the spec as run, every mechanism's privacy spend, the source database, the training and holdout counts, the seed, and the git version of the code. Each report in `synth.report` records its own code version. The data cards in `data/synth/cards/` are rendered from those two tables only.

@@ -1,10 +1,9 @@
 """Generate synthetic patients with Synthea as CSV under <output>/csv/.
 
-Usage: uv run python scripts/generate_synthea.py [--patients 1000] [--output data/synthea/output]
+Usage: uv run python scripts/generate_synthea.py [--patients 20000] [--output data/synthea/output]
 
---patients counts living patients; those who die during the simulation are written too, so 1000
-gives 1,172. Module 1 uses the defaults; module 4 uses --patients 20000 --output
-data/synthea_20k/output.
+--patients counts living patients; those who die during the simulation are written too, so 20000
+gives 23,421. The ETL-Synthea and DQD comparisons used --patients 1000 (1,172 people).
 
 Seeds and the reference date are fixed, so the same arguments always produce the same patients.
 Needs Java 17 or newer on PATH.
@@ -44,7 +43,7 @@ def fetch_jar() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--patients", type=int, default=1000)
+    parser.add_argument("--patients", type=int, default=20000)
     parser.add_argument("--output", type=Path, default=OUTPUT)
     args = parser.parse_args()
     output = args.output.resolve()

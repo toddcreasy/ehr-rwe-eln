@@ -1,7 +1,7 @@
 """Simulate a dbGaP-style genotyping study for adults in the OMOP build, with one genetic
 effect planted on a phenotype.
 
-Usage: DB_NAME=ehr_rwe_eln_tte uv run python scripts/generate_genomics.py
+Usage: uv run python scripts/generate_genomics.py
            [--people 5000] [--chromosomes 3] [--length 3000000] [--odds-ratio 1.4]
            [--phenotype hypertension] [--seed 0]
 

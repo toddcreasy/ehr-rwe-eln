@@ -17,7 +17,7 @@ Genomic inflation (lambda) compares the middle of the observed test statistics w
 ## Run it
 
 ```bash
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/generate_genomics.py   # about 2 minutes
+uv run python scripts/generate_genomics.py   # about 2 minutes
 uv run python scripts/run_gwas.py
 docker compose run --rm --build hail                                 # optional, 2.4 GB image
 ```
