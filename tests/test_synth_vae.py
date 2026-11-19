@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -55,3 +56,37 @@ def test_vae_settings_are_validated():
 def test_unseeded_vae_releases_are_refused():
     with pytest.raises(ValueError, match="vae releases need a seed"):
         spec(AGE, seed=None, releases=[{"method": "vae", "epsilon": 1}])
+
+
+def conditioned(epsilon, epochs=2):
+    s = vae_spec(epsilon, epochs=epochs)
+    return s.model_copy(update={"vae": s.vae.model_copy(update={"condition": "age"})})
+
+
+def test_a_condition_is_measured_with_noise_and_paid_for():
+    s = conditioned(1)
+    _, spend = vae.synthesize(toy(2000), s, s.releases[0])
+    count, histogram, sgd = spend
+    assert histogram == {"mechanism": "geometric", "of": "age histogram", "epsilon": 0.1}
+    assert count["epsilon"] + histogram["epsilon"] + sgd["epsilon"] <= 1
+
+
+def test_a_skewed_condition_keeps_its_share():
+    # Few old people, unlike the rest: the shape DP-SGD tends to lose (unconditioned, this
+    # release has 4.8% old people). Whether their other columns come out right is measured on
+    # the real data by scripts/evaluate_synth.py, not here.
+    rng = np.random.default_rng(2)
+    n = 10_000
+    age = np.where(rng.random(n) < 0.1, rng.integers(80, 100, n), rng.integers(20, 60, n))
+    hypertension = (rng.random(n) < np.where(age >= 80, 0.8, 0.05)).astype(int)
+    lisinopril = (rng.random(n) < np.where(hypertension == 1, 0.7, 0.02)).astype(int)
+    table = pd.DataFrame({"age": age, "hypertension": hypertension, "lisinopril": lisinopril})
+    s = conditioned(8, epochs=10)
+    out, _ = vae.synthesize(table, s, s.releases[0])
+    old = out.age >= 80
+    assert abs(old.mean() - 0.1) < 0.02  # the share comes from the noisy histogram
+
+
+def test_a_condition_must_be_a_column():
+    with pytest.raises(ValueError, match="vae.condition height is not a column"):
+        spec(AGE).model_validate({**spec(AGE).model_dump(), "vae": {"condition": "height"}})

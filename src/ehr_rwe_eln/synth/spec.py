@@ -107,6 +107,10 @@ class VaeSettings(Strict):
     # DP-SGD's guarantee is (epsilon, delta): delta is the small chance it does not hold.
     # Keep it well below one over the number of people.
     delta: float = Field(default=1e-5, gt=0, lt=1)
+    # A column to condition on (a conditional VAE). Its histogram is measured with noise, from
+    # 10% of the budget; the decoder takes the column as an input instead of generating it, and
+    # releases draw it from the noisy histogram. Without it, every column comes from the decoder.
+    condition: str | None = None
 
 
 class Spec(Strict):
@@ -162,6 +166,8 @@ class Spec(Strict):
                 if parent not in seen:
                     raise ValueError(f"{column.name}: parent {parent} must be listed before it")
             seen.add(column.name)
+        if self.vae.condition is not None and self.vae.condition not in seen:
+            raise ValueError(f"vae.condition {self.vae.condition} is not a column")
         if self.seed is None and any(r.method == "vae" for r in self.releases):
             # Unseeded means real data, which needs Opacus's secure noise. That needs
             # torchcsprng, last released in 2021 for torch 1.8 and Python 3.9: not installable

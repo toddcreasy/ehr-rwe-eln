@@ -30,7 +30,10 @@ utility_target: deceased
 # each combination of the listed pairs; cells under 11 people are listed without numbers.
 subgroups: [race, ethnicity, sex, age, [age, race], [age, sex], [race, sex]]
 # Training settings for the vae releases; these are the defaults, written out for review.
-vae: {hidden: 128, latent: 16, epochs: 20, batch_size: 512, learning_rate: 0.001, max_grad_norm: 1.0, delta: 0.00001}
+# condition: age makes it a conditional VAE: age shares come from a noisy histogram (10% of the
+# budget) and the decoder is told each row's age. Releases 5 and 6, without it, had 19% to 28%
+# too few people aged 70 and over, and those they had were far from real older patients.
+vae: {hidden: 128, latent: 16, epochs: 20, batch_size: 512, learning_rate: 0.001, max_grad_norm: 1.0, delta: 0.00001, condition: age}
 columns:
   # Demographics. Age is at the end of the person's observation period.
   - {name: age, demographic: age, numeric: {low: 0, high: 100, bins: 10, integer: true, open_top: true}}

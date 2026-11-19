@@ -35,7 +35,7 @@ Synthetic rows are not real people, so a match between a synthetic row and a rea
 
 **Bayesian network synthesizer** (`synth/bayes_net.py`). One histogram per column over the column and its parents. Each count gets noise from the truncated geometric mechanism (integer noise, the discrete form of the Laplace mechanism) through IBM's [diffprivlib](https://github.com/IBM/differential-privacy-library). Adding or removing one person changes one cell of each histogram by 1, so the sensitivity is 1. Every histogram counts every person, so the release's epsilon is split evenly across the histograms (21 for the person summary, 15 for the trial table), and diffprivlib's budget accountant refuses any spend beyond it. Each share is reduced by one part in a trillion so that floating-point rounding can only underspend. New rows are sampled from the noisy counts alone. The row count is the noisy total of the first histogram, not the true count.
 
-**Variational autoencoder (VAE)** (`synth/vae.py`). A neural network that compresses each row to 16 numbers and rebuilds it, trained with DP-SGD through Meta's [Opacus](https://opacus.ai). Each training step clips every person's gradient to length 1 and adds Gaussian noise; Opacus chooses the noise for the target epsilon over the planned steps. The guarantee is (epsilon, delta)-DP: delta is a small probability that the guarantee does not hold, set to 1e-5, well under one over the number of people. Privacy is tracked with the Rényi DP (RDP) accountant, whose epsilon is a guaranteed upper bound; Opacus's default accountant warned that its numerical integration was divergent on this data. One percent of epsilon buys a noisy row count. Training settings are fixed in the spec, not tuned on the source: every training run on private data spends privacy, tuning runs included.
+**Variational autoencoder (VAE)** (`synth/vae.py`). A neural network that compresses each row to 16 numbers and rebuilds it, trained with DP-SGD through Meta's [Opacus](https://opacus.ai). Each training step clips every person's gradient to length 1 and adds Gaussian noise; Opacus chooses the noise for the target epsilon over the planned steps. The guarantee is (epsilon, delta)-DP: delta is a small probability that the guarantee does not hold, set to 1e-5, well under one over the number of people. Privacy is tracked with the Rényi DP (RDP) accountant, whose epsilon is a guaranteed upper bound; Opacus's default accountant warned that its numerical integration was divergent on this data. One percent of epsilon buys a noisy row count. The person summary's VAE is conditional on age (`vae.condition`): 10% of epsilon buys a noisy age histogram (one count per ten-year bin; each person is in one bin, so the bins together cost that 10%), the decoder takes each row's age band as an input instead of generating it, and a release draws ages from the noisy histogram before the decoder fills in the rest. DP-SGD gets the remaining 89%. Training settings are fixed in the spec, not tuned on the source: every training run on private data spends privacy, tuning runs included.
 
 **Randomness.** The specs here are seeded so that each release can be remade exactly. That is acceptable only because the source is synthetic: anyone who knows the seed can regenerate the noise and subtract it. A spec over real data must set `seed: null`, which makes diffprivlib draw from a cryptographically secure generator. The VAE would need Opacus's secure mode, which depends on the `torchcsprng` package; its last release (2021) supports only torch 1.8 and Python up to 3.9, so it cannot be installed on this stack. The spec therefore refuses VAE releases without a seed: on real data, only the Bayesian network can be used here.
 
@@ -77,8 +77,10 @@ A failed attack shows only that this attack failed. These checks bound risk from
 | Independent columns, epsilon 1 | 0.005 | 0.071 | age x BMI (0.333) | 0.231 | 0.497 |
 | Bayesian network, epsilon 1 | 0.014 | 0.039 | hyperlipidemia x eGFR (0.160) | 0.087 | 0.709 |
 | Bayesian network, epsilon 4 | 0.005 | 0.023 | hyperlipidemia x eGFR (0.150) | 0.075 | 0.685 |
-| VAE, epsilon 1 | 0.038 | 0.073 | age x BMI (0.386) | 0.210 | 0.730 |
-| VAE, epsilon 4 | 0.046 | 0.077 | age x BMI (0.270) | 0.128 | 0.724 |
+| VAE conditional on age, epsilon 1 (17) | 0.040 | 0.076 | age x BMI (0.347) | 0.200 | 0.733 |
+| VAE conditional on age, epsilon 4 (18) | 0.041 | 0.069 | age x BMI (0.193) | 0.126 | 0.727 |
+| VAE, epsilon 1 (5, before) | 0.038 | 0.073 | age x BMI (0.386) | 0.210 | 0.730 |
+| VAE, epsilon 4 (6, before) | 0.046 | 0.077 | age x BMI (0.270) | 0.128 | 0.724 |
 
 - The Bayesian network at epsilon 4 matches single columns at the noise floor and comes closest on relationships (pair TVD 0.023 against a floor of 0.012). At epsilon 1 the four measurement columns carry more noise (worst, BMI, at 0.069).
 - Its worst pair is now hyperlipidemia x eGFR, a relationship the spec does not declare: eGFR depends on chronic kidney disease and age, hyperlipidemia on age, so the spec links them only through age.
@@ -113,7 +115,7 @@ At epsilon 4 the structure is a clear gain: children and the oldest groups reach
 
 ### Person summary by subgroup
 
-Column TVD within each group, past the group's own noise floor (excess), and the group's share of the release against its real share. The full table for every release is on its data card.
+Column TVD within each group, past the group's own noise floor (excess), and the group's share of the release against its real share. The full table for every release is on its data card. The VAE columns here are releases 5 and 6, before conditioning on age; the conditional VAE is compared with them below.
 
 | Group (training people) | Floor | Bayes net 1 | Bayes net 4 | VAE 1 | VAE 4 |
 |---|---|---|---|---|---|
@@ -163,6 +165,27 @@ Column TVD within each group, past the group's own noise floor (excess), and the
 At epsilon 4 it removes the structural error. At epsilon 1 the noise swamps the cells of the smallest races, many holding 11 to 30 people: seven come out empty (none did before) and Native American people overall reach 1.65 times their share. One structure serves every epsilon, and trading one group's error for noise across all the smallest groups is the wrong direction for fairness, so race keeps no parent and the doubled share of older Black people stays a documented, flagged limitation.
 - The person summary reads 74 HbA1c results the ELN bridge wrote to OMOP after releases 1 to 6 were made, which moves their figures at the third decimal; releases 13 and 14 were made after.
 
+**VAE conditional on age (releases 17 and 18, against 5 and 6).** Releases 5 and 6 had 19% to 28% too few people aged 70 and over. DP-SGD caps how much each person can move the model and adds the same noise for everyone, so people unlike most others (older patients, with more conditions and measurements) have the least pull on what it learns ([Bagdasaryan et al. 2019](https://arxiv.org/abs/1905.12101)). Conditioning on age takes their share out of the model's hands and tells the decoder which age it is generating:
+
+| Age band | Share, epsilon 1 (5 → 17) | Share, epsilon 4 (6 → 18) | Excess, epsilon 1 (5 → 17) | Excess, epsilon 4 (6 → 18) |
+|---|---|---|---|---|
+| 0 to 9 | 1.13 → 1.03 | 1.01 → 1.03 | +0.149 → +0.128 | +0.086 → +0.055 |
+| 10 to 19 | 1.18 → 0.95 | 1.09 → 0.95 | +0.142 → +0.113 | +0.071 → +0.036 |
+| 60 to 69 | 0.83 → 1.04 | 0.87 → 1.03 | +0.156 → +0.129 | +0.101 → +0.062 |
+| 70 to 79 | 0.77 → 0.95 | 0.79 → 0.95 | +0.200 → +0.189 | +0.133 → +0.123 |
+| 80 to 89 | 0.72 → 0.95 | 0.80 → 0.96 | +0.221 → +0.237 | +0.172 → +0.208 |
+| 90 or more | 0.81 → 1.10 | 0.81 → 1.11 | +0.223 → +0.228 | +0.187 → +0.214 |
+| Groups and cells flagged on the card | 15 → 7 | | 8 → 5 | |
+
+- Every age band's share is now within 11% of real, and no age or age-by-sex group is flagged; before, every band from 70 up and older men were.
+- People under 70 come out much closer to real at epsilon 4 (children +0.086 to +0.055, teenagers +0.071 to +0.036), and overall the worst pair improves from 0.270 to 0.193.
+- People 80 and over are not more realistic: their other columns are as far from real as before, or further (80 to 89 at epsilon 4, +0.172 to +0.208; one run each, so a difference this size may be run to run variation). Conditioning fixes how many older people there are, not what the model learned about them, which is still limited by DP-SGD's clipping.
+- The cards' remaining flags are small race cells (Native American people at 1.89 times their share at epsilon 1, from 1.69): DP-SGD has 10% less budget than before.
+- Privacy attacks stay at chance (membership AUC 0.507 and 0.504).
+- Releases 5 and 6 were made before the ELN bridge added 74 HbA1c results; 17 and 18 after, which moves figures at the third decimal.
+
+Kept: the shares are right at both epsilons and overall fidelity improves at epsilon 4. Making older people realistic remains open (section 7).
+
 ### Trial table (1,890 people, 26 events)
 
 The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.26) for lisinopril against amlodipine, and a crude (unweighted) hazard ratio of 1.22.
@@ -201,6 +224,7 @@ The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.26) fo
 - The attacks are simple. Stronger ones (for example, density-based membership inference that uses reference data) might do better.
 - The Bayesian network keeps only declared relationships, with at most two parents per column.
 - The VAE's training settings were not tuned. Tuning on a separate public stand-in would likely improve it.
+- The VAE, conditional on age, generates the right number of people 80 and over, but their other columns are still about 0.21 to 0.24 past their noise floor, against 0.005 or less for the Bayesian network at epsilon 4 (release 14). DP-SGD's clipping gives them little pull on training; conditioning does not change that. Use the Bayesian network for analyses of older people.
 - On real data only the Bayesian network can run here: the VAE needs a seed, because secure noise for it is not installable (section 3).
 - Intersections cover pairs of columns; three-way cells (older Black women, for example) would be smaller still, and most would fall under the 11-person cutoff. Cells under 11 people are listed without numbers.
 - One spec per table kind and one trial protocol; results on other cohorts will differ.
