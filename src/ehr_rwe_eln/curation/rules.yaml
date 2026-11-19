@@ -1,0 +1,106 @@
+# The ACMG/AMP criteria that data alone can decide, as each gene's ClinGen expert panel (VCEP)
+# specified them. Thresholds are transcribed from the ClinGen Criteria Specification (CSpec)
+# registry, https://cspec.genome.network, read 2026-11-19; each gene names its document.
+#
+# Measures, all gnomAD v4 with exomes and genomes joined:
+#   faf95      filtering allele frequency: the 95% lower bound of the frequency in the
+#              non-bottlenecked ancestry group where it is highest ("GroupMax FAF")
+#   grpmax_af  the frequency in the non-bottlenecked ancestry group where it is highest
+#   af         the overall frequency
+#   absent     no call at the site, or an allele count of 0
+# A variant gnomAD has no call for counts as frequency 0 for the "rare" criteria.
+#
+# Band bounds: above (>), at_least (>=), below (<), at_most (<=); ac_above and ac_at_most
+# limit the allele count.
+#
+# ptc_codons: PVS1 for nonsense and frameshift variants by the codon of the premature stop,
+# where the panel gives cut-offs. Without them, PVS1 follows the general ClinGen rule as far
+# as data allows (see rules.py).
+
+genes:
+  BRCA1:
+    panel: ENIGMA BRCA1 and BRCA2 Variant Curation Expert Panel
+    cspec: GN092
+    version: "1.2"
+    ba1:
+      - {strength: stand_alone, measure: faf95, above: 0.001}
+    bs1:
+      - {strength: strong, measure: faf95, above: 0.0001}
+      - {strength: supporting, measure: faf95, above: 0.00002, at_most: 0.0001}
+    pm2:
+      - {strength: supporting, measure: absent}
+    notes: >-
+      The panel reads gnomAD v2.1 and v3.1 non-cancer subsets and requires read depth of at
+      least 25 for PM2; this uses gnomAD v4 joined and does not check depth. PVS1 follows the
+      panel's flowchart, of which only the NMD (nonsense-mediated decay) part is applied here.
+  BRCA2:
+    panel: ENIGMA BRCA1 and BRCA2 Variant Curation Expert Panel
+    cspec: GN097
+    version: "1.2"
+    ba1:
+      - {strength: stand_alone, measure: faf95, above: 0.001}
+    bs1:
+      - {strength: strong, measure: faf95, above: 0.0001}
+      - {strength: supporting, measure: faf95, above: 0.00002, at_most: 0.0001}
+    pm2:
+      - {strength: supporting, measure: absent}
+    notes: >-
+      As BRCA1.
+  MLH1:
+    panel: InSiGHT Hereditary Colorectal Cancer/Polyposis Variant Curation Expert Panel
+    cspec: GN115
+    version: "2.0"
+    ba1:
+      - {strength: stand_alone, measure: faf95, at_least: 0.001}
+    bs1:
+      - {strength: strong, measure: faf95, at_least: 0.0001, below: 0.001}
+    pm2:
+      - {strength: supporting, measure: af, below: 0.00002}
+    ptc_codons:
+      - {strength: very_strong, at_most: 753}
+      - {strength: moderate, at_least: 754, at_most: 756}
+    notes: >-
+      BA1 and BS1 exclude known founder pathogenic variants; this does not.
+  MSH2:
+    panel: InSiGHT Hereditary Colorectal Cancer/Polyposis Variant Curation Expert Panel
+    cspec: GN137
+    version: "2.0"
+    ba1:
+      - {strength: stand_alone, measure: faf95, at_least: 0.001}
+    bs1:
+      - {strength: strong, measure: faf95, at_least: 0.0001, below: 0.001}
+    pm2:
+      - {strength: supporting, measure: af, below: 0.00002}
+    ptc_codons:
+      - {strength: very_strong, at_most: 891}
+      - {strength: moderate, at_least: 892, at_most: 934}
+    notes: >-
+      BA1 and BS1 exclude known founder pathogenic variants; this does not.
+  APC:
+    panel: InSiGHT Hereditary Colorectal Cancer/Polyposis Variant Curation Expert Panel
+    cspec: GN089
+    version: "2.1"
+    ba1:
+      - {strength: stand_alone, measure: faf95, at_least: 0.001}
+    bs1:
+      - {strength: strong, measure: faf95, at_least: 0.00001}
+    pm2:
+      - {strength: supporting, measure: af, at_most: 0.000003, ac_above: 1}
+      - {strength: supporting, measure: af, below: 0.00001, ac_at_most: 1}
+    notes: >-
+      PM2's allele frequency is read as the overall frequency. The panel's PVS1 follows a
+      modified decision tree for APC, where truncations in the last exon (exon 16, most of the
+      gene) can be pathogenic; this leaves last-exon truncations to the curator.
+  LDLR:
+    panel: Familial Hypercholesterolemia Variant Curation Expert Panel
+    cspec: GN013
+    version: "1.2"
+    ba1:
+      - {strength: stand_alone, measure: faf95, at_least: 0.005}
+    bs1:
+      - {strength: strong, measure: faf95, at_least: 0.002}
+    pm2:
+      - {strength: moderate, measure: grpmax_af, at_most: 0.0002}
+    notes: >-
+      PM2 is Moderate for LDLR, not Supporting. The panel's PVS1 flow diagram is applied only
+      as far as NMD; founder variants are not excepted from PM2.

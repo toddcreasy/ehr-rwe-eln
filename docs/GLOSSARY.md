@@ -309,6 +309,30 @@ The Genome Aggregation Database: variant frequencies from hundreds of thousands 
 
 The American College of Medical Genetics and Genomics list of genes where a pathogenic variant is worth reporting even when found by chance, because something can be done about it (BRCA1 and BRCA2, the Lynch syndrome genes, LDLR, and others). The panel's genes come from it. [ACMG SF list in ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/docs/acmg/)
 
+### ACMG/AMP criteria
+
+The 2015 American College of Medical Genetics and Genomics and Association for Molecular Pathology rules for classifying a variant. Each criterion is a piece of evidence, pathogenic or benign, at a strength: PVS1 (a null variant), PM2 (absent from population data), BA1 and BS1 (too common), and others. Curation applies the ones data alone can decide. [Richards et al. 2015](https://doi.org/10.1038/gim.2015.30)
+
+### VCEP and CSpec
+
+A ClinGen Variant Curation Expert Panel adapts the ACMG/AMP criteria to its genes: frequency thresholds, which criteria apply, at what strength. The adaptations are published in the Criteria Specification (CSpec) registry; `curation/rules.yaml` cites each one. [CSpec registry](https://cspec.genome.network)
+
+### Bayesian points
+
+A way to combine ACMG/AMP criteria by adding points: supporting 1, moderate 2, strong 4, very strong 8, benign evidence negative. 10 or more is pathogenic, 6 to 9 likely pathogenic, 0 to 5 uncertain significance (VUS), -1 to -6 likely benign, -7 or less benign. [Tavtigian et al. 2020](https://doi.org/10.1002/humu.24088)
+
+### FAF
+
+Filtering allele frequency: the lower bound of a 95% confidence interval on a variant's frequency in the ancestry group where it is highest. If even that bound is above what the disease allows, the variant is too common to cause it. Expert panels set BA1 and BS1 on it. [Whiffin et al. 2017](https://doi.org/10.1038/gim.2017.26)
+
+### VEP and MANE Select
+
+Ensembl's Variant Effect Predictor gives what a variant does to each transcript: consequence, HGVS names (c. and p.), position, exon. MANE Select is the one transcript per gene that NCBI and Ensembl agree on, which clinical reports use. [VEP](https://www.ensembl.org/info/docs/tools/vep/index.html)
+
+### NMD
+
+Nonsense-mediated decay: a cell destroys an mRNA with a premature stop codon, unless the stop falls in the last exon (or near its end). A truncation that triggers NMD makes no protein, which is why PVS1 depends on where the stop is.
+
 ### VCF
 
 Variant call format: the standard text file of genotypes, one line per variant and one column per sample. [VCF 4.2 specification](https://samtools.github.io/hts-specs/VCFv4.2.pdf)

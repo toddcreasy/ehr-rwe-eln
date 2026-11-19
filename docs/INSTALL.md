@@ -108,6 +108,10 @@ uv run python scripts/run_gwas.py
 docker compose run --rm --build hail      # optional: the same GWAS in Hail, a 2.4 GB image
 uv run python scripts/generate_panel.py   # clinical panel: downloads ClinVar (200 MB) once
 
+# Variant curation
+uv run python scripts/curate_variants.py --set panel   # the panel's 48 variants
+uv run python scripts/curate_variants.py --set eval    # scored against ClinVar expert panels
+
 # Synthetic data
 export SPEC=src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
 uv run python scripts/synthesize.py

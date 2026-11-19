@@ -10,7 +10,7 @@ and the expected cost table live in `docs/SETUP.md`; runbooks are in `docs/INSTA
 
 ## Project scope
 
-Real world evidence from synthetic EHR data, linked to lab notebook records. Six modules, one OMOP CDM v5.4 database:
+Real world evidence from synthetic EHR data, linked to lab notebook records. Seven modules, one OMOP CDM v5.4 database:
 
 | Module | Package | What it does |
 |---|---|---|
@@ -19,6 +19,7 @@ Real world evidence from synthetic EHR data, linked to lab notebook records. Six
 | 4. Target trial emulation toolkit | `ehr_rwe_eln.tte` | Protocol spec in YAML (eligibility, strategies, time zero, outcomes) to cohort SQL, propensity score analysis, survival estimates, and a bias diagnostics report |
 | 7. RWE data quality dashboard | `ehr_rwe_eln.dq` | Conformance, completeness, and plausibility checks (Kahn framework) over the OMOP tables, scored and shown in the frontend |
 | Synthetic genomics | `ehr_rwe_eln.genomics` | A dbGaP-style genotyping study simulated with msprime for OMOP persons (VCF, PLINK, phenotype and sample tables), a planted genetic effect, and a GWAS checked against it; a clinical panel of real ClinVar variants at their GRCh38 positions, planted in the same synthetic people |
+| Variant curation | `ehr_rwe_eln.curation` | ACMG/AMP criteria that data alone decides, with each gene's ClinGen expert panel thresholds, from gnomAD v4 frequencies and Ensembl VEP consequences; Bayesian points to a class; scored against ClinVar expert-panel classifications it never reads |
 | Synthetic data | `ehr_rwe_eln.synth` | Differentially private synthetic releases of the OMOP data (statistical and generative synthesizers), with fidelity, utility, and privacy risk reports and a provenance record per release |
 
 Build order after the platform: 1, then 7, then 4, then 2. Each module depends on the OMOP tables from module 1.
@@ -45,6 +46,8 @@ Data rules:
 - Public reference data is allowed: summary-level knowledge about variants and phenotypes, never individual-level data. Kept in `data/reference/`, never committed, each release named so a run can be repeated:
   - ClinVar (NCBI; no restrictions on use), from the dated GRCh38 VCF, checked against NCBI's md5.
   - gnomAD (CC0). Attribute it ("includes data from the gnomAD v4 release"), never attempt to reidentify participants, never put "gnomAD" in a tool's name, and skip its SpliceAI annotations (non-commercial license). The API allows about 10 requests a minute; cache every answer.
+  - Ensembl VEP and lookup (no restrictions on use), cached per Ensembl release.
+  - ClinGen expert panel thresholds, transcribed into `curation/rules.yaml` with each panel's CSpec ID and version.
   - HPO: add its license here before using it.
 - Every LLM extraction is validated against a typed Pydantic model and scored against a labeled set in `evals/`.
 - Outputs are for research and demonstration. No clinical decision claims in code, docs, or UI.

@@ -1,0 +1,210 @@
+"""The ACMG/AMP criteria that data alone can decide, with each gene's expert-panel thresholds,
+combined into a classification on the Bayesian points scale.
+
+ACMG/AMP (American College of Medical Genetics and Genomics, Association for Molecular
+Pathology) criteria are pieces of evidence, each pathogenic (P) or benign (B) at a strength.
+Here, from data:
+
+- BA1 (stand-alone benign): too common in gnomAD to cause the disease.
+- BS1 (benign): more common than the disease allows.
+- PM2 (pathogenic): absent or extremely rare in gnomAD.
+- PVS1 (pathogenic, very strong by default): a null variant (nonsense, frameshift, canonical
+  splice site) in a gene where loss of function causes the disease, as all six here do.
+
+Points (Tavtigian et al. 2020, Hum Mutat 41:1734): supporting 1, moderate 2, strong 4, very
+strong 8; benign evidence counts against. 10 or more is pathogenic, 6 to 9 likely pathogenic,
+0 to 5 uncertain significance, -1 to -6 likely benign, -7 or less benign. BA1 is benign on its
+own.
+
+What a rule cannot decide is listed as not assessed, with the reason, for the curator.
+Nothing here reads the variant's ClinVar classification.
+"""
+
+import re
+from pathlib import Path
+from typing import Literal
+
+import yaml
+from pydantic import Field
+
+from ehr_rwe_eln.cohort.spec import Strict
+
+RULES = Path(__file__).parent / "rules.yaml"
+Strength = Literal["stand_alone", "very_strong", "strong", "moderate", "supporting"]
+POINTS = {"very_strong": 8, "strong": 4, "moderate": 2, "supporting": 1}
+# Each code's strength as originally defined; a different strength is written CODE_Strength.
+DEFAULT = {
+    "BA1": "stand_alone",
+    "BS1": "strong",
+    "PM2": "moderate",
+    "PVS1": "very_strong",
+}
+BENIGN = {"BA1", "BS1"}
+CLASSES = [
+    (10, "Pathogenic"),
+    (6, "Likely pathogenic"),
+    (0, "Uncertain significance"),
+    (-6, "Likely benign"),
+]
+TRUNCATING = {"stop_gained", "frameshift_variant"}
+SPLICE = {"splice_donor_variant", "splice_acceptor_variant"}
+PTC = re.compile(r"^p\.[A-Z][a-z]{2}(\d+)(?:[A-Z][a-z]{2})?(?:fsTer(\d+)|Ter)$")
+
+
+class Band(Strict):
+    strength: Strength
+    measure: Literal["faf95", "af", "grpmax_af", "absent"]
+    above: float | None = None
+    at_least: float | None = None
+    below: float | None = None
+    at_most: float | None = None
+    ac_above: int | None = None
+    ac_at_most: int | None = None
+
+    def met(self, frequency: dict | None) -> bool:
+        ac = (frequency or {}).get("ac", 0)
+        if self.measure == "absent":
+            return ac == 0
+        # No call, or no frequency reported (gnomAD gives no FAF for a single observation),
+        # counts as frequency 0: it meets "rare" bands and fails "common" ones.
+        value = (frequency or {}).get(self.measure) or 0.0
+        return (
+            (self.above is None or value > self.above)
+            and (self.at_least is None or value >= self.at_least)
+            and (self.below is None or value < self.below)
+            and (self.at_most is None or value <= self.at_most)
+            and (self.ac_above is None or ac > self.ac_above)
+            and (self.ac_at_most is None or ac <= self.ac_at_most)
+        )
+
+
+class Codons(Strict):
+    strength: Strength
+    at_least: int = 1
+    at_most: int
+
+
+class GeneRules(Strict):
+    panel: str
+    cspec: str = Field(pattern=r"^GN\d{3}$")
+    version: str
+    ba1: list[Band]
+    bs1: list[Band]
+    pm2: list[Band]
+    ptc_codons: list[Codons] = []
+    notes: str = ""
+
+
+class Rules(Strict):
+    genes: dict[str, GeneRules]
+
+
+def load_rules(path: Path = RULES) -> Rules:
+    return Rules.model_validate(yaml.safe_load(path.read_text()))
+
+
+def label(code: str, strength: str) -> str:
+    if strength == DEFAULT[code]:
+        return code
+    return f"{code}_" + strength.replace("_", " ").title().replace(" ", "")
+
+
+def _criterion(code: str, strength: str, reason: str) -> dict:
+    return {"code": code, "label": label(code, strength), "strength": strength, "reason": reason}
+
+
+def _frequency_text(frequency: dict | None) -> str:
+    if not frequency or frequency["ac"] == 0:
+        return "absent from gnomAD v4"
+    faf = frequency.get("faf95")
+    faf_text = f"FAF95 {faf:.2e} ({frequency.get('faf95_group')})" if faf else "no FAF95"
+    return f"gnomAD v4 AC {frequency['ac']}, AF {frequency['af']:.2e}, {faf_text}"
+
+
+def ptc_codon(hgvsp: str | None) -> int | None:
+    """The codon of the premature stop: p.Arg1443Ter gives 1443; p.Gly324AlafsTer46, a
+    frameshift whose new reading frame stops 46 codons on, gives 324 + 46 - 1 = 369."""
+    found = PTC.match(hgvsp or "")
+    if not found:
+        return None
+    start, shift = int(found[1]), found[2]
+    return start + int(shift) - 1 if shift else start
+
+
+def _pvs1(rules: GeneRules, vep: dict, exon_lengths: list[int]) -> tuple[dict | None, str | None]:
+    """PVS1 at its strength, or None with why it was not assessed (None, None if the variant
+    is not a null variant at all)."""
+    consequences = set(vep["consequences"])
+    if consequences & TRUNCATING:
+        codon = ptc_codon(vep.get("hgvsp"))
+        if rules.ptc_codons:
+            if codon is None:
+                return None, f"no premature stop codon in {vep.get('hgvsp')}"
+            for band in rules.ptc_codons:
+                if band.at_least <= codon <= band.at_most:
+                    return _criterion(
+                        "PVS1", band.strength, f"premature stop at codon {codon}"
+                    ), None
+            return None, f"premature stop at codon {codon}, past the panel's PVS1 cut-offs"
+        number, total = map(int, vep["exon"].split("/")) if vep.get("exon") else (0, 0)
+        if number and number == total:
+            return None, "truncation in the last exon escapes NMD; PVS1 strength is for the curator"
+        return _criterion(
+            "PVS1", "very_strong", f"{vep['hgvsp']} in exon {vep['exon']}, NMD predicted"
+        ), None
+    if consequences & SPLICE and vep.get("intron"):
+        intron, _ = map(int, vep["intron"].split("/"))
+        # A donor (+1, +2) site loss skips the exon before the intron; an acceptor (-1, -2)
+        # site loss skips the exon after it.
+        skipped = intron if "splice_donor_variant" in consequences else intron + 1
+        if skipped in (1, len(exon_lengths)):
+            return (
+                None,
+                f"splice site of exon {skipped}, the first or last; outcome is for the curator",
+            )
+        length = exon_lengths[skipped - 1]
+        if length % 3:
+            return _criterion(
+                "PVS1",
+                "very_strong",
+                f"{vep['hgvsc']}: skipping exon {skipped} ({length} nt) shifts the frame,"
+                " NMD predicted",
+            ), None
+        return None, (
+            f"{vep['hgvsc']}: skipping exon {skipped} ({length} nt) keeps the frame; whether the"
+            " lost region is critical is for the curator"
+        )
+    return None, None
+
+
+def assess(
+    rules: GeneRules, frequency: dict | None, vep: dict | None, exon_lengths: list[int]
+) -> dict:
+    met, not_assessed = [], []
+    text = _frequency_text(frequency)
+    for code, bands in (("BA1", rules.ba1), ("BS1", rules.bs1), ("PM2", rules.pm2)):
+        if code == "BS1" and met:
+            continue  # BA1 stands alone; BS1 adds nothing to it
+        for band in bands:
+            if band.met(frequency):
+                met.append(_criterion(code, band.strength, text))
+                break
+    if vep is None:
+        not_assessed.append({"code": "PVS1", "reason": "no MANE Select consequence"})
+    else:
+        criterion, reason = _pvs1(rules, vep, exon_lengths)
+        if criterion:
+            met.append(criterion)
+        elif reason:
+            not_assessed.append({"code": "PVS1", "reason": reason})
+    return {"met": met, "not_assessed": not_assessed} | classify(met)
+
+
+def classify(met: list[dict]) -> dict:
+    if any(c["code"] == "BA1" for c in met):
+        return {"points": None, "classification": "Benign"}
+    points = sum(
+        -POINTS[c["strength"]] if c["code"] in BENIGN else POINTS[c["strength"]] for c in met
+    )
+    classification = next((name for floor, name in CLASSES if points >= floor), "Benign")
+    return {"points": points, "classification": classification}
