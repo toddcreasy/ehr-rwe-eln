@@ -13,9 +13,11 @@ data_use_limitations: >-
   here, word for word from the study's data use certification.
 # The source is synthetic, so releases are seeded and reproducible. Null for real data.
 seed: 0
+# No bayes_net at epsilon 0.25: with age as a second parent on the four measurements, their
+# histograms have ten times the cells, and at 0.25 the noise outweighs what the structure adds
+# (methodology section 5). Releases 2 to 4 used the earlier structure.
 releases:
   - {method: independent, epsilon: 1}
-  - {method: bayes_net, epsilon: 0.25}
   - {method: bayes_net, epsilon: 1}
   - {method: bayes_net, epsilon: 4}
   - {method: vae, epsilon: 1}
@@ -61,22 +63,23 @@ columns:
   - {name: metformin, drug: {concept_ids: [1503297]}, parents: [diabetes]}
   - {name: insulin, drug: {concept_ids: [1596977, 46221581, 1550023]}, parents: [diabetes]}
 
-  # Latest value ever recorded; a missing value is its own code.
+  # Latest value ever recorded; a missing value is its own code. Each depends on age as well
+  # as its condition: children's BMI and older people's eGFR differ by age alone.
   - name: systolic_bp # mmHg
     measurement: {concept_ids: [3004249]}
     numeric: {low: 70, high: 190, bins: 12}
-    parents: [hypertension]
+    parents: [hypertension, age]
   - name: bmi # kg/m2
     measurement: {concept_ids: [3038553]}
     numeric: {low: 10, high: 60, bins: 10}
-    parents: [obesity]
+    parents: [obesity, age]
   - name: egfr # MDRD, mL/min/1.73 m2
     measurement: {concept_ids: [46236952]}
     numeric: {low: 0, high: 150, bins: 10}
-    parents: [chronic_kidney_disease]
+    parents: [chronic_kidney_disease, age]
   - name: hba1c # percent
     measurement: {concept_ids: [3004410]}
     numeric: {low: 2, high: 12, bins: 10}
-    parents: [diabetes]
+    parents: [diabetes, age]
 
   - {name: deceased, demographic: deceased, parents: [age]}
