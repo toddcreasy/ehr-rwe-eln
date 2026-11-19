@@ -485,7 +485,8 @@ s += [
         "ops",
         "pre-commit",
         "ruff, secrets, file checks",
-        "Lint, format, YAML, large-file, and private-key checks before a commit lands.",
+        "Lint, format, YAML, large-file, private-key, and gitleaks secret checks before a "
+        "commit lands.",
         REPO + ".pre-commit-config.yaml",
     ),
     node(
@@ -497,7 +498,7 @@ s += [
         "GitHub",
         "pull request to main",
         "main is protected: every change arrives as a pull request, up to date with main, with "
-        "lint-test passing, and is squash-merged.",
+        "lint-test and secrets passing, and is squash-merged.",
         "https://github.com/toddcreasy/ehr-rwe-eln/pulls",
     ),
     node(
@@ -507,8 +508,10 @@ s += [
         NH,
         "ops",
         "GitHub Actions",
-        "lint-test, Postgres service",
-        "uv sync --locked, ruff, and pytest against the same pgvector image as Compose.",
+        "lint-test, secrets",
+        "lint-test: uv sync --locked, ruff, and pytest against the same pgvector image as "
+        "Compose. secrets: gitleaks over every commit and every file, for keys, tokens, "
+        "passwords, usernames, and email addresses.",
         REPO + ".github/workflows",
     ),
     node(

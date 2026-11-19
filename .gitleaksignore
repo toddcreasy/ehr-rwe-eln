@@ -1,0 +1,8 @@
+# Findings in past commits that cannot be removed without rewriting history (no force push).
+# Each line is a gitleaks fingerprint, commit:file:rule:line, after a comment saying why it is
+# not a live secret. Never add a fingerprint for a credential that is still in use.
+
+# POSTGRES_PASSWORD=localdev: the throwaway password of a local-only Postgres container in an
+# early README (bound to 127.0.0.1, never deployed). Removed in d033ca3, which moved to a
+# per-user DB_PASSWORD in .env.
+d762c5ff22533a2b3bc390605ff76bf0528ae82f:README.md:password-env:114

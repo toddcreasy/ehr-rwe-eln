@@ -74,7 +74,7 @@ Both are scored by evals in `evals/` against the real model. They are slow and b
 | Interoperability | `fhir.resources` | [FHIR R4](https://hl7.org/fhir/R4/) models in Python, no FHIR server needed at this scale |
 | API | FastAPI + Pydantic | Typed requests and responses |
 | Frontend | Next.js, React, Tailwind, static export | Builds to plain files FastAPI can serve |
-| CI | GitHub Actions | `lint-test`: ruff and pytest against the same Postgres image |
+| CI | GitHub Actions | `lint-test`: ruff and pytest against the same Postgres image. `secrets`: [gitleaks](https://github.com/gitleaks/gitleaks) over every commit and file for keys, tokens, passwords, usernames, and email addresses (`.gitleaks.toml`). Both required to merge |
 
 OHDSI's reference tools (ETL-Synthea, [DataQualityDashboard](https://github.com/OHDSI/DataQualityDashboard), CohortMethod) are written in R. This repo reimplements the needed parts in Python and uses the R tools as the correctness reference, not as dependencies.
 
