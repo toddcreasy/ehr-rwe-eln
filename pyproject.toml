@@ -15,8 +15,10 @@ dependencies = [
     "fastapi[standard]>=0.142.2",
     "fhir-resources>=8.3.0",
     "lifelines>=0.30.0",
+    "numpy>=2.5.4",
     "pandas>=3.0.6",
     "psycopg[binary]>=3.3.6",
+    "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
     "pyyaml>=6.0.3",
     "scikit-learn>=1.8.0",
@@ -31,6 +33,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "openpyxl>=3.1.5",
     "pre-commit>=4.6.2",
     "pydantic-evals>=2.54.0",
     "pytest>=9.1.1",

@@ -48,7 +48,11 @@ def curate(
             continue
         frequency = frequencies[v["gnomad_id"]]
         result = assess(
-            rules.genes[vep["gene"]], frequency, vep, exon_lengths.get(vep["transcript"], [])
+            vep["gene"],
+            rules.genes[vep["gene"]],
+            frequency,
+            vep,
+            exon_lengths.get(vep["transcript"], []),
         )
         out.append(
             {

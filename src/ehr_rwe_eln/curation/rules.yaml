@@ -13,9 +13,12 @@
 # Band bounds: above (>), at_least (>=), below (<), at_most (<=); ac_above and ac_at_most
 # limit the allele count.
 #
-# ptc_codons: PVS1 for nonsense and frameshift variants by the codon of the premature stop,
-# where the panel gives cut-offs. Without them, PVS1 follows the general ClinGen rule as far
-# as data allows (see rules.py).
+# PVS1 (see rules.py), by the first that is set:
+#   pvs1_table: enigma   ENIGMA's Specifications Table 4, per exon and per splice-site change
+#                        (enigma_pvs1.yaml, from scripts/import_enigma_pvs1.py)
+#   ptc_codons           cut-offs on the codon of the premature stop
+#   ptc_window           codons where a truncation counts whatever its exon
+# otherwise the NMD rule. splice_to_curator leaves canonical splice sites to the curator.
 
 genes:
   BRCA1:
@@ -29,10 +32,12 @@ genes:
       - {strength: supporting, measure: faf95, above: 0.00002, at_most: 0.0001}
     pm2:
       - {strength: supporting, measure: absent}
+    pvs1_table: enigma
     notes: >-
       The panel reads gnomAD v2.1 and v3.1 non-cancer subsets and requires read depth of at
-      least 25 for PM2; this uses gnomAD v4 joined and does not check depth. PVS1 follows the
-      panel's flowchart, of which only the NMD (nonsense-mediated decay) part is applied here.
+      least 25 for PM2; this uses gnomAD v4 joined and does not check depth. PVS1 and PM5_PTC
+      come from the panel's Specifications Table 4 (v1.2); splice-site changes it does not
+      list, and deletions or duplications, are left to the curator.
   BRCA2:
     panel: ENIGMA BRCA1 and BRCA2 Variant Curation Expert Panel
     cspec: GN097
@@ -44,6 +49,7 @@ genes:
       - {strength: supporting, measure: faf95, above: 0.00002, at_most: 0.0001}
     pm2:
       - {strength: supporting, measure: absent}
+    pvs1_table: enigma
     notes: >-
       As BRCA1.
   MLH1:
@@ -87,10 +93,16 @@ genes:
     pm2:
       - {strength: supporting, measure: af, at_most: 0.000003, ac_above: 1}
       - {strength: supporting, measure: af, below: 0.00001, ac_at_most: 1}
+    # Spier et al. 2024, Genet Med 26:100992 (doi:10.1016/j.gim.2023.100992): the last exon
+    # (codons 653 to 2843) escapes NMD but truncations there cause FAP, so NMD does not decide
+    # PVS1. Its boundaries are the 5'-most and 3'-most truncations the panel could classify
+    # likely pathogenic: p.(Lys49AsnfsTer20) and p.(Tyr2645LysfsTer14). Canonical splice sites
+    # are graded by lists A to E in its supplement, not encoded here.
+    ptc_window: {first: 49, last: 2645}
+    splice_to_curator: true
     notes: >-
-      PM2's allele frequency is read as the overall frequency. The panel's PVS1 follows a
-      modified decision tree for APC, where truncations in the last exon (exon 16, most of the
-      gene) can be pathogenic; this leaves last-exon truncations to the curator.
+      PM2's allele frequency is read as the overall frequency. Splice sites, initiation codon
+      variants, and deletions are left to the curator.
   LDLR:
     panel: Familial Hypercholesterolemia Variant Curation Expert Panel
     cspec: GN013

@@ -21,6 +21,7 @@ Nothing here reads the variant's ClinVar classification.
 """
 
 import re
+from functools import cache
 from pathlib import Path
 from typing import Literal
 
@@ -30,6 +31,8 @@ from pydantic import Field
 from ehr_rwe_eln.cohort.spec import Strict
 
 RULES = Path(__file__).parent / "rules.yaml"
+# ENIGMA's PVS1 decision table for BRCA1 and BRCA2 (scripts/import_enigma_pvs1.py).
+ENIGMA = Path(__file__).parent / "enigma_pvs1.yaml"
 Strength = Literal["stand_alone", "very_strong", "strong", "moderate", "supporting"]
 POINTS = {"very_strong": 8, "strong": 4, "moderate": 2, "supporting": 1}
 # Each code's strength as originally defined; a different strength is written CODE_Strength.
@@ -38,6 +41,7 @@ DEFAULT = {
     "BS1": "strong",
     "PM2": "moderate",
     "PVS1": "very_strong",
+    "PM5": "moderate",
 }
 BENIGN = {"BA1", "BS1"}
 CLASSES = [
@@ -49,6 +53,8 @@ CLASSES = [
 TRUNCATING = {"stop_gained", "frameshift_variant"}
 SPLICE = {"splice_donor_variant", "splice_acceptor_variant"}
 PTC = re.compile(r"^p\.[A-Z][a-z]{2}(\d+)(?:[A-Z][a-z]{2})?(?:fsTer(\d+)|Ter)$")
+FIRST_CODON = re.compile(r"^p\.[A-Z][a-z]{2}(\d+)")
+DELETED_SITE = re.compile(r"^(c\.-?\d+[+-][12])del$")
 
 
 class Band(Strict):
@@ -84,6 +90,11 @@ class Codons(Strict):
     at_most: int
 
 
+class Window(Strict):
+    first: int
+    last: int
+
+
 class GeneRules(Strict):
     panel: str
     cspec: str = Field(pattern=r"^GN\d{3}$")
@@ -91,7 +102,13 @@ class GeneRules(Strict):
     ba1: list[Band]
     bs1: list[Band]
     pm2: list[Band]
+    # PVS1, by the first rule that is set: the panel's own table (ENIGMA, BRCA1 and BRCA2);
+    # codon cut-offs for the premature stop (InSiGHT, MLH1 and MSH2); a window of codons where
+    # truncations count whatever the exon (InSiGHT, APC). Otherwise the NMD rule.
+    pvs1_table: Literal["enigma"] | None = None
     ptc_codons: list[Codons] = []
+    ptc_window: Window | None = None
+    splice_to_curator: bool = False
     notes: str = ""
 
 
@@ -121,6 +138,17 @@ def _frequency_text(frequency: dict | None) -> str:
     return f"gnomAD v4 AC {frequency['ac']}, AF {frequency['af']:.2e}, {faf_text}"
 
 
+def _not(reason: str, decided: bool = False) -> dict:
+    """PVS1 not applied: decided (the panel's rules say it does not apply) or left to the
+    curator (the rules cannot tell)."""
+    return {"code": "PVS1", "reason": reason, "decided": decided}
+
+
+@cache
+def _enigma_table() -> dict:
+    return yaml.safe_load(ENIGMA.read_text())["genes"]
+
+
 def ptc_codon(hgvsp: str | None) -> int | None:
     """The codon of the premature stop: p.Arg1443Ter gives 1443; p.Gly324AlafsTer46, a
     frameshift whose new reading frame stops 46 codons on, gives 324 + 46 - 1 = 369."""
@@ -131,54 +159,159 @@ def ptc_codon(hgvsp: str | None) -> int | None:
     return start + int(shift) - 1 if shift else start
 
 
-def _pvs1(rules: GeneRules, vep: dict, exon_lengths: list[int]) -> tuple[dict | None, str | None]:
-    """PVS1 at its strength, or None with why it was not assessed (None, None if the variant
-    is not a null variant at all)."""
+def _deleted_site(entry: dict, hgvsc: str | None) -> dict | None:
+    """Table 4 lists substitutions at the canonical +1, +2, -1, -2 positions. Deleting that
+    base breaks the site as surely, so a one-base deletion there takes the table's strength
+    when every substitution it lists at the position has the same one; otherwise None."""
+    found = DELETED_SITE.match(hgvsc or "")
+    if not found:
+        return None
+    sites = [v for k, v in entry["splice"].items() if k[:-3] == found[1]]
+    strengths = {s["strength"] for s in sites}
+    if not sites or len(strengths) != 1:
+        return None
+    codes = sorted({s["code"] for s in sites})
+    return {
+        "code": "/".join(codes),
+        "strength": strengths.pop(),
+        "note": f"one-base deletion; every substitution at {found[1]} is {', '.join(codes)}",
+    }
+
+
+def _enigma(gene: str, vep: dict, table: dict) -> tuple[list[dict], dict | None]:
+    """PVS1 (and PM5_PTC) from ENIGMA's Specifications Table 4."""
+    entry, consequences = table[gene], set(vep["consequences"])
+    if consequences & TRUNCATING:
+        number = int(vep["exon"].split("/")[0]) if vep.get("exon") else None
+        codon = ptc_codon(vep.get("hgvsp"))
+        rows = entry["exons"].get(number, [])
+        row = next(
+            (
+                r
+                for r in rows
+                if ("before_codon" not in r or (codon is not None and codon < r["before_codon"]))
+                and ("after_codon" not in r or (codon is not None and codon > r["after_codon"]))
+            ),
+            None,
+        )
+        if row is None:
+            return [], _not(f"{vep.get('hgvsp')} in exon {number}: no ENIGMA Table 4 row matches")
+        where = f"{vep['hgvsp']}, premature stop in exon {number}"
+        if row["pvs1"]["strength"] is None:
+            return [], _not(f"ENIGMA Table 4: {row['pvs1']['code']} for {where}", decided=True)
+        met = [_criterion("PVS1", row["pvs1"]["strength"], f"ENIGMA Table 4: {where}")]
+        if row["pm5_ptc"]["strength"]:
+            met.append(
+                _criterion(
+                    "PM5",
+                    row["pm5_ptc"]["strength"],
+                    f"ENIGMA Table 4: {row['pm5_ptc']['code']}, proven pathogenic PTCs in exon"
+                    f" {number}",
+                )
+            )
+        return met, None
+    if consequences & SPLICE:
+        site = entry["splice"].get(vep.get("hgvsc")) or _deleted_site(entry, vep.get("hgvsc"))
+        if site is None:
+            return [], _not(f"{vep.get('hgvsc')} is not in ENIGMA Table 4; for the curator")
+        why = f"ENIGMA Table 4: {site['code']} for {vep['hgvsc']}" + (
+            f" ({site['note']})" if site.get("note") else ""
+        )
+        if site["strength"] is None:
+            return [], _not(why, decided=True)
+        return [_criterion("PVS1", site["strength"], why)], None
+    return [], None
+
+
+def _pvs1(
+    gene: str, rules: GeneRules, vep: dict, exon_lengths: list[int]
+) -> tuple[list[dict], dict | None]:
+    """The criteria PVS1 adds (with PM5_PTC for ENIGMA), and a note when PVS1 is not applied
+    to a null variant; ([], None) if the variant is not a null variant at all."""
+    if rules.pvs1_table == "enigma":
+        return _enigma(gene, vep, _enigma_table())
     consequences = set(vep["consequences"])
     if consequences & TRUNCATING:
+        if rules.ptc_window:
+            # Truncations in APC's last exon escape NMD but still cause FAP, so the panel sets
+            # PVS1 by where the truncation starts, not by exon.
+            found = FIRST_CODON.match(vep.get("hgvsp") or "")
+            if not found:
+                return [], _not(f"no protein position in {vep.get('hgvsp')}")
+            codon, window = int(found[1]), rules.ptc_window
+            if window.first <= codon <= window.last:
+                return [
+                    _criterion(
+                        "PVS1",
+                        "very_strong",
+                        f"{vep['hgvsp']}: codon {codon}, within the panel's PVS1 boundaries"
+                        f" ({window.first} to {window.last})",
+                    )
+                ], None
+            return [], _not(
+                f"{vep['hgvsp']}: codon {codon}, outside the panel's PVS1 boundaries"
+                f" ({window.first} to {window.last})",
+                decided=True,
+            )
         codon = ptc_codon(vep.get("hgvsp"))
         if rules.ptc_codons:
             if codon is None:
-                return None, f"no premature stop codon in {vep.get('hgvsp')}"
+                return [], _not(f"no premature stop codon in {vep.get('hgvsp')}")
             for band in rules.ptc_codons:
                 if band.at_least <= codon <= band.at_most:
-                    return _criterion(
-                        "PVS1", band.strength, f"premature stop at codon {codon}"
-                    ), None
-            return None, f"premature stop at codon {codon}, past the panel's PVS1 cut-offs"
+                    return [
+                        _criterion("PVS1", band.strength, f"premature stop at codon {codon}")
+                    ], None
+            return [], _not(
+                f"premature stop at codon {codon}, past the panel's PVS1 cut-offs", decided=True
+            )
         number, total = map(int, vep["exon"].split("/")) if vep.get("exon") else (0, 0)
         if number and number == total:
-            return None, "truncation in the last exon escapes NMD; PVS1 strength is for the curator"
-        return _criterion(
-            "PVS1", "very_strong", f"{vep['hgvsp']} in exon {vep['exon']}, NMD predicted"
-        ), None
-    if consequences & SPLICE and vep.get("intron"):
+            return [], _not(
+                "truncation in the last exon escapes NMD; PVS1 strength is for the curator"
+            )
+        return [
+            _criterion(
+                "PVS1", "very_strong", f"{vep['hgvsp']} in exon {vep['exon']}, NMD predicted"
+            )
+        ], None
+    if consequences & SPLICE:
+        if rules.splice_to_curator:
+            return [], _not(
+                f"{vep.get('hgvsc')}: the panel grades splice sites from splicing predictions and"
+                " RNA data; for the curator"
+            )
+        if not vep.get("intron"):
+            return [], _not(f"{vep.get('hgvsc')}: no intron number")
         intron, _ = map(int, vep["intron"].split("/"))
         # A donor (+1, +2) site loss skips the exon before the intron; an acceptor (-1, -2)
         # site loss skips the exon after it.
         skipped = intron if "splice_donor_variant" in consequences else intron + 1
         if skipped in (1, len(exon_lengths)):
-            return (
-                None,
-                f"splice site of exon {skipped}, the first or last; outcome is for the curator",
-            )
+            return [], _not(f"splice site of exon {skipped}, the first or last; for the curator")
         length = exon_lengths[skipped - 1]
         if length % 3:
-            return _criterion(
-                "PVS1",
-                "very_strong",
-                f"{vep['hgvsc']}: skipping exon {skipped} ({length} nt) shifts the frame,"
-                " NMD predicted",
-            ), None
-        return None, (
+            return [
+                _criterion(
+                    "PVS1",
+                    "very_strong",
+                    f"{vep['hgvsc']}: skipping exon {skipped} ({length} nt) shifts the frame,"
+                    " NMD predicted",
+                )
+            ], None
+        return [], _not(
             f"{vep['hgvsc']}: skipping exon {skipped} ({length} nt) keeps the frame; whether the"
             " lost region is critical is for the curator"
         )
-    return None, None
+    return [], None
 
 
 def assess(
-    rules: GeneRules, frequency: dict | None, vep: dict | None, exon_lengths: list[int]
+    gene: str,
+    rules: GeneRules,
+    frequency: dict | None,
+    vep: dict | None,
+    exon_lengths: list[int],
 ) -> dict:
     met, not_assessed = [], []
     text = _frequency_text(frequency)
@@ -190,13 +323,12 @@ def assess(
                 met.append(_criterion(code, band.strength, text))
                 break
     if vep is None:
-        not_assessed.append({"code": "PVS1", "reason": "no MANE Select consequence"})
+        not_assessed.append(_not("no MANE Select consequence"))
     else:
-        criterion, reason = _pvs1(rules, vep, exon_lengths)
-        if criterion:
-            met.append(criterion)
-        elif reason:
-            not_assessed.append({"code": "PVS1", "reason": reason})
+        criteria, note = _pvs1(gene, rules, vep, exon_lengths)
+        met += criteria
+        if note:
+            not_assessed.append(note)
     return {"met": met, "not_assessed": not_assessed} | classify(met)
 
 
