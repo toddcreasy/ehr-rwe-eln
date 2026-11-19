@@ -105,3 +105,26 @@ def test_trial_warning_appears_with_spurious_draws():
     card = render_card(record, {"trial": trial})
     assert "40% of draws at this setting showed an effect the real data does not" in card
     assert "| This release | 19 | 3.00 (1.20 to 7.50) |" in card
+
+
+def test_card_shows_subgroups_and_names_a_misrepresented_group():
+    s = spec(AGE, FLAG, DRUG)
+    train = toy(2000)
+    out, measurements = synthesize(train, s, s.releases[0])
+    fidelity = fidelity_report(train, out, s.columns)
+    fidelity["noise_floor"] = None
+    row = {
+        "column": "sex", "group": "male", "train_people": 990, "holdout_people": 410,
+        "release_people": 700, "column_tvd_mean": 0.120, "noise_floor": 0.020, "excess": 0.100,
+    }  # fmt: skip
+    fidelity["subgroups"] = [
+        {**row, "share_ratio": 0.71},
+        {**row, "group": "female", "share_ratio": 1.05, "column_tvd_mean": 0.03, "excess": 0.01},
+    ]
+    record = release_record(s, s.releases[0], measurements, len(out), 0)
+    card = render_card(record, {"fidelity": fidelity})
+    assert "## Fidelity by subgroup" in card
+    assert "| sex: male | 990 | 0.71 | 0.120 | 0.020 |" in card
+    assert "Furthest past their floor: sex male (0.120 against 0.020)" in card
+    assert "do not study them in it: sex male at 0.71 times its real share." in card
+    assert "sex female at" not in card  # 5% off is within the warning's margin

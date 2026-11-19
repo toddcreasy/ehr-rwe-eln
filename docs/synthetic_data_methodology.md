@@ -51,8 +51,9 @@ Synthetic rows are not real people, so a match between a synthetic row and a rea
 - Kolmogorov-Smirnov statistic for numeric columns.
 - Correlation gap: mean absolute difference between the two Pearson correlation matrices.
 - Read against a **noise floor**: the same measures between two real samples (holdout against training). No release can be expected to beat it.
+- **By subgroup**: the spec names columns to split by (race, ethnicity, sex, and age by its ten-year bins). Within each group of at least 11 people: its share of the release against its share of the real data, its mean column TVD, and its own noise floor, which is higher for a small group because two small samples differ more. Groups under 11 are left out, as CMS suppresses cells under 11.
 
-**Utility.** Train on synthetic, test on real (TSTR): a logistic regression predicting death, trained on the release and scored on held-out real people by AUC (the chance that a random person who died ranks above one who did not; 0.5 is guessing). Compared with the same model trained on real data (TRTR).
+**Utility.** Train on synthetic, test on real (TSTR): a logistic regression predicting death, trained on the release and scored on held-out real people by AUC (the chance that a random person who died ranks above one who did not; 0.5 is guessing). Compared with the same model trained on real data (TRTR). Both models are also scored within each subgroup's held-out people, where the group has at least 11 people on each side of the outcome.
 
 **Downstream parity** (`synth/parity.py`). The trial's own propensity-weighted Cox analysis from the trial emulation module, unchanged, run on the real trial table and on synthetic ones. One synthetic draw varies like a fresh small sample, so each method and epsilon is redrawn 20 more times with different seeds. Reported: share estimable, share whose 95% interval covers the real hazard ratio, and share showing a spurious effect (an interval excluding 1 when the real interval includes it).
 
@@ -73,8 +74,8 @@ A failed attack shows only that this attack failed. These checks bound risk from
 | Release | Column TVD mean | Pair TVD mean | Worst pair (TVD) | Correlation gap | TSTR AUC |
 |---|---|---|---|---|---|
 | Noise floor (real against real) | 0.006 | 0.012 | 0.050 | 0.015 | 0.804 (TRTR) |
-| Independent columns, epsilon 1 | 0.005 | 0.071 | age x BMI (0.333) | 0.232 | 0.497 |
-| Bayesian network, epsilon 0.25 | 0.015 | 0.049 | age x BMI (0.258) | 0.099 | 0.689 |
+| Independent columns, epsilon 1 | 0.005 | 0.071 | age x BMI (0.333) | 0.231 | 0.497 |
+| Bayesian network, epsilon 0.25 | 0.015 | 0.049 | age x BMI (0.258) | 0.098 | 0.689 |
 | Bayesian network, epsilon 1 | 0.006 | 0.035 | age x BMI (0.247) | 0.084 | 0.698 |
 | Bayesian network, epsilon 4 | 0.004 | 0.032 | age x BMI (0.244) | 0.079 | 0.686 |
 | VAE, epsilon 1 | 0.038 | 0.073 | age x BMI (0.386) | 0.210 | 0.730 |
@@ -90,13 +91,40 @@ A failed attack shows only that this attack failed. These checks bound risk from
 | Copy of the training data | 62.9% | 68.7% / 44.4% | 0.650 | +0.5% / +1.6% |
 | Independent columns, epsilon 1 | 50.0% | 2.0% / 2.1% | 0.512 | +0.2% / +1.2% |
 | Bayesian network, epsilon 0.25 | 50.8% | 17.4% / 17.5% | 0.504 | +0.1% / +1.1% |
-| Bayesian network, epsilon 1 | 51.0% | 19.2% / 18.9% | 0.507 | +0.1% / +1.4% |
+| Bayesian network, epsilon 1 | 50.9% | 19.2% / 18.9% | 0.507 | +0.1% / +1.4% |
 | Bayesian network, epsilon 4 | 50.1% | 20.8% / 21.3% | 0.500 | +0.2% / +1.3% |
 | VAE, epsilon 1 | 50.9% | 9.4% / 8.8% | 0.509 | +0.2% / +1.2% |
-| VAE, epsilon 4 | 50.4% | 19.6% / 19.5% | 0.506 | +0.2% / +1.3% |
+| VAE, epsilon 4 | 50.5% | 19.6% / 19.5% | 0.506 | +0.2% / +1.3% |
 
 - Every release is at chance on every attack; the copy shows the attacks detect leakage when it exists.
 - The copy's own numbers are modest because the encoding is coarse: 44% of held-out people have an exact twin among training people on all 21 binned columns. In the source, 2.4% of people are unique on exact age, sex, race, and ethnicity, and 0.2% with age in ten-year groups (the last one 90 or older). With these quasi-identifiers, a linkage attack has almost no one to single out.
+
+### Person summary by subgroup
+
+Column TVD within each group, past the group's own noise floor (excess), and the group's share of the release against its real share. The full table for every release is on its data card.
+
+| Group (training people) | Floor | Bayes net 0.25 | Bayes net 1 | Bayes net 4 | VAE 1 | VAE 4 |
+|---|---|---|---|---|---|---|
+| Race: white (13,429) | 0.008 | +0.009, 1.00 | +0.001, 1.00 | -0.002, 1.00 | +0.034, 1.00 | +0.040, 1.01 |
+| Race: Black (1,435) | 0.022 | +0.020, 1.00 | +0.014, 1.00 | +0.008, 0.99 | +0.030, 0.93 | +0.046, 0.99 |
+| Race: Asian (1,067) | 0.025 | +0.023, 0.92 | +0.005, 0.95 | +0.010, 0.95 | +0.017, 1.00 | +0.033, 0.94 |
+| Race: Native American (69) | 0.077 | -0.004, 0.91 | +0.008, 1.01 | -0.017, 0.96 | +0.002, 1.69 | +0.049, 0.87 |
+| Race: other (193) | 0.068 | +0.032, 1.21 | -0.009, 1.08 | -0.028, 1.06 | -0.012, 0.98 | -0.017, 1.02 |
+| Sex: female (8,162) | 0.009 | +0.019, 0.99 | +0.013, 1.00 | +0.011, 1.00 | +0.015, 1.03 | +0.026, 1.02 |
+| Sex: male (8,223) | 0.008 | +0.021, 1.01 | +0.016, 1.00 | +0.014, 1.00 | +0.047, 0.97 | +0.053, 0.98 |
+| Age 0 to 9 (1,621) | 0.007 | +0.071, 1.11 | +0.059, 1.04 | +0.059, 1.04 | +0.149, 1.13 | +0.086, 1.01 |
+| Age 40 to 49 (2,121) | 0.016 | +0.020, 0.91 | +0.011, 0.98 | +0.009, 0.99 | +0.059, 0.98 | +0.050, 1.11 |
+| Age 70 to 79 (1,244) | 0.023 | +0.064, 0.95 | +0.040, 0.95 | +0.034, 0.95 | +0.200, 0.77 | +0.133, 0.79 |
+| Age 80 to 89 (561) | 0.035 | +0.095, 0.99 | +0.039, 0.98 | +0.035, 0.97 | +0.221, 0.72 | +0.172, 0.80 |
+| Age 90 or more (310) | 0.047 | +0.096, 0.68 | +0.019, 0.98 | +0.016, 1.07 | +0.223, 0.81 | +0.187, 0.81 |
+
+- Age is where releases fall short. The VAE has 19 to 28% too few people aged 70 and over, and the ones it has are far from real older patients: up to 0.22 past the floor, against 0.04 for the Bayesian network at epsilon 1 and 4. Those are the people the cohort's conditions affect most.
+- Children are distorted in every release, most in BMI (column TVD 0.64 within ages 0 to 9 for the Bayesian network at epsilon 1), then HbA1c and eGFR. None of the four measurement columns has age as a parent, so their children's values come from the adult-heavy whole: the same cause as the worst pair above. Older groups show it too, in eGFR and blood pressure.
+- Race is close to the floor in the Bayesian network at epsilon 1 and 4. At epsilon 0.25 the "other" group is 21% over-represented, and the VAE at epsilon 1 makes Native American people 1.69 times as common as they are. DP noise is the same size for every count, so the smallest groups move most.
+- The VAE distorts men two to three times as much as women; the Bayesian network treats them alike.
+- Utility within groups: release models lose about as much AUC for Black patients (0.687 to 0.717 against 0.780 for the real-data model) as for white patients (0.689 to 0.732 against 0.806). Native American, Hawaiian, and other groups have too few deaths in the holdout to score.
+- Each data card lists every group and names any whose share is off by more than 20% under intended use, with an instruction not to study it in that release.
+- The person summary now reads 74 HbA1c results the ELN bridge wrote to OMOP after these releases were made. That moves a few figures above at the third decimal; the releases were not remade.
 
 ### Trial table (1,890 people, 26 events)
 
@@ -120,7 +148,7 @@ The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.26) fo
 
 - Releases like these are fit for building, testing, and demonstrating analyses and pipelines without access to the source: schemas, code paths, and failure modes behave as they would on the real data.
 - They are not fit for reporting estimates. On small cohorts with rare outcomes, they produce effects that are not there, at rates measured above.
-- Each release's data card states its intended use and, for trial tables, the measured rate of spurious effects at its setting.
+- Each release's data card states its intended use and, for trial tables, the measured rate of spurious effects at its setting, and names any subgroup whose share of the release is off by more than 20%. Do not study people 70 and over in the VAE releases.
 - For a real source, choose epsilon before looking at results, leave seeds unset, and treat the evaluation reports as internal.
 
 ## 7. Limitations
@@ -131,7 +159,7 @@ The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.26) fo
 - The Bayesian network keeps only declared relationships, with at most two parents per column.
 - The VAE's training settings were not tuned. Tuning on a separate public stand-in would likely improve it.
 - On real data only the Bayesian network can run here: the VAE needs a seed, because secure noise for it is not installable (section 3).
-- Fidelity is not yet measured by subgroup. DP noise is the same size for every count, so small groups (99 people of 23,421 are recorded as Native American) are distorted most.
+- Subgroup fidelity covers race, ethnicity, sex, and age one at a time, not their intersections (older Black women, for example), which would be smaller still. Groups under 11 people are not reported.
 - One spec per table kind and one trial protocol; results on other cohorts will differ.
 
 ## 8. Reproducing and provenance

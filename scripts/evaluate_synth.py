@@ -7,20 +7,21 @@ Rebuilds each release's source and split from the spec stored with it, so it mus
 the database the release was made from. The noise floor is the same report for the real
 holdout against the real training set: no release can be expected to do better.
 
-Releases with a holdout also get a privacy report: three attacks, read against the same
-attacks on a plain copy of the training data. Releases of a module 4 trial's analysis table
-also get a trial report: the trial rerun on the
-release, and on 20 more draws of its method and epsilon (a few minutes for the VAE).
+Specs with subgroup columns also get fidelity within each group (race, sex, age bins), stored
+in the fidelity report. Releases with a holdout also get a privacy report: three attacks, read
+against the same attacks on a plain copy of the training data. Releases of a module 4 trial's
+analysis table also get a trial report: the trial rerun on the release, and on 20 more draws
+of its method and epsilon (a few minutes for the VAE).
 """
 
 from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.synth import bayes_net, vae
-from ehr_rwe_eln.synth.fidelity import fidelity_report, utility_auc
+from ehr_rwe_eln.synth.fidelity import fidelity_report, subgroup_report, utility_auc
 from ehr_rwe_eln.synth.parity import load_trial, parity_report, repeated_draws, trial_estimate
 from ehr_rwe_eln.synth.privacy import privacy_report
 from ehr_rwe_eln.synth.release import load_release, save_report
 from ehr_rwe_eln.synth.source import build_source, split
-from ehr_rwe_eln.synth.spec import Spec
+from ehr_rwe_eln.synth.spec import SPECS, Spec, load_spec
 
 
 def row(label: str, report: dict, tstr: float | None, trtr: float | None) -> str:
@@ -57,6 +58,17 @@ def trial_row(label: str, report: dict) -> str:
     )
 
 
+def subgroup_row(label: str, report: dict, worst: int = 3) -> str:
+    rows = [r for r in report["subgroups"] if r["excess"] is not None]
+    if not rows:
+        return f"{label:<24}no noise floor (no holdout)"
+    rows.sort(key=lambda r: r["excess"], reverse=True)
+    return f"{label:<24}" + "; ".join(
+        f"{r['column']} {r['group']} {r['excess']:+.3f}, x{r['share_ratio']:.2f}"
+        for r in rows[:worst]
+    )
+
+
 def privacy_row(label: str, report: dict) -> str:
     dcr = report["distance_to_closest_record"]
     attrs = report["attribute_inference"]
@@ -72,7 +84,7 @@ def main() -> None:
         releases = con.execute(
             "SELECT release_id, method, epsilon, spec FROM synth.release ORDER BY release_id"
         ).fetchall()
-        sources, trial_lines, privacy_lines, summaries = {}, [], [], []
+        sources, trial_lines, privacy_lines, summaries, subgroup_lines = {}, [], [], [], []
         print(
             f"{'':<24}{'column TVD':>14}{'pair TVD':>14}  {'worst pair':<34}{'corr gap':>7}"
             f"   TSTR / TRTR AUC\n{'':<24}{'mean':>7}{'max':>7}{'mean':>7}{'max':>7}"
@@ -105,6 +117,17 @@ def main() -> None:
                 }
             else:
                 tstr = None
+            # Subgroups choose how a release is read, not how it was made, so releases stored
+            # before a spec named them take them from the spec file of the same name.
+            shipped = SPECS / f"{spec.name}.yaml"
+            by = spec.subgroups or (load_spec(shipped).subgroups if shipped.exists() else [])
+            names = {c.name for c in spec.columns}
+            by = [name for name in by if name in names]
+            if by:
+                report["subgroups"] = subgroup_report(
+                    train, holdout, synthetic, spec.columns, by, spec.utility_target
+                )
+                subgroup_lines.append(subgroup_row(f"{release_id}: {method} {epsilon:g}", report))
             save_report(con, release_id, "fidelity", report)
             con.commit()
             print(row(f"{release_id}: {method} {epsilon:g}", report, tstr, trtr))
@@ -145,6 +168,11 @@ def main() -> None:
                 save_report(con, release_id, "trial", trial)
                 con.commit()
                 trial_lines.append(trial_row(f"{release_id}: {method} {epsilon:g}", trial))
+        if subgroup_lines:
+            print(
+                "\nSubgroups furthest past their noise floor (column TVD minus floor; share of"
+                " the release over share of the real data):\n" + "\n".join(subgroup_lines)
+            )
         if privacy_lines:
             print(
                 f"\n{'':<24}{'nearer':>9}{'exact match':>18}{'member':>9}"

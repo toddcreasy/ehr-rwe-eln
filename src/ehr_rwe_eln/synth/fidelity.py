@@ -20,6 +20,11 @@ it), so every column is compared on the same footing.
 
 None of these has a fixed pass mark. Read them against the noise floor: the same report for
 the real holdout against the real training set, two samples of the same population.
+
+A release can match its source overall and still distort a small group, because DP noise is
+the same size for every count. So the spec's subgroup columns (race, sex, age bins) get the
+same reading within each group: its share of the release, its mean column TVD, and its own
+noise floor, which is higher for a small group because two small samples differ more.
 """
 
 import numpy as np
@@ -32,6 +37,10 @@ from ehr_rwe_eln.synth.bayes_net import encode
 from ehr_rwe_eln.synth.spec import Column
 
 WORST_PAIRS = 10
+# Groups smaller than this are left out of subgroup reports, as CMS suppresses any published
+# cell under 11 people; below it a group's measures are mostly noise anyway. A group AUC also
+# needs this many people in each outcome class.
+MIN_GROUP = 11
 
 
 def _tvd(a: np.ndarray, b: np.ndarray, size: int) -> float:
@@ -58,19 +67,110 @@ def _one_hot(codes: np.ndarray, columns: list[Column]) -> np.ndarray:
     return np.hstack([np.eye(c.size)[codes[:, j]] for j, c in enumerate(columns)])
 
 
+def _fit(
+    train: pd.DataFrame, columns: list[Column], target: str
+) -> tuple[LogisticRegression, list[Column]] | None:
+    features = [c for c in columns if c.name != target]
+    y_train = train[target].to_numpy()
+    if len(set(y_train)) < 2:
+        return None
+    model = LogisticRegression(max_iter=2000)
+    model.fit(_one_hot(encode(train, features), features), y_train)
+    return model, features
+
+
+def _auc(
+    fit: tuple[LogisticRegression, list[Column]] | None,
+    test: pd.DataFrame,
+    target: str,
+    min_class: int = 1,
+) -> float | None:
+    y_test = test[target].to_numpy()
+    if fit is None or min((y_test == 0).sum(), (y_test == 1).sum()) < min_class:
+        return None
+    model, features = fit
+    scores = model.predict_proba(_one_hot(encode(test, features), features))[:, 1]
+    return float(roc_auc_score(y_test, scores))
+
+
 def utility_auc(
     train: pd.DataFrame, test: pd.DataFrame, columns: list[Column], target: str
 ) -> float | None:
     """AUC on test of a logistic regression fit on train, predicting target from every other
     column. None when train has only one class (nothing to learn from)."""
-    features = [c for c in columns if c.name != target]
-    y_train, y_test = train[target].to_numpy(), test[target].to_numpy()
-    if len(set(y_train)) < 2:
-        return None
-    model = LogisticRegression(max_iter=2000)
-    model.fit(_one_hot(encode(train, features), features), y_train)
-    scores = model.predict_proba(_one_hot(encode(test, features), features))[:, 1]
-    return float(roc_auc_score(y_test, scores))
+    return _auc(_fit(train, columns, target), test, target)
+
+
+def _group_labels(column: Column) -> list[str]:
+    """One label per code: the categories, or each numeric bin's range, then missing."""
+    if column.numeric is None:
+        return [str(c) for c in column.categories or []]
+    n = column.numeric
+    edges = np.linspace(n.low, n.high, n.bins + 1)
+    top = [edges[i + 1] - 1 if n.integer else edges[i + 1] for i in range(n.bins)]
+    labels = [f"{edges[i]:g} to {top[i]:g}" for i in range(n.bins)]
+    if n.open_top:
+        labels[-1] = f"{edges[-2]:g} or more"
+    return labels + (["missing"] if column.missing_allowed else [])
+
+
+def _column_tvd_mean(real: np.ndarray, synthetic: np.ndarray, columns: list[Column]) -> float:
+    return float(
+        np.mean([_tvd(real[:, j], synthetic[:, j], c.size) for j, c in enumerate(columns)])
+    )
+
+
+def subgroup_report(
+    train: pd.DataFrame,
+    holdout: pd.DataFrame,
+    synthetic: pd.DataFrame,
+    columns: list[Column],
+    by: list[str],
+    target: str | None = None,
+) -> list[dict]:
+    """Fidelity within each group of each column in by, one row per group of at least
+    MIN_GROUP training people:
+
+    - share_ratio: the group's share of the release over its share of the training data (1 is
+      right; 0.7 means the release has 30% too few of them).
+    - column_tvd_mean: mean column TVD between the group's training rows and its release rows,
+      over the other columns. noise_floor: the same between its holdout and training rows.
+      excess: the first minus the second, how far the release is past sampling noise.
+    - tstr_auc, trtr_auc (with a target and a holdout): the utility models, trained on the
+      whole release and on the whole training data, scored on the group's held-out people.
+    """
+    real, held, synth = (encode(t, columns) for t in (train, holdout, synthetic))
+    fits = None
+    if target and len(holdout):
+        fits = (_fit(synthetic, columns, target), _fit(train, columns, target))
+    out = []
+    for name in by:
+        j = next(i for i, c in enumerate(columns) if c.name == name)
+        others = [k for k in range(len(columns)) if k != j]
+        rest = [columns[k] for k in others]
+        for code, label in enumerate(_group_labels(columns[j])):
+            r, h, s = (t[t[:, j] == code][:, others] for t in (real, held, synth))
+            if len(r) < MIN_GROUP:
+                continue
+            tvd = _column_tvd_mean(r, s, rest) if len(s) >= MIN_GROUP else None
+            floor = _column_tvd_mean(r, h, rest) if len(h) >= MIN_GROUP else None
+            row = {
+                "column": name,
+                "group": label,
+                "train_people": len(r),
+                "holdout_people": len(h),
+                "release_people": len(s),
+                "share_ratio": (len(s) / len(synth)) / (len(r) / len(real)),
+                "column_tvd_mean": tvd,
+                "noise_floor": floor,
+                "excess": tvd - floor if tvd is not None and floor is not None else None,
+            }
+            if fits and target:
+                group = holdout[held[:, j] == code]
+                row["tstr_auc"] = _auc(fits[0], group, target, MIN_GROUP)
+                row["trtr_auc"] = _auc(fits[1], group, target, MIN_GROUP)
+            out.append(row)
+    return out
 
 
 def fidelity_report(real: pd.DataFrame, synthetic: pd.DataFrame, columns: list[Column]) -> dict:

@@ -21,6 +21,8 @@ releases:
 holdout_fraction: 0.3
 # The utility test predicts death from the other columns.
 utility_target: deceased
+# Fidelity is also reported within each group of these columns (age by its bins).
+subgroups: [race, ethnicity, sex, age]
 # Training settings for the vae releases; these are the defaults, written out for review.
 vae: {hidden: 128, latent: 16, epochs: 20, batch_size: 512, learning_rate: 0.001, max_grad_norm: 1.0, delta: 0.00001}
 columns:

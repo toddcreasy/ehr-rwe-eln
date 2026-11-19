@@ -255,3 +255,10 @@ def test_split_is_stable_and_near_the_fraction():
 def test_utility_target_must_be_a_flag():
     with pytest.raises(ValidationError, match="must be a 0/1 column"):
         Spec.model_validate({**spec(AGE).model_dump(), "utility_target": "age"})
+
+
+def test_subgroups_must_be_columns():
+    fields = spec(AGE, SEX).model_dump()
+    assert Spec(**{**fields, "subgroups": ["sex", "age"]}).subgroups == ["sex", "age"]
+    with pytest.raises(ValidationError, match="subgroup race is not a column"):
+        Spec(**{**fields, "subgroups": ["race"]})

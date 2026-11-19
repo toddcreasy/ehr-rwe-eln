@@ -31,7 +31,7 @@ Ages are released in ten-year bins, the last one "90 or older," as HIPAA [Safe H
 
 ## Reports
 
-- **Fidelity**: total variation distance (TVD) per column and per pair of columns, read against a noise floor (the same measure between two real samples).
+- **Fidelity**: total variation distance (TVD) per column and per pair of columns, read against a noise floor (the same measure between two real samples). Also within each race, ethnicity, sex, and age group, against that group's own floor.
 - **Utility**: a model trained on the release and tested on held-out real people (TSTR), against one trained on real data.
 - **Trial parity**: the trial emulation module's own analysis on each release, over 20 more draws, counting how often the interval covers the real hazard ratio and how often it shows an effect the real data does not.
 - **Privacy risk**: distance to closest record, a membership inference attack, and attribute inference, each comparing training people with held-out people, against the same attacks on a plain copy of the training data.
@@ -48,13 +48,14 @@ uv run python scripts/evaluate_synth.py
 uv run python scripts/synth_cards.py
 ```
 
-Synthesis takes under a minute and evaluation about a minute. Data cards go to `data/synth/cards/`. The page at http://127.0.0.1:8000/synth/ compares the releases and shows each card (start the app with the same `DB_NAME`).
+Synthesis takes under a minute and evaluation about a minute. Data cards go to `data/synth/cards/`. The page at http://127.0.0.1:8000/synth/ compares the releases and shows each card.
 
 ## Results in brief
 
 From the [methodology](../synthetic_data_methodology.md#5-results):
 
 - The Bayesian network matches single columns at the noise floor from epsilon 1 up. Relationships between columns fall short of it at every epsilon.
+- By subgroup, age is where releases fall short: the VAE has 19 to 28% too few people aged 70 and over and distorts them most. Each data card names any group a release misrepresents.
 - Every release is at chance on every privacy attack; the plain copy of the training data is not, which shows the attacks detect leakage when it exists.
 - On the 26-event trial, DP releases often give confident wrong answers: 55% of draws at epsilon 1 and 20% at epsilon 4 show an effect the real data does not. These releases are fit for building and testing pipelines, not for reporting estimates.
 

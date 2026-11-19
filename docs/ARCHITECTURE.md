@@ -89,6 +89,5 @@ OHDSI's reference tools (ETL-Synthea, [DataQualityDashboard](https://github.com/
 
 ## Known gaps
 
-- **Synthetic data fairness.** Fidelity is not measured by subgroup, and small groups are distorted most. See the [NIST AI RMF mapping](nist_ai_rmf.md#gaps-in-order-of-importance).
 - **Release withdrawal.** There is no process to withdraw a synthetic release or notify its users.
 - **Real data readiness.** What a controlled-access source would add is listed in [NIH and HHS requirements](nih_hhs_requirements.md#gaps-and-fixes).
