@@ -25,22 +25,13 @@ The table is in run order: the cohort pipeline builds the OMOP tables every othe
 
 ## Architecture
 
-<img src="docs/architecture.svg" alt="ehr-rwe-eln architecture. Top: a browser reaches the app container (FastAPI plus a static Next.js frontend), which reads Postgres 18 with pgvector; scripts on the host write to Postgres; a Hail container runs on request. Middle: Synthea output and Athena vocabularies feed the cohort pipeline, which builds the OMOP CDM v5.4 tables. Data quality, target trial emulation, synthetic data, and synthetic genomics read OMOP and write their own schemas and files. The ELN bridge sends free-text entries to Claude on the Anthropic API and writes specimen and measurement rows into OMOP and a FHIR R4 bundle. Bottom: pre-commit, pull requests, GitHub Actions, pytest, and evals." width="100%">
+<a href="https://toddcreasy.github.io/ehr-rwe-eln/architecture.svg"><img src="docs/architecture.svg" alt="ehr-rwe-eln architecture. Top: a browser reaches the app container (FastAPI plus a static Next.js frontend), which reads Postgres 18 with pgvector; scripts on the host write to Postgres; a Hail container runs on request. Middle: Synthea output and Athena vocabularies feed the cohort pipeline, which builds the OMOP CDM v5.4 tables. Data quality, target trial emulation, synthetic data, and synthetic genomics read OMOP and write their own schemas and files. The ELN bridge sends free-text entries to Claude on the Anthropic API and writes specimen and measurement rows into OMOP and a FHIR R4 bundle. Bottom: pre-commit, pull requests, GitHub Actions, pytest, and evals." width="100%"></a>
 
-GitHub shows the diagram as a plain image. Opened in a browser, [`docs/architecture.svg`](docs/architecture.svg) is interactive: hover a box for what it does and why, and click it for its source or docs. [ARCHITECTURE.md](docs/ARCHITECTURE.md) walks through it, with the stack and the known gaps.
+Click the diagram for [the interactive version](https://toddcreasy.github.io/ehr-rwe-eln/architecture.svg): hover a box for what it does and why, and click it for its source or docs. GitHub shows the diagram above as a plain image. [ARCHITECTURE.md](docs/ARCHITECTURE.md) walks through it, with the stack and the known gaps.
 
-## Quick start
+## Install
 
-```bash
-git clone https://github.com/toddcreasy/ehr-rwe-eln.git
-cd ehr-rwe-eln
-cp .env.example .env          # set DB_PASSWORD and ANTHROPIC_API_KEY
-uv sync
-docker compose up -d --wait db
-uv run alembic upgrade head
-```
-
-Building the data needs Java for Synthea and a vocabulary download from [OHDSI Athena](https://athena.ohdsi.org). [INSTALL.md](docs/INSTALL.md) covers every step, from prerequisites to running each module and the app.
+[INSTALL.md](docs/INSTALL.md) has every step, from prerequisites to running each module and the app. You need uv, Docker Desktop, Java for Synthea, an Anthropic API key, and a free vocabulary download from [OHDSI Athena](https://athena.ohdsi.org). A full build takes about an hour.
 
 ## Documentation
 
