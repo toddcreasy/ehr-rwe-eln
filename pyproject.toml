@@ -36,6 +36,13 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.16.10",
 ]
+# The docs site (MkDocs); not needed by the app.
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-include-markdown-plugin>=7.3.2",
+    "mkdocs-material>=9.8.1",
+    "mkdocs-open-in-new-tab>=1.0.8",
+]
 # Synthetic genotypes and GWAS; not needed by the app.
 genomics = [
     "bed-reader>=1.1.0",

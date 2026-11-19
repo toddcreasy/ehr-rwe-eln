@@ -48,7 +48,7 @@ Building the data needs Java for Synthea and a vocabulary download from [OHDSI A
 |---|---|
 | [INSTALL.md](docs/INSTALL.md) | Prerequisites, configuration, building the data, running the modules and the app, troubleshooting |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | The diagram, how data moves, the stack and why, design decisions, known gaps |
-| [Module pages](docs/modules/) | One per module: what it does, how to run it, results |
+| [Module pages](#modules) | One per module: what it does, how to run it, results |
 | [GLOSSARY.md](docs/GLOSSARY.md) | Every acronym, standard, method, and service, defined, with links to their official pages |
 | [ETL-Synthea comparison](docs/etl_synthea_comparison.md) | The cohort pipeline against OHDSI's reference ETL |
 | [DQD comparison](docs/dqd_comparison.md) | The data quality checks against OHDSI's DataQualityDashboard |

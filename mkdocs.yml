@@ -1,0 +1,71 @@
+# The docs site. Preview: uv run --group docs mkdocs serve (http://127.0.0.1:8001).
+# Build: uv run --group docs mkdocs build --strict, into site/.
+site_name: ehr-rwe-eln
+site_description: Real world evidence from synthetic EHR data, linked to lab notebook records
+repo_url: https://github.com/toddcreasy/ehr-rwe-eln
+repo_name: toddcreasy/ehr-rwe-eln
+edit_uri: edit/main/docs/
+docs_dir: docs
+# 8000 is the app's port.
+dev_addr: 127.0.0.1:8001
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle: {icon: material/brightness-7, name: Switch to dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle: {icon: material/brightness-4, name: Switch to light mode}
+
+nav:
+  - Home: index.md
+  - Install and run: INSTALL.md
+  - Architecture: ARCHITECTURE.md
+  - Modules:
+      - Cohort pipeline: modules/cohort.md
+      - Data quality: modules/data_quality.md
+      - Target trial emulation: modules/trial_emulation.md
+      - ELN to EHR bridge: modules/eln.md
+      - Synthetic genomics: modules/genomics.md
+      - Synthetic data: modules/synthetic_data.md
+  - Reference:
+      - Glossary: GLOSSARY.md
+      - ETL-Synthea comparison: etl_synthea_comparison.md
+      - DQD comparison: dqd_comparison.md
+      - Synthetic data methodology: synthetic_data_methodology.md
+      - NIST AI RMF mapping: nist_ai_rmf.md
+      - NIH and HHS requirements: nih_hhs_requirements.md
+      - Build history: SETUP.md
+
+plugins:
+  - search
+  # The home page is the README, so the two never drift apart.
+  - include-markdown
+  # Links to other sites open in a new tab; links within the docs stay in the same one.
+  - open-in-new-tab
+
+hooks:
+  - docs/hooks.py
+# The hook is build code, not a page.
+exclude_docs: |
+  hooks.py
+  __pycache__/
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.highlight

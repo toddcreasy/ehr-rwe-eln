@@ -14,8 +14,9 @@ Terms are defined in the [glossary](GLOSSARY.md). A full build from a fresh clon
 6. [Run the modules](#run-the-modules)
 7. [Run the app](#run-the-app)
 8. [Tests and evals](#tests-and-evals)
-9. [Stop and clean up](#stop-and-clean-up)
-10. [Troubleshooting](#troubleshooting)
+9. [Docs site](#docs-site)
+10. [Stop and clean up](#stop-and-clean-up)
+11. [Troubleshooting](#troubleshooting)
 
 ## Prerequisites
 
@@ -152,6 +153,17 @@ uv run pytest evals    # golden cases against the real model, about 6 minutes, b
 ```
 
 Tests run in their own database, `ehr_rwe_eln_test`, and roll back everything they write. Plain `uv run pytest` never collects `evals/`.
+
+## Docs site
+
+The docs build into a website with navigation, search, and links to other sites that open in a new tab:
+
+```bash
+uv run --group docs mkdocs serve           # http://127.0.0.1:8001, reloads on save
+uv run --group docs mkdocs build --strict  # static site in site/
+```
+
+The `docs` dependency group is not installed by default, so CI and the app image never carry it. The home page is the README itself (`docs/index.md` includes it), and `docs/hooks.py` points its GitHub-relative links at their place on the site.
 
 ## Stop and clean up
 
