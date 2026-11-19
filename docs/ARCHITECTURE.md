@@ -89,5 +89,4 @@ OHDSI's reference tools (ETL-Synthea, [DataQualityDashboard](https://github.com/
 
 ## Known gaps
 
-- **Release withdrawal.** There is no process to withdraw a synthetic release or notify its users.
 - **Real data readiness.** What a controlled-access source would add is listed in [NIH and HHS requirements](nih_hhs_requirements.md#gaps-and-fixes).

@@ -60,13 +60,13 @@ Trustworthy characteristics (MEASURE 2):
 | MANAGE 1: risks prioritized and responded to | Findings become tracked items: give BMI age as a parent (worst pair everywhere), give the trial outcome a confounder as a parent, load location for linkage testing, tune the VAE on a public stand-in. | Prioritization is informal (a TODO list), not a risk register. |
 | MANAGE 2: strategies to maximize benefits and minimize negative impacts | Intended-use limits on every card; warnings where trial parity found spurious effects; a holdout kept out of every release; budgets enforced in code; unsafe configurations refused (unseeded VAE). | None. |
 | MANAGE 3: third-party risks and benefits | Version constraints and lockfile; the accountant switched after a numerical warning; model changes gated by evals. | No scanning or alerting on new dependency advisories. |
-| MANAGE 4: risk treatments, response and recovery, and communication | Data cards and the methodology communicate risk to reviewers. | No process to withdraw a release or notify its users if a flaw is found later; no monitoring after release. |
+| MANAGE 4: risk treatments, response and recovery, and communication | Data cards and the methodology communicate risk to reviewers. Every export is recorded with its recipient and purpose; a withdrawal marks the release, stops further exports, rewrites its card, and drafts a notice for each recipient (methodology section 6). Each evaluation run lists releases whose privacy checks drift past halfway to a copy of the training data. | Notices are drafted, not sent, and no one confirms deletion in the system. Monitoring runs when someone reruns the evaluation, not on a schedule. |
 
 ## Gaps, in order of importance
 
-1. Release withdrawal and notification process (MANAGE 4).
-2. Fairness across intersections of groups, and the VAE's distortion of older people (MEASURE 2).
-3. Location in the source, so the linkage attack reflects real risk (MEASURE 2, privacy-enhanced).
-4. Report history in the database, not only the latest report (MEASURE 3).
+1. Fairness across intersections of groups, and the VAE's distortion of older people (MEASURE 2).
+2. Location in the source, so the linkage attack reflects real risk (MEASURE 2, privacy-enhanced).
+3. Report history in the database, not only the latest report (MEASURE 3).
+4. Scheduled re-evaluation of released data, and confirmed deletion after a withdrawal (MANAGE 4).
 5. Outside review by a DAC or red team (GOVERN 5), and separated roles (GOVERN 2), for any use beyond this project.
 6. A written policy for choosing epsilon on real data (GOVERN 1) and dependency advisory scanning (GOVERN 6, MANAGE 3).
