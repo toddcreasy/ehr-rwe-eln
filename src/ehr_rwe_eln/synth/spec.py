@@ -112,6 +112,20 @@ class VaeSettings(Strict):
 class Spec(Strict):
     name: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     description: str
+    # Where the source comes from, stated by every spec so no guard can be skipped by omission.
+    # synthetic: generated data with no participants (Synthea, here). controlled: a
+    # controlled-access source such as a dbGaP study, used under a data access request; then
+    # seeds are refused, the privacy attacks need attack_approval, and exports need the
+    # recipient to be an approved user (docs/nih_hhs_requirements.md, items 2 and 7).
+    source_access: Literal["synthetic", "controlled"]
+    # Where the data access request approves the privacy attacks, which on a real source are in
+    # method attempts to identify participants. Without it they do not run on controlled data.
+    attack_approval: str | None = None
+    # The users and teams named in the data access request. A release from controlled data is
+    # derived data and goes only to them, unless dac_sharing_approval cites the DAC decision
+    # that allows wider sharing.
+    approved_users: list[str] = []
+    dac_sharing_approval: str | None = None
     # The source's data use limitations: the consent-based terms that say what its data may be
     # used for (dbGaP's "general research use", "disease-specific", and so on). A synthetic
     # release is derived data and inherits them, so they are required and printed on every
@@ -164,7 +178,27 @@ class Spec(Strict):
         for name in self.subgroups:
             if name not in seen:
                 raise ValueError(f"subgroup {name} is not a column")
+        if self.source_access == "controlled":
+            if self.seed is not None:
+                raise ValueError("a controlled source needs secure noise: leave seed unset")
+            if not self.approved_users and self.dac_sharing_approval is None:
+                raise ValueError(
+                    "a controlled source needs approved_users from the data access request,"
+                    " or a dac_sharing_approval"
+                )
         return self
+
+    @property
+    def attacks_allowed(self) -> bool:
+        return self.source_access == "synthetic" or bool(self.attack_approval)
+
+    def may_receive(self, recipient: str) -> bool:
+        """Whether a release from this spec may go to recipient (item 7)."""
+        return (
+            self.source_access == "synthetic"
+            or self.dac_sharing_approval is not None
+            or recipient in self.approved_users
+        )
 
 
 def load_spec(path: Path) -> Spec:

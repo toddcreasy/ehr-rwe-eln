@@ -118,9 +118,19 @@ def signed_percent(value: float) -> str:
     return f"{round(value, 3) + 0.0:+.1%}"  # + 0.0 turns -0.0 into 0.0
 
 
+class AttacksNotApproved(Exception):
+    pass
+
+
 def privacy_report(
     train: pd.DataFrame, holdout: pd.DataFrame, synthetic: pd.DataFrame, spec: Spec, seed: int = 0
 ) -> dict:
+    # On a controlled source these attacks are attempts to identify participants, which the
+    # Data Use Certification forbids unless the data access request approved them.
+    if not spec.attacks_allowed:
+        raise AttacksNotApproved(
+            f"{spec.name}: privacy attacks on a controlled source need attack_approval"
+        )
     rng = np.random.default_rng(seed)
     members, non_members = encode(train, spec.columns), encode(holdout, spec.columns)
     synthetic_codes = encode(synthetic, spec.columns)

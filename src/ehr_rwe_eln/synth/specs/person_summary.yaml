@@ -4,6 +4,9 @@ description: >-
   recorded, and the latest of four measurements. The OMOP build stands in for a controlled-access
   source. Bounds are clinical ranges, not read from the data; values outside them are clamped into
   the end bins. Synthetic Synthea data only; no clinical claims.
+# Synthea output, no participants. A controlled-access source says controlled here, and
+# must then give approved_users (and attack_approval to run the privacy attacks).
+source_access: synthetic
 data_use_limitations: >-
   None. The source is Synthea output with no participants, so there is no consent and no
   data use limitation. A spec over a controlled-access source copies its data use limitations

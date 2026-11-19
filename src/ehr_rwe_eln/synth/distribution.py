@@ -1,10 +1,12 @@
 """Exporting synthetic releases, withdrawing them, and watching them after release.
 
-A release that leaves the database is recorded with who received it and why. If a flaw turns
-up later (a privacy attack that now succeeds, a misrepresented group, a bug in the
-synthesizer), the release is withdrawn: it is marked in the database with the reason, can no
-longer be exported, its data card says not to use it, and a notice is drafted for everyone who
-received it. Notices are drafted, never sent: a person reviews and sends them.
+A release that leaves the database is recorded with who received it and why. A release from
+controlled-access data goes only to the approved users its spec names, unless the spec cites
+a DAC decision allowing wider sharing. If a flaw turns up later (a privacy attack that now
+succeeds, a misrepresented group, a bug in the synthesizer), the release is withdrawn: it is
+marked in the database with the reason, can no longer be exported, its data card says not to
+use it, and a notice is drafted for everyone who received it. Notices are drafted, never
+sent: a person reviews and sends them.
 
 After release, scripts/evaluate_synth.py rescores every release, and privacy_flags names any
 whose privacy attacks have moved more than halfway from chance toward what a plain copy of the
@@ -16,10 +18,11 @@ from datetime import UTC, datetime
 import psycopg
 
 from ehr_rwe_eln.synth.release import code_version
+from ehr_rwe_eln.synth.spec import Spec
 
 # Withdrawal and export need these; the rest of the release record is not needed here.
 RELEASE_SQL = """
-SELECT release_id, spec_name, method, epsilon, created_at, withdrawn_at, withdrawn_reason
+SELECT release_id, spec_name, method, epsilon, created_at, withdrawn_at, withdrawn_reason, spec
 FROM synth.release WHERE release_id = %s
 """
 
@@ -38,10 +41,16 @@ def _release(con: psycopg.Connection, release_id: int) -> tuple:
 def record_export(
     con: psycopg.Connection, release_id: int, recipient: str, contact: str, purpose: str, path: str
 ) -> int:
-    """Record that a release went to a recipient. Refuses a withdrawn release."""
+    """Record that a release went to a recipient. Refuses a withdrawn release, and a release
+    from controlled data to anyone the data access request does not name."""
     found = _release(con, release_id)
     if found[5] is not None:
         raise ReleaseUnavailable(f"release {release_id} was withdrawn on {found[5]:%Y-%m-%d}")
+    if not Spec.model_validate(found[7]).may_receive(recipient):
+        raise ReleaseUnavailable(
+            f"release {release_id} is derived from controlled data; {recipient} is not an approved"
+            " user in its spec, and no DAC decision allows wider sharing"
+        )
     return con.execute(
         "INSERT INTO synth.distribution (release_id, recipient, contact, purpose, path,"
         " exported_at, code_version) VALUES (%s, %s, %s, %s, %s, %s, %s)"

@@ -89,4 +89,4 @@ OHDSI's reference tools (ETL-Synthea, [DataQualityDashboard](https://github.com/
 
 ## Known gaps
 
-- **Real data readiness.** What a controlled-access source would add is listed in [NIH and HHS requirements](nih_hhs_requirements.md#gaps-and-fixes).
+- **Real data readiness.** The code refuses the risky steps on a controlled-access source until the approvals exist (privacy attacks, sharing beyond approved users, seeded noise). What remains is an institutionally attested environment under NIST SP 800-171, which a local single-user stack cannot provide. See [NIH and HHS requirements](nih_hhs_requirements.md#gaps-and-fixes).
