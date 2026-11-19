@@ -341,6 +341,14 @@ Ensembl's Variant Effect Predictor gives what a variant does to each transcript:
 
 Nonsense-mediated decay: a cell destroys an mRNA with a premature stop codon, unless the stop falls in the last exon (or near its end). A truncation that triggers NMD makes no protein, which is why PVS1 depends on where the stop is.
 
+### HPO
+
+The Human Phenotype Ontology: about 20,000 terms for clinical findings ("Breast carcinoma", "Intestinal polyp"), each linked to broader ones above it, and a file of which terms each gene's diseases show. Used to compare a person's conditions with what each gene causes. Free to use under its own license: cite it, show the release, never change its files. [HPO](https://hpo.jax.org), [Köhler et al. 2014](https://doi.org/10.1093/nar/gkt1026)
+
+### Information content and Resnik similarity
+
+How telling an HPO term is: minus the log of the share of genes annotated with it or anything under it. A term every gene has scores 0. Two terms are as similar as their most informative shared ancestor (Resnik): breast carcinoma and colon cancer share "Neoplasm", which says less than either. A person's score for a gene averages, over the person's terms, the best match to any of the gene's terms. [Resnik 1995](https://arxiv.org/abs/cmp-lg/9511007), [Köhler et al. 2009](https://doi.org/10.1016/j.ajhg.2009.09.003)
+
 ### VCF
 
 Variant call format: the standard text file of genotypes, one line per variant and one column per sample. [VCF 4.2 specification](https://samtools.github.io/hts-specs/VCFv4.2.pdf)
