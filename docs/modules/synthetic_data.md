@@ -46,7 +46,13 @@ uv run python scripts/synthesize.py
 uv run python scripts/synthesize.py --spec $SPEC
 uv run python scripts/evaluate_synth.py
 uv run python scripts/synth_cards.py
+
+# Hand a release to someone, and withdraw one later
+uv run python scripts/export_release.py --release 3 --recipient "Pipeline team" --contact team@example.org --purpose "testing the cohort pipeline"
+uv run python scripts/withdraw_release.py --release 3 --reason "what is wrong with it"
 ```
+
+Exports go to `data/synth/exports/` with the release's data card, and each is recorded with its recipient. A withdrawal marks the release, stops further exports, rewrites its card, and drafts a notice per recipient in `data/synth/withdrawals/` for you to send. Each evaluation run lists any release whose privacy checks have drifted toward leakage.
 
 Synthesis takes under a minute and evaluation about a minute. Data cards go to `data/synth/cards/`. The page at http://127.0.0.1:8000/synth/ compares the releases and shows each card.
 

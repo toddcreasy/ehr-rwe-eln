@@ -227,9 +227,19 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
     spurious = trial["repeated"]["spurious_effect"] if trial else None
     subgroups = reports.get("fidelity", {}).get("subgroups") or []
     misrepresented = _misrepresented(subgroups)
+    withdrawn = release.get("withdrawn_at")
     lines = [
         f"# Data card: synthetic release {release['release_id']}",
         "",
+        *(
+            [
+                f"**Withdrawn {withdrawn:%Y-%m-%d}: {release['withdrawn_reason']}** Do not use"
+                " this release. Delete every copy, and recheck any result computed from it.",
+                "",
+            ]
+            if withdrawn
+            else []
+        ),
         f"**{spec.name}**, made {release['created_at']:%Y-%m-%d} from database"
         f" `{release['source_database']}` at code version `{release['code_version']}`.",
         "",

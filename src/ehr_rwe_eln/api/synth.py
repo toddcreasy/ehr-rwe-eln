@@ -13,7 +13,7 @@ router = APIRouter(prefix="/synth")
 # null when its report was not made (no holdout, no trial, or not evaluated yet).
 RELEASES_SQL = """
 SELECT r.release_id, r.created_at, r.spec_name, r.method, r.epsilon, r.rows,
-       r.source_rows, r.holdout_rows,
+       r.source_rows, r.holdout_rows, r.withdrawn_at,
        (f.report -> 'summary' ->> 'column_tvd_mean')::float AS column_tvd_mean,
        (f.report -> 'summary' ->> 'pair_tvd_mean')::float AS pair_tvd_mean,
        (f.report -> 'noise_floor' ->> 'pair_tvd_mean')::float AS pair_tvd_floor,
@@ -31,7 +31,8 @@ LEFT JOIN synth.report t ON t.release_id = r.release_id AND t.kind = 'trial'
 # The columns render_card reads; the release's rows stay in synth.row.
 RELEASE_SQL = """
 SELECT release_id, created_at, spec_name, method, epsilon, seed, spec, measurements,
-       source_database, source_rows, holdout_rows, rows, code_version
+       source_database, source_rows, holdout_rows, rows, code_version, withdrawn_at,
+       withdrawn_reason
 FROM synth.release WHERE release_id = %s
 """
 

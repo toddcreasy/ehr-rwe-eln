@@ -151,6 +151,10 @@ The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.26) fo
 - Each release's data card states its intended use and, for trial tables, the measured rate of spurious effects at its setting, and names any subgroup whose share of the release is off by more than 20%. Do not study people 70 and over in the VAE releases.
 - For a real source, choose epsilon before looking at results, leave seeds unset, and treat the evaluation reports as internal.
 
+**Export and withdrawal.** A release leaves the database only through `scripts/export_release.py`, which writes its rows with its data card and records who received it, how to reach them, and why (`synth.distribution`). If a flaw turns up later, `scripts/withdraw_release.py` marks the release withdrawn with the reason. A withdrawn release keeps its record and reports for review, can no longer be exported, and its card opens with the withdrawal and an instruction to delete every copy. A draft notice is written for each recipient; nothing is sent automatically, so a person reviews and sends them.
+
+**After release.** Each run of `scripts/evaluate_synth.py` rescores every release and lists for review any whose membership inference AUC or nearer-a-member share has moved more than halfway from chance (0.5) toward what a plain copy of the training data shows (0.650 and 62.9% on the person summary, so 0.575 and 56.5%). That is a trigger to investigate and possibly withdraw, not proof of a leak. No current release is flagged.
+
 ## 7. Limitations
 
 - Synthea output is cleaner and more regular than real records. Fidelity and attack results on real data will differ.
@@ -169,6 +173,10 @@ uv run python scripts/synthesize.py
 uv run python scripts/synthesize.py --spec src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
 uv run python scripts/evaluate_synth.py
 uv run python scripts/synth_cards.py
+
+# Hand a release to someone, and withdraw one
+uv run python scripts/export_release.py --release 3 --recipient "Pipeline team" --contact team@example.org --purpose "testing the cohort pipeline"
+uv run python scripts/withdraw_release.py --release 3 --reason "what is wrong with it"
 ```
 
 Each release in `synth.release` records the spec as run, every mechanism's privacy spend, the source database, the training and holdout counts, the seed, and the git version of the code. Each report in `synth.report` records its own code version. The data cards in `data/synth/cards/` are rendered from those two tables only.

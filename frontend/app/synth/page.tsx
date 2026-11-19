@@ -12,6 +12,7 @@ type Release = {
   rows: number;
   source_rows: number;
   holdout_rows: number | null;
+  withdrawn_at: string | null;
   column_tvd_mean: number | null;
   pair_tvd_mean: number | null;
   pair_tvd_floor: number | null;
@@ -128,7 +129,10 @@ function ReleaseTable({ releases, selected, onSelect }: { releases: Release[]; s
               className={`${row} cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${selected === r.release_id ? "bg-zinc-100 dark:bg-zinc-900" : ""}`}
             >
               <td className="py-1 pr-4">{r.release_id}</td>
-              <td className="py-1 pr-4">{METHODS[r.method] ?? r.method}</td>
+              <td className="py-1 pr-4">
+                {METHODS[r.method] ?? r.method}
+                {r.withdrawn_at && <span className="ml-2 rounded bg-red-100 px-1 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-300">withdrawn</span>}
+              </td>
               <td className={td}>{r.epsilon}</td>
               <td className={td}>{fmt(r.rows)}</td>
               <td className={td}>{num(r.column_tvd_mean)}</td>
