@@ -18,7 +18,7 @@ Everything runs on one machine in [Docker Compose](https://docs.docker.com/compo
 | [Data quality](docs/modules/data_quality.md) | All 2,384 OHDSI [DataQualityDashboard](https://github.com/OHDSI/DataQualityDashboard) checks, scored, with a dashboard | [Identical to DQD](docs/dqd_comparison.md) on every check; 99.41% pass |
 | [Target trial emulation](docs/modules/trial_emulation.md) | Trial protocols in YAML; propensity weighting, survival, a bias report | Weighted hazard ratios with negative controls; says "not estimable" when arms don't overlap |
 | [ELN to EHR bridge](docs/modules/eln.md) | Claude extracts samples and results from notebook text into OMOP and [FHIR R4](https://hl7.org/fhir/R4/) | Precision and recall 1.000 on 300 entries; resists prompt injection |
-| [Synthetic genomics](docs/modules/genomics.md) | A [dbGaP](https://www.ncbi.nlm.nih.gov/gap/)-style genotype study with a planted effect, and a GWAS | Finds the planted effect; calibrated across 16 rebuilt studies |
+| [Synthetic genomics](docs/modules/genomics.md) | A [dbGaP](https://www.ncbi.nlm.nih.gov/gap/)-style genotype study with a planted effect, and a GWAS; a clinical panel of real ClinVar variants at their GRCh38 positions | Finds the planted effect; calibrated across 16 rebuilt studies |
 | [Synthetic data](docs/modules/synthetic_data.md) | Differentially private releases with fidelity, privacy, and trial parity reports | Every release at chance on every privacy attack; [methodology](docs/synthetic_data_methodology.md) |
 
 The table is in run order: the cohort pipeline builds the OMOP tables every other module reads, and the rest follow.

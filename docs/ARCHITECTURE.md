@@ -69,7 +69,7 @@ Both are scored by evals in `evals/` against the real model. They are slow and b
 | Agent framework | Anthropic Python SDK tool runner | Runs the tool loop and returns typed output with no extra framework |
 | Causal inference and survival | [scikit-learn](https://scikit-learn.org), [statsmodels](https://www.statsmodels.org), [lifelines](https://lifelines.readthedocs.io) | Propensity scores, Cox models, Kaplan-Meier |
 | Differential privacy | [diffprivlib](https://github.com/IBM/differential-privacy-library), [Opacus](https://opacus.ai) | Noisy histograms with a budget accountant; DP-SGD for the autoencoder |
-| Genomics | [msprime](https://tskit.dev/msprime/), [Hail](https://hail.is) | Coalescent simulation; Hail as the cross-check for the GWAS |
+| Genomics | [msprime](https://tskit.dev/msprime/), [Hail](https://hail.is), [ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/), [gnomAD](https://gnomad.broadinstitute.org) | Coalescent simulation; Hail as the cross-check for the GWAS; real variants and their population frequencies for the clinical panel |
 | Interoperability | `fhir.resources` | [FHIR R4](https://hl7.org/fhir/R4/) models in Python, no FHIR server needed at this scale |
 | API | FastAPI + Pydantic | Typed requests and responses |
 | Frontend | Next.js, React, Tailwind, static export | Builds to plain files FastAPI can serve |

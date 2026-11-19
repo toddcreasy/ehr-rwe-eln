@@ -18,7 +18,7 @@ Real world evidence from synthetic EHR data, linked to lab notebook records. Six
 | 2. ELN to EHR bridge | `ehr_rwe_eln.eln` | LLM extraction of samples, assays, biomarkers, and results from ELN entries into typed models, then OMOP `specimen` and `measurement` rows plus FHIR `Specimen` and `Observation` resources |
 | 4. Target trial emulation toolkit | `ehr_rwe_eln.tte` | Protocol spec in YAML (eligibility, strategies, time zero, outcomes) to cohort SQL, propensity score analysis, survival estimates, and a bias diagnostics report |
 | 7. RWE data quality dashboard | `ehr_rwe_eln.dq` | Conformance, completeness, and plausibility checks (Kahn framework) over the OMOP tables, scored and shown in the frontend |
-| Synthetic genomics | `ehr_rwe_eln.genomics` | A dbGaP-style genotyping study simulated with msprime for OMOP persons (VCF, PLINK, phenotype and sample tables), a planted genetic effect, and a GWAS checked against it |
+| Synthetic genomics | `ehr_rwe_eln.genomics` | A dbGaP-style genotyping study simulated with msprime for OMOP persons (VCF, PLINK, phenotype and sample tables), a planted genetic effect, and a GWAS checked against it; a clinical panel of real ClinVar variants at their GRCh38 positions, planted in the same synthetic people |
 | Synthetic data | `ehr_rwe_eln.synth` | Differentially private synthetic releases of the OMOP data (statistical and generative synthesizers), with fidelity, utility, and privacy risk reports and a provenance record per release |
 
 Build order after the platform: 1, then 7, then 4, then 2. Each module depends on the OMOP tables from module 1.
@@ -42,6 +42,10 @@ Decided 2026-10-12: PostgreSQL with pgvector replaces both DuckDB and Aurora (17
 Data rules:
 - Synthetic or openly licensed de-identified data only: Synthea output, the MIMIC-IV demo, and synthetic ELN entries generated in this repo. No real patient data, ever.
 - OMOP vocabularies come from OHDSI Athena under their own licenses. Never commit vocabulary files or patient-level data; `data/` is gitignored.
+- Public reference data is allowed: summary-level knowledge about variants and phenotypes, never individual-level data. Kept in `data/reference/`, never committed, each release named so a run can be repeated:
+  - ClinVar (NCBI; no restrictions on use), from the dated GRCh38 VCF, checked against NCBI's md5.
+  - gnomAD (CC0). Attribute it ("includes data from the gnomAD v4 release"), never attempt to reidentify participants, never put "gnomAD" in a tool's name, and skip its SpliceAI annotations (non-commercial license). The API allows about 10 requests a minute; cache every answer.
+  - HPO: add its license here before using it.
 - Every LLM extraction is validated against a typed Pydantic model and scored against a labeled set in `evals/`.
 - Outputs are for research and demonstration. No clinical decision claims in code, docs, or UI.
 
