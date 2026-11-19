@@ -41,29 +41,29 @@ def test_bands_respect_their_bounds_and_count_absence_as_rare():
 
 def test_apc_pm2_depends_on_the_allele_count():
     apc = RULES.genes["APC"]
-    assert labels(assess(apc, freq(af=0.000004, ac=1), None, [])) == ["PM2_Supporting"]
-    assert labels(assess(apc, freq(af=0.000004, ac=6), None, [])) == []
-    assert labels(assess(apc, freq(af=0.000003, ac=5), None, [])) == ["PM2_Supporting"]
+    assert labels(assess("APC", apc, freq(af=0.000004, ac=1), None, [])) == ["PM2_Supporting"]
+    assert labels(assess("APC", apc, freq(af=0.000004, ac=6), None, [])) == []
+    assert labels(assess("APC", apc, freq(af=0.000003, ac=5), None, [])) == ["PM2_Supporting"]
 
 
 def test_brca_frequency_criteria_follow_enigma():
     brca1 = RULES.genes["BRCA1"]
-    assert assess(brca1, freq(faf=0.0011), None, [])["classification"] == "Benign"
-    at_ba1 = assess(brca1, freq(faf=0.001), None, [])  # BA1 needs more than 0.1%
+    assert assess("BRCA1", brca1, freq(faf=0.0011), None, [])["classification"] == "Benign"
+    at_ba1 = assess("BRCA1", brca1, freq(faf=0.001), None, [])  # BA1 needs more than 0.1%
     assert labels(at_ba1) == ["BS1"] and at_ba1["points"] == -4
-    assert labels(assess(brca1, freq(faf=0.00005), None, [])) == ["BS1_Supporting"]
-    assert labels(assess(brca1, None, None, [])) == ["PM2_Supporting"]
-    assert labels(assess(brca1, freq(faf=None, af=0.000001, ac=1), None, [])) == []
+    assert labels(assess("BRCA1", brca1, freq(faf=0.00005), None, [])) == ["BS1_Supporting"]
+    assert labels(assess("BRCA1", brca1, None, None, [])) == ["PM2_Supporting"]
+    assert labels(assess("BRCA1", brca1, freq(faf=None, af=0.000001, ac=1), None, [])) == []
 
 
 def test_ldlr_pm2_is_moderate_on_the_grpmax_frequency():
     ldlr = RULES.genes["LDLR"]
-    assert labels(assess(ldlr, freq(grpmax_af=0.0002), None, [])) == ["PM2"]
-    assert labels(assess(ldlr, freq(grpmax_af=0.00021), None, [])) == []
+    assert labels(assess("LDLR", ldlr, freq(grpmax_af=0.0002), None, [])) == ["PM2"]
+    assert labels(assess("LDLR", ldlr, freq(grpmax_af=0.00021), None, [])) == []
 
 
 def test_ba1_stands_alone_without_bs1():
-    result = assess(RULES.genes["LDLR"], freq(faf=0.3, af=0.3, grpmax_af=0.4), None, [])
+    result = assess("LDLR", RULES.genes["LDLR"], freq(faf=0.3, af=0.3, grpmax_af=0.4), None, [])
     assert labels(result) == ["BA1"] and result["points"] is None
 
 
@@ -76,37 +76,85 @@ def test_ptc_codon_reads_nonsense_and_frameshift_names():
 def test_mlh1_pvs1_follows_the_codon_cut_offs():
     mlh1 = RULES.genes["MLH1"]
     stop = lambda codon: vep("stop_gained", f"p.Arg{codon}Ter", exon="19/19")  # noqa: E731
-    assert labels(assess(mlh1, freq(), stop(753), [])) == ["PVS1"]  # even in the last exon
-    assert labels(assess(mlh1, freq(), stop(755), [])) == ["PVS1_Moderate"]
-    past = assess(mlh1, freq(), stop(757), [])
+    assert labels(assess("MLH1", mlh1, freq(), stop(753), [])) == ["PVS1"]  # even in the last exon
+    assert labels(assess("MLH1", mlh1, freq(), stop(755), [])) == ["PVS1_Moderate"]
+    past = assess("MLH1", mlh1, freq(), stop(757), [])
     assert (
         labels(past) == [] and "past the panel's PVS1 cut-offs" in past["not_assessed"][0]["reason"]
     )
     shifted = vep("frameshift_variant", "p.Gly700AlafsTer60")  # stops at codon 759
-    assert labels(assess(mlh1, freq(), shifted, [])) == []
+    assert labels(assess("MLH1", mlh1, freq(), shifted, [])) == []
 
 
 def test_generic_pvs1_leaves_last_exon_truncations_to_the_curator():
-    brca2 = RULES.genes["BRCA2"]
-    early = assess(brca2, None, vep("stop_gained", "p.Glu13Ter", exon="2/27"), [])
-    assert (
-        labels(early) == ["PM2_Supporting", "PVS1"]
-        and early["classification"] == "Likely pathogenic"
-    )
-    late = assess(brca2, None, vep("stop_gained", "p.Lys3326Ter", exon="27/27"), [])
-    assert labels(late) == ["PM2_Supporting"]
+    ldlr = RULES.genes["LDLR"]
+    early = assess("LDLR", ldlr, None, vep("stop_gained", "p.Glu13Ter", exon="2/18"), [])
+    assert labels(early) == ["PM2", "PVS1"] and early["classification"] == "Pathogenic"
+    late = assess("LDLR", ldlr, None, vep("stop_gained", "p.Lys830Ter", exon="18/18"), [])
+    assert labels(late) == ["PM2"]
     assert "last exon" in late["not_assessed"][0]["reason"]
+    assert not late["not_assessed"][0]["decided"]  # left to the curator, not ruled out
 
 
 def test_splice_pvs1_depends_on_the_skipped_exon_keeping_the_frame():
-    brca1, lengths = RULES.genes["BRCA1"], [90, 100, 99, 120, 80]
+    ldlr, lengths = RULES.genes["LDLR"], [90, 100, 99, 120, 80]
     donor = vep("splice_donor_variant", intron="2/4", exon=None, hgvsc="c.200+1G>A")
     acceptor = vep("splice_acceptor_variant", intron="2/4", exon=None, hgvsc="c.201-1G>A")
-    assert labels(assess(brca1, freq(), donor, lengths)) == ["PVS1"]  # skips exon 2, 100 nt
-    in_frame = assess(brca1, freq(), acceptor, lengths)  # skips exon 3, 99 nt
+    assert labels(assess("LDLR", ldlr, freq(), donor, lengths)) == ["PVS1"]  # exon 2, 100 nt
+    in_frame = assess("LDLR", ldlr, freq(), acceptor, lengths)  # skips exon 3, 99 nt
     assert labels(in_frame) == [] and "keeps the frame" in in_frame["not_assessed"][0]["reason"]
     first = vep("splice_donor_variant", intron="1/4", exon=None)
-    assert "first or last" in assess(brca1, freq(), first, lengths)["not_assessed"][0]["reason"]
+    reason = assess("LDLR", ldlr, freq(), first, lengths)["not_assessed"][0]["reason"]
+    assert "first or last" in reason
+
+
+def test_enigma_table_sets_pvs1_and_pm5_by_exon():
+    brca1, brca2 = RULES.genes["BRCA1"], RULES.genes["BRCA2"]
+    early = assess("BRCA2", brca2, None, vep("stop_gained", "p.Glu13Ter", exon="2/27"), [])
+    assert labels(early) == ["PM2_Supporting", "PM5_Strong", "PVS1"]
+    assert early["classification"] == "Pathogenic"  # 8 + 4 + 1
+    # BRCA1 exon 9: the natural isoform skipping exons 8 and 9 rescues function.
+    rescued = assess(
+        "BRCA1", brca1, None, vep("frameshift_variant", "p.Thr208AsnfsTer29", exon="9/23"), []
+    )
+    assert labels(rescued) == ["PM2_Supporting"]
+    assert (
+        rescued["not_assessed"][0]["decided"] and "PVS1_N/A" in rescued["not_assessed"][0]["reason"]
+    )
+    # The last exon is split by the premature stop's codon: before 3310 counts, after not.
+    last = lambda hgvsp: assess("BRCA2", brca2, None, vep("stop_gained", hgvsp, exon="27/27"), [])  # noqa: E731
+    assert "PVS1" in labels(last("p.Glu3309Ter"))
+    assert "PVS1" not in labels(last("p.Lys3326Ter"))
+
+
+def test_enigma_table_sets_splice_sites_by_the_exact_change():
+    brca1, brca2 = RULES.genes["BRCA1"], RULES.genes["BRCA2"]
+    splice = lambda hgvsc: vep("splice_donor_variant", intron="5/22", exon=None, hgvsc=hgvsc)  # noqa: E731
+    small = assess("BRCA1", brca1, freq(), splice("c.301+1G>T"), [])
+    assert labels(small) == ["PVS1_Supporting"] and "Small in-frame" in small["met"][0]["reason"]
+    rescued = assess("BRCA2", brca2, freq(), splice("c.425+1G>A"), [])
+    assert labels(rescued) == [] and rescued["not_assessed"][0]["decided"]
+    deleted = assess("BRCA1", brca1, freq(), splice("c.302-2del"), [])
+    assert labels(deleted) == ["PVS1"] and "one-base deletion" in deleted["met"][0]["reason"]
+    assert labels(assess("BRCA1", brca1, freq(), splice("c.301+1del"), [])) == ["PVS1_Supporting"]
+    # At c.4097-1 the table gives some substitutions very strong and others supporting.
+    disputed = assess("BRCA1", brca1, freq(), splice("c.4097-1del"), [])
+    assert labels(disputed) == [] and not disputed["not_assessed"][0]["decided"]
+    unlisted = assess("BRCA1", brca1, freq(), splice("c.999+5G>A"), [])
+    assert labels(unlisted) == [] and not unlisted["not_assessed"][0]["decided"]
+
+
+def test_apc_pvs1_counts_truncations_by_codon_not_exon():
+    apc = RULES.genes["APC"]
+    stop = lambda hgvsp, exon: assess("APC", apc, freq(), vep("stop_gained", hgvsp, exon=exon), [])  # noqa: E731
+    assert labels(stop("p.Gln433Ter", "10/16")) == ["PVS1"]
+    assert labels(stop("p.Gln1935SerfsTer35", "16/16")) == ["PVS1"]  # last exon still counts
+    early = stop("p.Gln12AlafsTer3", "2/16")
+    assert labels(early) == [] and early["not_assessed"][0]["decided"]
+    assert labels(stop("p.Tyr2646Ter", "16/16")) == []
+    splice = vep("splice_donor_variant", intron="3/15", exon=None, hgvsc="c.220+1G>A")
+    result = assess("APC", apc, freq(), splice, [90, 100, 99])
+    assert labels(result) == [] and "for the curator" in result["not_assessed"][0]["reason"]
 
 
 def test_points_map_to_classes_at_every_boundary():
@@ -249,4 +297,4 @@ def test_a_run_is_stored_with_its_sources(pg, dq_schema):
         " JOIN curation.run r USING (run_id) WHERE run_id = %s",
         [run_id],
     ).fetchone()
-    assert row == ("Likely pathogenic", "Pathogenic", "116")
+    assert row == ("Pathogenic", "Pathogenic", "116")  # PVS1, PM5_Strong, PM2_Supporting

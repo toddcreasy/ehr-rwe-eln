@@ -47,7 +47,7 @@ Data rules:
   - ClinVar (NCBI; no restrictions on use), from the dated GRCh38 VCF, checked against NCBI's md5.
   - gnomAD (CC0). Attribute it ("includes data from the gnomAD v4 release"), never attempt to reidentify participants, never put "gnomAD" in a tool's name, and skip its SpliceAI annotations (non-commercial license). The API allows about 10 requests a minute; cache every answer.
   - Ensembl VEP and lookup (no restrictions on use), cached per Ensembl release.
-  - ClinGen expert panel thresholds, transcribed into `curation/rules.yaml` with each panel's CSpec ID and version.
+  - ClinGen curated content (CC0 1.0; attribute ClinGen with the date accessed): expert panel thresholds, transcribed into `curation/rules.yaml` with each panel's CSpec ID and version; ENIGMA's PVS1 table, generated into `curation/enigma_pvs1.yaml` by `scripts/import_enigma_pvs1.py`.
   - HPO: add its license here before using it.
 - Every LLM extraction is validated against a typed Pydantic model and scored against a labeled set in `evals/`.
 - Outputs are for research and demonstration. No clinical decision claims in code, docs, or UI.
