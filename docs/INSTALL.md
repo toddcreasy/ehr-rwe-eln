@@ -112,6 +112,7 @@ uv run python scripts/generate_panel.py   # clinical panel: downloads ClinVar (2
 uv run python scripts/curate_variants.py --set panel   # the panel's 48 variants
 uv run python scripts/curate_variants.py --set eval    # scored against ClinVar expert panels
 uv run python scripts/curate_variants.py --set erepo   # criterion by criterion, ClinGen Evidence Repository
+uv run python scripts/curate_literature.py --dry-run   # literature retrieval and token count; drop --dry-run to call Claude
 
 # Synthetic data
 export SPEC=src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml

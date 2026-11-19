@@ -321,6 +321,10 @@ A ClinGen Variant Curation Expert Panel adapts the ACMG/AMP criteria to its gene
 
 ClinGen's public record of expert panel curations: for each variant, the classification and every ACMG/AMP criterion the panel applied or rejected, with the papers cited. Curation is scored against it criterion by criterion. [ClinGen ERepo](https://erepo.clinicalgenome.org)
 
+### LitVar2 and PubTator3
+
+NCBI services that find variants in the literature. LitVar2 knows the many ways a variant is written (c.5096G>A, p.Arg1699Gln, R1699Q, rs41293459) and lists the papers that mention it. PubTator3 gives a paper's text with genes and variants marked: full text for open-access PMC articles, the abstract otherwise. [LitVar2](https://www.ncbi.nlm.nih.gov/research/litvar2/), [PubTator3](https://www.ncbi.nlm.nih.gov/research/pubtator3/)
+
 ### Bayesian points
 
 A way to combine ACMG/AMP criteria by adding points: supporting 1, moderate 2, strong 4, very strong 8, benign evidence negative. 10 or more is pathogenic, 6 to 9 likely pathogenic, 0 to 5 uncertain significance (VUS), -1 to -6 likely benign, -7 or less benign. [Tavtigian et al. 2020](https://doi.org/10.1002/humu.24088)
