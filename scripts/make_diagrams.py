@@ -87,7 +87,9 @@ def arrow(points, label="", lx=None, ly=None, anchor="start"):
     return out + "</g>"
 
 
-W, H = 1240, 920
+W, H = 1240, 990
+# Everything below the runtime panel moves down this far, to fit the monitor under the database.
+SHIFT = 70
 NH, DW = 56, 190
 C = [60, 290, 520, 750, 980]
 s = header(
@@ -113,9 +115,10 @@ s.append(
         40,
         40,
         1160,
-        130,
+        130 + SHIFT,
         "Docker Compose, every port on 127.0.0.1",
-        "docker compose up -d starts the database and the app. No cloud account; the only "
+        "docker compose up -d starts the database, the app, and the privacy monitor. No cloud "
+        "account; the only "
         "outside service is the Anthropic API, on your own key. There is no sign-in, which is "
         "why nothing listens beyond this machine.",
     )
@@ -184,7 +187,27 @@ s += [
     arrow([(C[0] + DW, mt), (C[1], mt)], "HTTP", C[0] + DW + 8, mt - 6),
     arrow([(C[1] + DW, mt), (C[2], mt)], "read", C[1] + DW + 8, mt - 6),
     arrow([(C[3], mt), (C[2] + DW, mt)], "write", C[2] + DW + 8, mt - 6),
+    node(
+        C[2],
+        RT + NH + 18,
+        DW,
+        NH,
+        "runtime",
+        "monitor container",
+        "privacy checks every 24h",
+        "Reruns the privacy attacks on every release when a source table or the synth code has "
+        "changed since the last check, and skips otherwise. Each run is a row in "
+        "synth.monitor_run; the last one shows on /synth/. Set MONITOR_INTERVAL_HOURS in .env.",
+        REPO + "src/ehr_rwe_eln/synth/monitor.py",
+    ),
+    arrow(
+        [(C[2] + DW / 2, RT + NH + 18), (C[2] + DW / 2, RT + NH)],
+        "read, write reports",
+        C[2] + DW / 2 + 8,
+        RT + NH + 13,
+    ),
 ]
+s.append(f'<g transform="translate(0,{SHIFT})">')
 
 # Modules.
 R = [240, 320, 400, 480, 560]
@@ -515,6 +538,7 @@ for i, (kind, name, sub) in enumerate(
     ]
 ):
     s.append(node(60 + i * 230, LY + 40, DW, NH, kind, name, sub, f"{name}: {sub}"))
+s.append("</g>")
 s.append("</svg>")
 (OUT / "architecture.svg").write_text("\n".join(s) + "\n")
 print("wrote", OUT / "architecture.svg")

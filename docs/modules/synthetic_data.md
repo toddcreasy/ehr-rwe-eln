@@ -50,9 +50,10 @@ uv run python scripts/synth_cards.py
 # Hand a release to someone, and withdraw one later
 uv run python scripts/export_release.py --release 3 --recipient "Pipeline team" --contact team@example.org --purpose "testing the cohort pipeline"
 uv run python scripts/withdraw_release.py --release 3 --reason "what is wrong with it"
+uv run python scripts/confirm_deletion.py --export 7 --evidence "Dana's reply, 2026-11-20"
 ```
 
-Exports go to `data/synth/exports/` with the release's data card, and each is recorded with its recipient. A withdrawal marks the release, stops further exports, rewrites its card, and drafts a notice per recipient in `data/synth/withdrawals/` for you to send. Each evaluation run lists any release whose privacy checks have drifted toward leakage, and the Compose `monitor` service runs that check every 24 hours when a source or the synth code has changed; the `/synth/` page shows the last check.
+Exports go to `data/synth/exports/` with the release's data card, and each is recorded with its recipient. A withdrawal marks the release, stops further exports, rewrites its card, and drafts a notice per recipient in `data/synth/withdrawals/` for you to send. Record each recipient's reply that they deleted it with `scripts/confirm_deletion.py`; with no arguments it lists who has not replied. Each evaluation run lists any release whose privacy checks have drifted toward leakage, and the Compose `monitor` service runs that check every 24 hours when a source or the synth code has changed; the `/synth/` page shows the last check.
 
 Synthesis takes under a minute and evaluation about a minute. Data cards go to `data/synth/cards/`. The page at http://127.0.0.1:8000/synth/ compares the releases and shows each card.
 
