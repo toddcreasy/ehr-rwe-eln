@@ -73,58 +73,70 @@ A failed attack shows only that this attack failed. These checks bound risk from
 
 | Release | Column TVD mean | Pair TVD mean | Worst pair (TVD) | Correlation gap | TSTR AUC |
 |---|---|---|---|---|---|
-| Noise floor (real against real) | 0.006 | 0.012 | 0.050 | 0.015 | 0.804 (TRTR) |
+| Noise floor (real against real) | 0.006 | 0.012 | age x systolic BP (0.050) | 0.015 | 0.804 (TRTR) |
 | Independent columns, epsilon 1 | 0.005 | 0.071 | age x BMI (0.333) | 0.231 | 0.497 |
-| Bayesian network, epsilon 0.25 | 0.015 | 0.049 | age x BMI (0.258) | 0.098 | 0.689 |
-| Bayesian network, epsilon 1 | 0.006 | 0.035 | age x BMI (0.247) | 0.084 | 0.698 |
-| Bayesian network, epsilon 4 | 0.004 | 0.032 | age x BMI (0.244) | 0.079 | 0.686 |
+| Bayesian network, epsilon 1 | 0.014 | 0.039 | hyperlipidemia x eGFR (0.160) | 0.087 | 0.709 |
+| Bayesian network, epsilon 4 | 0.005 | 0.023 | hyperlipidemia x eGFR (0.150) | 0.075 | 0.685 |
 | VAE, epsilon 1 | 0.038 | 0.073 | age x BMI (0.386) | 0.210 | 0.730 |
 | VAE, epsilon 4 | 0.046 | 0.077 | age x BMI (0.270) | 0.128 | 0.724 |
 
-- The Bayesian network matches single columns at the noise floor from epsilon 1 up. Relationships fall short of the floor at every epsilon.
-- The worst pair in every release is age x BMI. The spec makes BMI depend only on obesity, and the source includes children, whose BMI depends strongly on age. A declared structure keeps only what it declares.
-- The VAE matches single columns worse (DP noise on 63,100 network weights trained from 16,385 people) but predicts death better, because in the Bayesian network death depends on age alone.
+- The Bayesian network at epsilon 4 matches single columns at the noise floor and comes closest on relationships (pair TVD 0.023 against a floor of 0.012). At epsilon 1 the four measurement columns carry more noise (worst, BMI, at 0.069).
+- Its worst pair is now hyperlipidemia x eGFR, a relationship the spec does not declare: eGFR depends on chronic kidney disease and age, hyperlipidemia on age, so the spec links them only through age.
+- The VAE matches single columns worse (DP noise on 63,100 network weights trained from 16,385 people) but predicts death better, because in the Bayesian network death depends on age alone. Its worst pair is still age x BMI: it learns structure from data, not from the spec.
 - The independent-columns baseline keeps every column and loses every relationship, and predicts death no better than guessing: the checks can tell a useless release from a useful one.
+
+**Structure: age as a parent of the measurements.** Releases 2 to 4 gave each measurement only its condition as a parent, so BMI, blood pressure, eGFR, and HbA1c ignored age: age x BMI was the worst pair in every release, and children were off in every release, because their values came from the adult-heavy whole. The current spec adds age as each measurement's second parent (releases 13 and 14). That costs no privacy, since the structure is declared, but gives each measurement's histogram ten times the cells for the same noise:
+
+| | Epsilon 0.25 (2 → 12) | Epsilon 1 (3 → 13) | Epsilon 4 (4 → 14) |
+|---|---|---|---|
+| Worst pair TVD | 0.258 → 0.311 | 0.247 → 0.160 | 0.244 → 0.150 |
+| Pair TVD mean | 0.049 → 0.085 | 0.035 → 0.039 | 0.032 → 0.023 |
+| Worst single column TVD | 0.057 → 0.190 | 0.015 → 0.069 | 0.015 → 0.018 |
+| Ages 0 to 9, excess over floor | +0.071 → +0.053 | +0.059 → +0.012 | +0.059 → +0.001 |
+| Ages 90 or more, excess over floor | +0.096 → +0.158 | +0.019 → +0.047 | +0.016 → +0.003 |
+| TSTR AUC | 0.689 → 0.665 | 0.698 → 0.709 | 0.686 → 0.685 |
+
+At epsilon 4 the structure is a clear gain: children and the oldest groups reach their noise floor. At epsilon 1 it fixes children at some cost to single columns. At epsilon 0.25 the noise outweighs it almost everywhere, so the spec no longer makes a Bayesian network release at 0.25. Releases 2 to 4 and 12 stay in the database for comparison; the tables in this section show the current ones.
 
 | Release | Nearer a member | Exact match, member / non-member | Membership AUC | Attribute gap, mean / max |
 |---|---|---|---|---|
 | Copy of the training data | 62.9% | 68.7% / 44.4% | 0.650 | +0.5% / +1.6% |
 | Independent columns, epsilon 1 | 50.0% | 2.0% / 2.1% | 0.512 | +0.2% / +1.2% |
-| Bayesian network, epsilon 0.25 | 50.8% | 17.4% / 17.5% | 0.504 | +0.1% / +1.1% |
-| Bayesian network, epsilon 1 | 50.9% | 19.2% / 18.9% | 0.507 | +0.1% / +1.4% |
-| Bayesian network, epsilon 4 | 50.1% | 20.8% / 21.3% | 0.500 | +0.2% / +1.3% |
+| Bayesian network, epsilon 1 | 51.2% | 29.0% / 29.1% | 0.506 | +0.1% / +1.4% |
+| Bayesian network, epsilon 4 | 49.2% | 35.0% / 35.5% | 0.503 | +0.2% / +1.3% |
 | VAE, epsilon 1 | 50.9% | 9.4% / 8.8% | 0.509 | +0.2% / +1.2% |
 | VAE, epsilon 4 | 50.5% | 19.6% / 19.5% | 0.506 | +0.2% / +1.3% |
 
 - Every release is at chance on every attack; the copy shows the attacks detect leakage when it exists.
+- Exact matches rose with the age parents (from 21% to 35% at epsilon 4), equally for training and held-out people. That is the release resembling the population more closely on a coarse encoding, not copying: a held-out person, whom the synthesizer never saw, is as likely to have a twin in it.
 - The copy's own numbers are modest because the encoding is coarse: 44% of held-out people have an exact twin among training people on all 21 binned columns. In the source, 2.4% of people are unique on exact age, sex, race, and ethnicity, and 0.2% with age in ten-year groups (the last one 90 or older). With these quasi-identifiers, a linkage attack has almost no one to single out.
 
 ### Person summary by subgroup
 
 Column TVD within each group, past the group's own noise floor (excess), and the group's share of the release against its real share. The full table for every release is on its data card.
 
-| Group (training people) | Floor | Bayes net 0.25 | Bayes net 1 | Bayes net 4 | VAE 1 | VAE 4 |
-|---|---|---|---|---|---|---|
-| Race: white (13,429) | 0.008 | +0.009, 1.00 | +0.001, 1.00 | -0.002, 1.00 | +0.034, 1.00 | +0.040, 1.01 |
-| Race: Black (1,435) | 0.022 | +0.020, 1.00 | +0.014, 1.00 | +0.008, 0.99 | +0.030, 0.93 | +0.046, 0.99 |
-| Race: Asian (1,067) | 0.025 | +0.023, 0.92 | +0.005, 0.95 | +0.010, 0.95 | +0.017, 1.00 | +0.033, 0.94 |
-| Race: Native American (69) | 0.077 | -0.004, 0.91 | +0.008, 1.01 | -0.017, 0.96 | +0.002, 1.69 | +0.049, 0.87 |
-| Race: other (193) | 0.068 | +0.032, 1.21 | -0.009, 1.08 | -0.028, 1.06 | -0.012, 0.98 | -0.017, 1.02 |
-| Sex: female (8,162) | 0.009 | +0.019, 0.99 | +0.013, 1.00 | +0.011, 1.00 | +0.015, 1.03 | +0.026, 1.02 |
-| Sex: male (8,223) | 0.008 | +0.021, 1.01 | +0.016, 1.00 | +0.014, 1.00 | +0.047, 0.97 | +0.053, 0.98 |
-| Age 0 to 9 (1,621) | 0.007 | +0.071, 1.11 | +0.059, 1.04 | +0.059, 1.04 | +0.149, 1.13 | +0.086, 1.01 |
-| Age 40 to 49 (2,121) | 0.016 | +0.020, 0.91 | +0.011, 0.98 | +0.009, 0.99 | +0.059, 0.98 | +0.050, 1.11 |
-| Age 70 to 79 (1,244) | 0.023 | +0.064, 0.95 | +0.040, 0.95 | +0.034, 0.95 | +0.200, 0.77 | +0.133, 0.79 |
-| Age 80 to 89 (561) | 0.035 | +0.095, 0.99 | +0.039, 0.98 | +0.035, 0.97 | +0.221, 0.72 | +0.172, 0.80 |
-| Age 90 or more (310) | 0.047 | +0.096, 0.68 | +0.019, 0.98 | +0.016, 1.07 | +0.223, 0.81 | +0.187, 0.81 |
+| Group (training people) | Floor | Bayes net 1 | Bayes net 4 | VAE 1 | VAE 4 |
+|---|---|---|---|---|---|
+| Race: white (13,429) | 0.008 | +0.009, 1.00 | -0.001, 1.00 | +0.034, 1.00 | +0.040, 1.01 |
+| Race: Black (1,435) | 0.022 | +0.020, 1.00 | +0.008, 0.99 | +0.030, 0.93 | +0.046, 0.99 |
+| Race: Asian (1,067) | 0.025 | +0.009, 0.95 | +0.012, 0.95 | +0.017, 1.00 | +0.033, 0.94 |
+| Race: Native American (69) | 0.077 | +0.003, 1.01 | -0.014, 0.96 | +0.002, 1.69 | +0.049, 0.87 |
+| Race: other (193) | 0.068 | -0.001, 1.08 | -0.031, 1.06 | -0.012, 0.98 | -0.017, 1.02 |
+| Sex: female (8,162) | 0.009 | +0.020, 1.00 | +0.012, 1.00 | +0.015, 1.03 | +0.026, 1.02 |
+| Sex: male (8,223) | 0.008 | +0.020, 1.00 | +0.014, 1.00 | +0.047, 0.97 | +0.053, 0.98 |
+| Age 0 to 9 (1,621) | 0.007 | +0.012, 1.04 | +0.001, 1.04 | +0.149, 1.13 | +0.086, 1.01 |
+| Age 40 to 49 (2,121) | 0.016 | +0.006, 0.98 | -0.005, 0.99 | +0.059, 0.98 | +0.050, 1.11 |
+| Age 70 to 79 (1,244) | 0.023 | +0.025, 0.95 | -0.000, 0.95 | +0.200, 0.77 | +0.133, 0.79 |
+| Age 80 to 89 (561) | 0.035 | +0.036, 0.98 | +0.005, 0.97 | +0.221, 0.72 | +0.172, 0.80 |
+| Age 90 or more (310) | 0.047 | +0.047, 0.98 | +0.003, 1.07 | +0.223, 0.81 | +0.187, 0.81 |
 
-- Age is where releases fall short. The VAE has 19 to 28% too few people aged 70 and over, and the ones it has are far from real older patients: up to 0.22 past the floor, against 0.04 for the Bayesian network at epsilon 1 and 4. Those are the people the cohort's conditions affect most.
-- Children are distorted in every release, most in BMI (column TVD 0.64 within ages 0 to 9 for the Bayesian network at epsilon 1), then HbA1c and eGFR. None of the four measurement columns has age as a parent, so their children's values come from the adult-heavy whole: the same cause as the worst pair above. Older groups show it too, in eGFR and blood pressure.
-- Race is close to the floor in the Bayesian network at epsilon 1 and 4. At epsilon 0.25 the "other" group is 21% over-represented, and the VAE at epsilon 1 makes Native American people 1.69 times as common as they are. DP noise is the same size for every count, so the smallest groups move most.
+- The Bayesian network at epsilon 4 is within 0.014 of the floor for every group: no group is distorted past sampling noise by more than that.
+- Age is where the VAE falls short. It has 19 to 28% too few people aged 70 and over, and the ones it has are far from real older patients: up to 0.22 past the floor. Those are the people the cohort's conditions affect most. Children are off too (+0.149 at epsilon 1).
+- Race is close to the floor in the Bayesian network. The VAE at epsilon 1 makes Native American people 1.69 times as common as they are; DP noise is the same size for every count, so the smallest groups move most.
 - The VAE distorts men two to three times as much as women; the Bayesian network treats them alike.
-- Utility within groups: release models lose about as much AUC for Black patients (0.687 to 0.717 against 0.780 for the real-data model) as for white patients (0.689 to 0.732 against 0.806). Native American, Hawaiian, and other groups have too few deaths in the holdout to score.
-- Each data card lists every group and names any whose share is off by more than 20% under intended use, with an instruction not to study it in that release.
-- The person summary now reads 74 HbA1c results the ELN bridge wrote to OMOP after these releases were made. That moves a few figures above at the third decimal; the releases were not remade.
+- Utility within groups: release models lose about as much AUC for Black patients (0.687 to 0.722 against 0.780 for the real-data model) as for white patients (0.688 to 0.732 against 0.806). Native American, Hawaiian, and other groups have too few deaths in the holdout to score.
+- Each data card lists every group and names any whose share is off by more than 20% under intended use, with an instruction not to study it in that release. No Bayesian network release has one.
+- The person summary reads 74 HbA1c results the ELN bridge wrote to OMOP after releases 1 to 6 were made, which moves their figures at the third decimal; releases 13 and 14 were made after.
 
 ### Trial table (1,890 people, 26 events)
 

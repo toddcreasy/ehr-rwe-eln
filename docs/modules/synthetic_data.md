@@ -60,7 +60,7 @@ Synthesis takes under a minute and evaluation about a minute. Data cards go to `
 
 From the [methodology](../synthetic_data_methodology.md#5-results):
 
-- The Bayesian network matches single columns at the noise floor from epsilon 1 up. Relationships between columns fall short of it at every epsilon.
+- The Bayesian network at epsilon 4 matches single columns at the noise floor, and every age, sex, and race group within 0.014 of its own floor. Relationships still fall short of the floor (pair TVD 0.023 against 0.012). Its measurements depend on age as well as their condition; at epsilon 0.25 that structure costs more in noise than it adds, so the spec makes no release there.
 - By subgroup, age is where releases fall short: the VAE has 19 to 28% too few people aged 70 and over and distorts them most. Each data card names any group a release misrepresents.
 - Every release is at chance on every privacy attack; the plain copy of the training data is not, which shows the attacks detect leakage when it exists.
 - On the 26-event trial, DP releases often give confident wrong answers: 55% of draws at epsilon 1 and 20% at epsilon 4 show an effect the real data does not. These releases are fit for building and testing pipelines, not for reporting estimates.
