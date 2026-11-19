@@ -47,6 +47,8 @@ DEFAULT = {
     "PM5": "moderate",
     "PS3": "strong",
     "BS3": "strong",
+    "PS4": "strong",
+    "PP1": "supporting",
 }
 BENIGN = {"BA1", "BS1", "BS3"}
 CLASSES = [

@@ -43,6 +43,9 @@ export default function Home() {
       <Link href="/synth/" className="w-fit underline">
         Synthetic data releases
       </Link>
+      <Link href="/curation/" className="w-fit underline">
+        Variant curation
+      </Link>
       <HealthPanel />
     </main>
   );

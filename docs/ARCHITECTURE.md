@@ -46,17 +46,19 @@ One container runs [FastAPI](https://fastapi.tiangolo.com). It serves the API un
 | `/tte/` | Bias reports per trial protocol | `/api/tte/runs` |
 | `/eln/` | Each ELN entry beside what was extracted | `/api/eln/entries` |
 | `/synth/` | Synthetic releases compared, with their data cards | `/api/synth/releases` |
+| `/curation/` | Each variant's evidence, criteria, and literature proposals; the curator's decision, with who and when | `/api/curation/runs` |
 
 There is no sign-in. Every port binds to 127.0.0.1, so nothing is reachable from another machine.
 
 ## Where Claude is used
 
-Two places, both on Claude Opus 5.5 through the [Anthropic API](https://docs.claude.com), set by one `MODEL` setting:
+Three places, all on Claude Opus 5.5 through the [Anthropic API](https://docs.claude.com), set by one `MODEL` setting:
 
 - **ELN extraction** (`src/ehr_rwe_eln/eln/`). Structured outputs constrain each reply to the extraction schema, and [Pydantic](https://docs.pydantic.dev) validates it before anything is stored. Offline runs go through the [Message Batches API](https://docs.claude.com/en/docs/build-with-claude/batch-processing) at half price.
+- **Literature evidence for variant curation** (`src/ehr_rwe_eln/curation/literature.py`). Claude proposes ACMG criteria from passages that name the variant, each with a PMID and a quote that code checks against what was sent. Proposals change nothing until a curator accepts them on `/curation/`.
 - **The agent** at `POST /api/agent` (`src/ehr_rwe_eln/agents/`), a small tool-using agent on the Anthropic SDK's tool runner. It checks the time and the database.
 
-Both are scored by evals in `evals/` against the real model. They are slow and billed, so they run by hand, never in CI.
+All three are scored by evals in `evals/` against the real model. They are slow and billed, so they run by hand, never in CI.
 
 ## Stack
 

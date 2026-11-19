@@ -4,7 +4,7 @@ Package: `ehr_rwe_eln.curation`. Back to the [README](../../README.md). Terms ar
 
 Classifies variants the way a clinical lab starts to: it applies the [ACMG/AMP](https://doi.org/10.1038/gim.2015.30) criteria that data alone can decide, with each gene's thresholds from its [ClinGen](https://clinicalgenome.org) expert panel, adds them up on the Bayesian points scale, and says what it could not decide and why. It curates the [clinical panel](genomics.md#clinical-panel) planted in the synthetic study, and is scored against ClinVar's expert-panel classifications, which it never reads.
 
-Two kinds of evidence: what the rules decide from data, and what Claude proposes from the literature, each claim quoted from its paper and checked in code. Proposals never change a classification. A curator's review and sign-off come next; until then nothing here is a final classification.
+Two kinds of evidence: what the rules decide from data, and what Claude proposes from the literature, each claim quoted from its paper and checked in code. Proposals never change a classification on their own. A curator does, on the `/curation/` page: they accept the proposals they agree with, see the points and class that gives, and record a decision with their name and the time. Only a decision is final.
 
 ## What it does
 
@@ -36,6 +36,7 @@ Two kinds of evidence: what the rules decide from data, and what Claude proposes
 4. **Store the run** (`curate.py`) in the `curation` schema: every assessment with its evidence, the criteria met and not assessed (each with its reason), the points, and the class; and on the run, every source and version (gnomAD dataset, Ensembl release, ClinVar release, each panel's CSpec version, a hash of `rules.yaml`, the git commit).
 
 5. **Propose literature evidence** (`literature.py`). For PS3 and BS3 (functional studies), PS4 (case-control or proband counts), and PP1 (segregation), Claude reads what papers say about the variant and proposes criteria, each claim with a PMID and a quoted sentence. Retrieval: [LitVar2](https://www.ncbi.nlm.nih.gov/research/litvar2/), NCBI's index of variant mentions, gives the PMIDs; [PubTator3](https://www.ncbi.nlm.nih.gov/research/pubtator3/) gives each paper's text (full text for open-access PMC articles, the abstract otherwise); only passages that name the variant are sent, under any of its names, including older numbering (LDLR residues without the signal peptide; BRCA1 and BRCA2 BIC nucleotides). Claude Opus 5.5 replies in a typed schema. Every claim is then verified in code: its PMID must be one that was sent and its quote must appear in a passage sent from that paper; a claim that fails is stored as rejected, with the reason. Verified claims go to `curation.proposal`, apart from the rules' assessments.
+6. **Decide** (`/curation/` page, `src/ehr_rwe_eln/api/curation.py`). For each variant the page shows the evidence (gnomAD, VEP), the criteria the rules met and what they left to the curator, each with its reason, Claude's proposals with their quotes and PubMed links, and the run's sources and versions. The curator ticks the verified proposals they accept, and the page rescores: the rules' criteria plus the accepted ones, through the same points scale. A proposal cannot add a criterion the rules already met (ENIGMA's PS3 table and a paper's PS3 would otherwise count twice), and a criterion accepted from two papers counts once, at the stronger strength. The curator then records a class with their name. A class other than the scored one needs a note saying why. Decisions go to `curation.decision`, which is only ever added to: a new decision on a variant adds a row, so the history of who decided what, and when, is kept.
 
 ## Run it
 
@@ -46,6 +47,7 @@ uv run python scripts/curate_variants.py --set erepo   # Evidence Repository cur
 uv run python scripts/curate_literature.py --dry-run   # retrieval and input tokens only, free
 uv run python scripts/curate_literature.py             # Claude proposes literature evidence, about $0.25 for 10
 uv run pytest evals/test_curation_literature.py -s     # the literature eval, about $0.15
+uv run fastapi dev                                     # then http://127.0.0.1:8000/curation/
 ```
 
 `uv run python scripts/import_enigma_pvs1.py` and `scripts/import_enigma_functional.py` refresh ENIGMA's tables when the panel releases a new version. The `erepo` run downloads ClinGen's Evidence Repository export (33 MB, CC0) to `data/reference/clingen/` the first time. Both curation runs read positions and alleles only. gnomAD, VEP, and exon answers are cached under `data/reference/` per release, so reruns make no requests. A first run asks gnomAD about several hundred variants at its limit of 10 requests a minute, about 10 minutes; when gnomAD answers that it is overloaded, the client waits and retries, and never records a busy answer as "absent".
@@ -108,4 +110,5 @@ The ceiling is retrieval, not reading. Of 20 such variants, 7 are not in LitVar2
 - PVS1 follows each panel only as far as data allows. For LDLR, MLH1, and MSH2 splice sites it does not check whether a stop falls in the last 50 nucleotides of the penultimate exon (which also escapes NMD), or a panel's list of critical domains. APC splice sites, initiation codon variants, and exon-level deletions and duplications are left to the curator. ENIGMA's RNA-based codes ("PVS1 (RNA)") are applied at the table's strength without re-reading the RNA data.
 - PVS1 from RNA evidence for variants outside the canonical sites (the panels' "PVS1 (RNA)"), and initiation codon (start-loss) variants, are not applied: they need lab data the rules do not have.
 - Thresholds are read on gnomAD v4 joined. ENIGMA's are defined on gnomAD v2.1 and v3.1 non-cancer subsets, and PM2 for BRCA1 and BRCA2 also requires read depth of at least 25, not checked. Founder variants, which InSiGHT excludes from BA1 and BS1, are not excepted.
+- The curator's name is what they type: the app has no sign-in, so a decision records who said they made it, not a verified identity.
 - This tool includes data from the gnomAD v4 release. For research and demonstration; not for clinical use.
