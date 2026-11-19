@@ -128,3 +128,28 @@ def test_card_shows_subgroups_and_names_a_misrepresented_group():
     assert "Furthest past their floor: sex male (0.120 against 0.020)" in card
     assert "do not study them in it: sex male at 0.71 times its real share." in card
     assert "sex female at" not in card  # 5% off is within the warning's margin
+
+
+def test_card_summarizes_intersections_and_warns_only_past_sampling_noise():
+    s = spec(AGE, FLAG, DRUG)
+    out, measurements = synthesize(toy(2000), s, s.releases[0])
+    fidelity = fidelity_report(toy(2000), out, s.columns)
+    fidelity["noise_floor"] = None
+    cell = {
+        "column": "age x sex", "group": "70 to 79, male", "suppressed": False, "train_people": 40,
+        "holdout_people": 15, "release_people": 60, "share_ratio": 1.5, "column_tvd_mean": 0.2,
+        "noise_floor": 0.05, "excess": 0.15,
+    }  # fmt: skip
+    fidelity["subgroups"] = [
+        {**cell, "column": "sex", "group": "male", "share_ratio": 1.0, "excess": 0.01},
+        {**cell, "share_ratio": 1.4},
+        {**cell, "group": "80 to 89, male", "train_people": 29, "share_ratio": 2.03, "excess": 0.0},
+        {"column": "age x sex", "group": "90 or more, male", "suppressed": True},
+    ]
+    record = release_record(s, s.releases[0], measurements, len(out), 0)
+    card = render_card(record, {"fidelity": fidelity})
+    assert "Intersections (age x sex): 2 groups reported, 1 left out under 11 people." in card
+    assert "70 to 79, male (40 people, 0.200 against 0.050, share 1.40)" in card
+    assert "| sex: male |" in card and "| age x sex:" not in card
+    # 40 people at 1.4x is within sampling noise (3 / sqrt(40) = 0.47); 29 at 2.03x is not.
+    assert "do not study them in it: age x sex 80 to 89, male at 2.03 times its real share." in card

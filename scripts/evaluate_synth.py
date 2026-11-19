@@ -62,7 +62,7 @@ def trial_row(label: str, report: dict) -> str:
 
 
 def subgroup_row(label: str, report: dict, worst: int = 3) -> str:
-    rows = [r for r in report["subgroups"] if r["excess"] is not None]
+    rows = [r for r in report["subgroups"] if r.get("excess") is not None]
     if not rows:
         return f"{label:<24}no noise floor (no holdout)"
     rows.sort(key=lambda r: r["excess"], reverse=True)
@@ -122,12 +122,13 @@ def main() -> None:
                 }
             else:
                 tstr = None
-            # Subgroups choose how a release is read, not how it was made, so releases stored
-            # before a spec named them take them from the spec file of the same name.
+            # Subgroups choose how a release is read, not how it was made, so every release is
+            # read with the current spec file's subgroups when there is one, older releases
+            # included; the list stored with the release is the fallback.
             shipped = SPECS / f"{spec.name}.yaml"
-            by = spec.subgroups or (load_spec(shipped).subgroups if shipped.exists() else [])
+            by = load_spec(shipped).subgroups if shipped.exists() else spec.subgroups
             names = {c.name for c in spec.columns}
-            by = [name for name in by if name in names]
+            by = [e for e in by if set([e] if isinstance(e, str) else e) <= names]
             if by:
                 report["subgroups"] = subgroup_report(
                     train, holdout, synthetic, spec.columns, by, spec.utility_target

@@ -147,8 +147,9 @@ class Spec(Strict):
     # A 0/1 column to predict in the utility test (train on synthetic, test on real).
     utility_target: str | None = None
     # Columns to report fidelity within, one group per category or numeric bin: a release can
-    # match its source overall and still distort a small group.
-    subgroups: list[str] = []
+    # match its source overall and still distort a small group. A list of two or three columns
+    # is an intersection, one group per combination (age 70 to 79 and Black, for example).
+    subgroups: list[str | list[str]] = []
     columns: list[Column] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -175,9 +176,13 @@ class Spec(Strict):
             target = next((c for c in self.columns if c.name == self.utility_target), None)
             if target is None or target.categories != [0, 1]:
                 raise ValueError(f"utility_target {self.utility_target} must be a 0/1 column")
-        for name in self.subgroups:
-            if name not in seen:
-                raise ValueError(f"subgroup {name} is not a column")
+        for entry in self.subgroups:
+            names = [entry] if isinstance(entry, str) else entry
+            if isinstance(entry, list) and not 2 <= len(set(entry)) == len(entry) <= 3:
+                raise ValueError(f"intersection {entry} needs two or three different columns")
+            for name in names:
+                if name not in seen:
+                    raise ValueError(f"subgroup {name} is not a column")
         if self.source_access == "controlled":
             if self.seed is not None:
                 raise ValueError("a controlled source needs secure noise: leave seed unset")

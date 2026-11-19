@@ -27,6 +27,8 @@ same reading within each group: its share of the release, its mean column TVD, a
 noise floor, which is higher for a small group because two small samples differ more.
 """
 
+import itertools
+
 import numpy as np
 import pandas as pd
 from scipy.stats import ks_2samp
@@ -37,7 +39,7 @@ from ehr_rwe_eln.synth.bayes_net import encode
 from ehr_rwe_eln.synth.spec import Column
 
 WORST_PAIRS = 10
-# Groups smaller than this are left out of subgroup reports, as CMS suppresses any published
+# Groups smaller than this are reported without numbers, as CMS suppresses any published
 # cell under 11 people; below it a group's measures are mostly noise anyway. A group AUC also
 # needs this many people in each outcome class.
 MIN_GROUP = 11
@@ -125,11 +127,11 @@ def subgroup_report(
     holdout: pd.DataFrame,
     synthetic: pd.DataFrame,
     columns: list[Column],
-    by: list[str],
+    by: list[str | list[str]],
     target: str | None = None,
 ) -> list[dict]:
-    """Fidelity within each group of each column in by, one row per group of at least
-    MIN_GROUP training people:
+    """Fidelity within each group of each entry in by: a column, one group per category or
+    bin, or a list of columns, one group per combination. One row per group:
 
     - share_ratio: the group's share of the release over its share of the training data (1 is
       right; 0.7 means the release has 30% too few of them).
@@ -138,25 +140,39 @@ def subgroup_report(
       excess: the first minus the second, how far the release is past sampling noise.
     - tstr_auc, trtr_auc (with a target and a holdout): the utility models, trained on the
       whole release and on the whole training data, scored on the group's held-out people.
+
+    A group with fewer than MIN_GROUP training people is still listed, with suppressed true and
+    no numbers, so a reader sees how much of an intersection is too small to report.
     """
     real, held, synth = (encode(t, columns) for t in (train, holdout, synthetic))
     fits = None
     if target and len(holdout):
         fits = (_fit(synthetic, columns, target), _fit(train, columns, target))
+    names = {c.name: j for j, c in enumerate(columns)}
     out = []
-    for name in by:
-        j = next(i for i, c in enumerate(columns) if c.name == name)
-        others = [k for k in range(len(columns)) if k != j]
+    for entry in by:
+        group_columns = [entry] if isinstance(entry, str) else entry
+        js = [names[name] for name in group_columns]
+        others = [k for k in range(len(columns)) if k not in js]
         rest = [columns[k] for k in others]
-        for code, label in enumerate(_group_labels(columns[j])):
-            r, h, s = (t[t[:, j] == code][:, others] for t in (real, held, synth))
-            if len(r) < MIN_GROUP:
+        labels = [_group_labels(columns[j]) for j in js]
+        for combination in itertools.product(*(range(len(x)) for x in labels)):
+            masks = [
+                np.all([t[:, j] == code for j, code in zip(js, combination, strict=True)], axis=0)
+                for t in (real, held, synth)
+            ]
+            r, h, s = (t[m][:, others] for t, m in zip((real, held, synth), masks, strict=True))
+            row: dict = {
+                "column": " x ".join(group_columns),
+                "group": ", ".join(x[code] for x, code in zip(labels, combination, strict=True)),
+                "suppressed": len(r) < MIN_GROUP,
+            }
+            if row["suppressed"]:
+                out.append(row)
                 continue
             tvd = _column_tvd_mean(r, s, rest) if len(s) >= MIN_GROUP else None
             floor = _column_tvd_mean(r, h, rest) if len(h) >= MIN_GROUP else None
-            row = {
-                "column": name,
-                "group": label,
+            row |= {
                 "train_people": len(r),
                 "holdout_people": len(h),
                 "release_people": len(s),
@@ -166,7 +182,7 @@ def subgroup_report(
                 "excess": tvd - floor if tvd is not None and floor is not None else None,
             }
             if fits and target:
-                group = holdout[held[:, j] == code]
+                group = holdout[masks[1]]
                 row["tstr_auc"] = _auc(fits[0], group, target, MIN_GROUP)
                 row["trtr_auc"] = _auc(fits[1], group, target, MIN_GROUP)
             out.append(row)
