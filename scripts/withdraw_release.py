@@ -5,7 +5,8 @@ Usage: uv run python scripts/withdraw_release.py --release 5 --reason "what is w
 Marks the release withdrawn in synth.release, rewrites its data card in data/synth/cards/ with
 the withdrawal at the top, and writes one draft notice per recipient to
 data/synth/withdrawals/release_<id>/. Nothing is sent: review the notices and send them
-yourself. The release's record and reports stay, so the decision can be reviewed later.
+yourself, and record each recipient's reply with scripts/confirm_deletion.py. The release's
+record and reports stay, so the decision can be reviewed later.
 """
 
 import argparse
@@ -55,7 +56,11 @@ def main() -> None:
     if recipients:
         print(f"{len(recipients)} recipient(s); draft notices in {folder} (not sent):")
         for r in recipients:
-            print(f"  {r['recipient']} <{r['contact']}>, exported {r['exported_at']:%Y-%m-%d}")
+            print(
+                f"  export {r['distribution_id']}: {r['recipient']} <{r['contact']}>,"
+                f" exported {r['exported_at']:%Y-%m-%d}"
+            )
+        print("record each reply with scripts/confirm_deletion.py --export <id> --evidence ...")
     else:
         print("it was never exported, so there is no one to notify")
 

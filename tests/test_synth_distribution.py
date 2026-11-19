@@ -4,6 +4,8 @@ from ehr_rwe_eln.synth.bayes_net import plan, synthesize
 from ehr_rwe_eln.synth.card import render_card
 from ehr_rwe_eln.synth.distribution import (
     ReleaseUnavailable,
+    awaiting_deletion,
+    confirm_deletion,
     notice,
     privacy_flags,
     record_export,
@@ -53,6 +55,28 @@ def test_notice_tells_the_recipient_what_to_do(pg, release_id):
     assert f"Synthetic release {release_id}" in text and "for a demo" in text
     assert "Reason: a bug in the synthesizer" in text
     assert "delete every copy" in text
+
+
+def test_deletion_is_confirmed_once_per_recipient_of_a_withdrawn_release(pg, release_id):
+    first = record_export(pg, release_id, "Pipeline team", "team@example.org", "tests", "a")
+    second = record_export(pg, release_id, "Dana", "dana@example.org", "a demo", "b")
+    with pytest.raises(ReleaseUnavailable, match="still in use"):
+        confirm_deletion(pg, first, "an early reply")
+    assert awaiting_deletion(pg) == []
+    withdraw(pg, release_id, "a bug in the synthesizer")
+    assert [w["distribution_id"] for w in awaiting_deletion(pg)] == [first, second]
+    with pytest.raises(ValueError, match="needs evidence"):
+        confirm_deletion(pg, first, " ")
+    confirm_deletion(pg, first, "reply from the pipeline team, 2026-11-20")
+    assert [w["recipient"] for w in awaiting_deletion(pg)] == ["Dana"]
+    evidence = pg.execute(
+        "SELECT deletion_evidence FROM synth.distribution WHERE distribution_id = %s", [first]
+    ).fetchone()[0]
+    assert evidence == "reply from the pipeline team, 2026-11-20"
+    with pytest.raises(ReleaseUnavailable, match="already confirmed"):
+        confirm_deletion(pg, first, "again")
+    with pytest.raises(ReleaseUnavailable, match="no export"):
+        confirm_deletion(pg, 999_999, "a reply")
 
 
 def test_card_of_a_withdrawn_release_says_so_first():

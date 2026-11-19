@@ -6,7 +6,8 @@ a DAC decision allowing wider sharing. If a flaw turns up later (a privacy attac
 succeeds, a misrepresented group, a bug in the synthesizer), the release is withdrawn: it is
 marked in the database with the reason, can no longer be exported, its data card says not to
 use it, and a notice is drafted for everyone who received it. Notices are drafted, never
-sent: a person reviews and sends them.
+sent: a person reviews and sends them. Each recipient's reply confirming deletion is recorded
+against their export, and awaiting_deletion lists everyone who has not replied.
 
 After release, scripts/evaluate_synth.py rescores every release, and privacy_flags names any
 whose privacy attacks have moved more than halfway from chance toward what a plain copy of the
@@ -78,6 +79,44 @@ def withdraw(con: psycopg.Connection, release_id: int, reason: str) -> list[dict
         [release_id],
     ).fetchall()
     keys = ["distribution_id", "recipient", "contact", "purpose", "path", "exported_at"]
+    return [dict(zip(keys, row, strict=True)) for row in rows]
+
+
+def confirm_deletion(con: psycopg.Connection, distribution_id: int, evidence: str) -> None:
+    """Record that the recipient of one export of a withdrawn release deleted every copy.
+    evidence says how that was confirmed, for whoever checks the record later."""
+    found = con.execute(
+        "SELECT r.withdrawn_at, d.deletion_confirmed_at FROM synth.distribution d"
+        " JOIN synth.release r USING (release_id) WHERE d.distribution_id = %s",
+        [distribution_id],
+    ).fetchone()
+    if found is None:
+        raise ReleaseUnavailable(f"no export {distribution_id}")
+    if found[0] is None:
+        raise ReleaseUnavailable(f"export {distribution_id} is of a release still in use")
+    if found[1] is not None:
+        raise ReleaseUnavailable(
+            f"deletion of export {distribution_id} was already confirmed on {found[1]:%Y-%m-%d}"
+        )
+    if not evidence.strip():
+        raise ValueError("a confirmation needs evidence: whose reply, and when")
+    con.execute(
+        "UPDATE synth.distribution SET deletion_confirmed_at = %s, deletion_evidence = %s"
+        " WHERE distribution_id = %s",
+        [datetime.now(UTC), evidence.strip(), distribution_id],
+    )
+
+
+def awaiting_deletion(con: psycopg.Connection) -> list[dict]:
+    """Every export of a withdrawn release whose recipient has not confirmed deletion, longest
+    waiting first."""
+    rows = con.execute(
+        "SELECT d.distribution_id, d.release_id, d.recipient, d.contact, r.withdrawn_at"
+        " FROM synth.distribution d JOIN synth.release r USING (release_id)"
+        " WHERE r.withdrawn_at IS NOT NULL AND d.deletion_confirmed_at IS NULL"
+        " ORDER BY r.withdrawn_at, d.distribution_id"
+    ).fetchall()
+    keys = ["distribution_id", "release_id", "recipient", "contact", "withdrawn_at"]
     return [dict(zip(keys, row, strict=True)) for row in rows]
 
 
