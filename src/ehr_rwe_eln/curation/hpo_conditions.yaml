@@ -1,0 +1,27 @@
+# Synthea condition concepts (OMOP concept_id) to HPO terms, written by hand for the conditions
+# whose names do not match an HPO term exactly but matter for the panel genes or are common.
+# This table is ours, not HPO's: HPO no longer ships SNOMED cross-references. Each entry names
+# the HPO term so phenotype.load_manual can check it against the release in use. A concept not
+# here and not matched by name takes the term of its nearest mapped OMOP ancestor.
+concepts:
+  # The panel's conditions
+  4112853: {name: Malignant neoplasm of breast, hpo: "HP:0003002", hpo_name: Breast carcinoma}
+  4180790: {name: Malignant neoplasm of colon, hpo: "HP:0003003", hpo_name: Colon cancer}
+  197500: {name: Primary malignant neoplasm of colon, hpo: "HP:0003003", hpo_name: Colon cancer}
+  # A single polyp, not polyposis: the general term, not "Colorectal polyposis"
+  4285898: {name: Polyp of colon, hpo: "HP:0005266", hpo_name: Intestinal polyp}
+  37017023: {name: Recurrent rectal polyp, hpo: "HP:0005266", hpo_name: Intestinal polyp}
+  # Cardiovascular and metabolic
+  320128: {name: Essential hypertension, hpo: "HP:0000822", hpo_name: Hypertension}
+  4060985: {name: Body mass index 30+ - obesity, hpo: "HP:0001513", hpo_name: Obesity}
+  4185932: {name: Ischemic heart disease, hpo: "HP:0001677", hpo_name: Coronary artery atherosclerosis}
+  381316: {name: Cerebrovascular accident, hpo: "HP:0001297", hpo_name: Stroke}
+  37018196: {name: Prediabetes, hpo: "HP:0040270", hpo_name: Impaired glucose tolerance}
+  201826: {name: Type 2 diabetes mellitus, hpo: "HP:0005978", hpo_name: Type II diabetes mellitus}
+  # Kidney and other cancers
+  443614: {name: Chronic kidney disease stage 1, hpo: "HP:0012622", hpo_name: Chronic kidney disease}
+  443601: {name: Chronic kidney disease stage 2, hpo: "HP:0012622", hpo_name: Chronic kidney disease}
+  443597: {name: Chronic kidney disease stage 3, hpo: "HP:0012622", hpo_name: Chronic kidney disease}
+  443612: {name: Chronic kidney disease stage 4, hpo: "HP:0012622", hpo_name: Chronic kidney disease}
+  4129902: {name: Neoplasm of prostate, hpo: "HP:0100787", hpo_name: Prostate neoplasm}
+  439392: {name: Primary malignant neoplasm, hpo: "HP:0002664", hpo_name: Neoplasm}

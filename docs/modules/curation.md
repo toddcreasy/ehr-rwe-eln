@@ -4,6 +4,8 @@ Package: `ehr_rwe_eln.curation`. Back to the [README](../../README.md). Terms ar
 
 Classifies variants the way a clinical lab starts to: it applies the [ACMG/AMP](https://doi.org/10.1038/gim.2015.30) criteria that data alone can decide, with each gene's thresholds from its [ClinGen](https://clinicalgenome.org) expert panel, adds them up on the Bayesian points scale, and says what it could not decide and why. It curates the [clinical panel](genomics.md#clinical-panel) planted in the synthetic study, and is scored against ClinVar's expert-panel classifications, which it never reads.
 
+It also matches each study subject's conditions against the panel genes with the [Human Phenotype Ontology](#phenotype-matching) (HPO), and checks whether that finds the planted carriers.
+
 Two kinds of evidence: what the rules decide from data, and what Claude proposes from the literature, each claim quoted from its paper and checked in code. Proposals never change a classification on their own. A curator does, on the `/curation/` page: they accept the proposals they agree with, see the points and class that gives, and record a decision with their name and the time. Only a decision is final.
 
 ## What it does
@@ -48,6 +50,7 @@ uv run python scripts/curate_literature.py --dry-run   # retrieval and input tok
 uv run python scripts/curate_literature.py             # Claude proposes literature evidence, about $0.25 for 10
 uv run pytest evals/test_curation_literature.py -s     # the literature eval, about $0.15
 uv run fastapi dev                                     # then http://127.0.0.1:8000/curation/
+uv run python scripts/match_phenotypes.py              # HPO phenotype scores and their eval, 15 s
 ```
 
 `uv run python scripts/import_enigma_pvs1.py` and `scripts/import_enigma_functional.py` refresh ENIGMA's tables when the panel releases a new version. The `erepo` run downloads ClinGen's Evidence Repository export (33 MB, CC0) to `data/reference/clingen/` the first time. Both curation runs read positions and alleles only. gnomAD, VEP, and exon answers are cached under `data/reference/` per release, so reruns make no requests. A first run asks gnomAD about several hundred variants at its limit of 10 requests a minute, about 10 minutes; when gnomAD answers that it is overloaded, the client waits and retries, and never records a busy answer as "absent".
@@ -102,6 +105,24 @@ Precision 70%, recall 50%; where both applied PS3 the strength matched every tim
 
 The ceiling is retrieval, not reading. Of 20 such variants, 7 are not in LitVar2 at all, and of the 24 papers the panels cited, none has a passage naming the variant in text PubTator3 provides: the panels' evidence sits in supplementary tables (multiplexed assays such as [Findlay et al. 2018](https://doi.org/10.1038/s41586-018-0461-z), which ENIGMA's Table 9 already captures), or in papers that do not name the variant in reachable text. Adding older numbering found no more. So the proposals come from other papers about the variant, and their agreement with the panels is at the level of criteria, not citations.
 
+## Phenotype matching
+
+`phenotype.py`, `scripts/match_phenotypes.py`. This service/product is using the Human Phenotype Ontology (release 2026-09-01). Find out more at http://www.human-phenotype-ontology.org. [Köhler et al. 2014](https://doi.org/10.1093/nar/gkt1026).
+
+1. **Conditions to HPO terms.** HPO no longer ships SNOMED cross-references, and the OMOP vocabularies loaded here do not carry HPO, so the mapping is ours, in three steps: a hand-written table for 17 conditions that matter for the panel or are common (`hpo_conditions.yaml`, each entry checked against the release's term name on load); an HPO term whose name or exact synonym equals the condition's name; otherwise the term of the nearest OMOP ancestor mapped either way. Of the 513 condition concepts among the 5,000 study subjects, 352 map (17 by table, 76 by name, 259 by ancestor), covering 74% of their condition records. A subject has a median of 9 terms.
+2. **Score each gene.** Each gene's terms come from HPO's `genes_to_phenotype.txt`. A subject's score for a gene is the Resnik best match average from the subject's side, as [Phenomizer](https://doi.org/10.1016/j.ajhg.2009.09.003) does it ([glossary](../GLOSSARY.md#information-content-and-resnik-similarity)). Raw scores do not compare across genes: a gene with many annotations matches almost anyone somewhere, so before standardizing, BRCA2 (217 terms) or APC (162) came first for 4,592 of the 5,000 subjects. Each gene's score is standardized over the study (mean 0, standard deviation 1). Scores go to `data/genomics/phenotype_scores.tsv` by subject ID; the OMOP person ID stays in the registry.
+3. **Check against the panel's answer key.** The [clinical panel](genomics.md#clinical-panel) chose pathogenic carriers by condition: about 10% of people with breast cancer, colon cancer, or hyperlipidemia (5% for hyperlipidemia), about 0.3% of everyone else, with the gene picked at random within the condition's group. So a phenotype can point to a group (BRCA1 and BRCA2; MLH1, MSH2, and APC; LDLR) but never to one gene within it, and a carrier and a non-carrier with the same condition have the same records. The eval asks whether the score ranks each group's carriers above everyone else (AUC, area under the ROC curve: the chance a random carrier scores above a random non-carrier), with a 95% bootstrap interval, next to the AUC of simply knowing who has the condition. That second number is the reference: about half the carriers were chosen without the condition, so no phenotype can find them.
+
+2026-11-19, HPO 2026-09-01, 5,000 subjects:
+
+| Group | Carriers (with the condition) | Phenotype score AUC (95% interval) | AUC of knowing the condition | Top-scoring gene in the group, carriers with the condition |
+|---|---|---|---|---|
+| Breast cancer: BRCA1, BRCA2 | 21 (7) | 0.70 (0.60 to 0.79) | 0.66 | 4 of 7 |
+| Colon cancer: MLH1, MSH2, APC | 29 (14) | 0.66 (0.53 to 0.77) | 0.73 | 7 of 14 |
+| Hyperlipidemia: LDLR | 74 (50) | 0.68 (0.62 to 0.74) | 0.74 | 37 of 50 |
+
+Every interval is above 0.5, and each score comes close to what knowing the condition gives; breast cancer's slightly passes it, within the interval. That is what the panel's design allows, and no more. By gene, MSH2 reaches 0.89 and APC and MLH1 are near chance, as expected when the gene within a group was picked at random: those are noise around the group result, with 8 to 13 carriers each, not differences between genes. Scoring by a subject's single best-matching term instead of the average (a sensitivity check, in `phenotype_eval.json`) gives group AUCs of 0.74, 0.75, and 0.68; the average stays the method because it was chosen before the eval and is the standard.
+
 ## Limits
 
 - The rules decide only what data alone can. Missense variants, which need functional studies, case data, or segregation, come out uncertain; literature proposals can point a curator to that evidence but do not change the class.
@@ -110,5 +131,6 @@ The ceiling is retrieval, not reading. Of 20 such variants, 7 are not in LitVar2
 - PVS1 follows each panel only as far as data allows. For LDLR, MLH1, and MSH2 splice sites it does not check whether a stop falls in the last 50 nucleotides of the penultimate exon (which also escapes NMD), or a panel's list of critical domains. APC splice sites, initiation codon variants, and exon-level deletions and duplications are left to the curator. ENIGMA's RNA-based codes ("PVS1 (RNA)") are applied at the table's strength without re-reading the RNA data.
 - PVS1 from RNA evidence for variants outside the canonical sites (the panels' "PVS1 (RNA)"), and initiation codon (start-loss) variants, are not applied: they need lab data the rules do not have.
 - Thresholds are read on gnomAD v4 joined. ENIGMA's are defined on gnomAD v2.1 and v3.1 non-cancer subsets, and PM2 for BRCA1 and BRCA2 also requires read depth of at least 25, not checked. Founder variants, which InSiGHT excludes from BA1 and BS1, are not excepted.
+- Phenotype matching is checked only against carriers planted by condition, so it can show that a score finds the right group of genes, not that it tells genes apart. Synthea records diseases, rarely the findings (polyp counts, age at diagnosis, family history) that separate Lynch syndrome from FAP or BRCA1 from BRCA2. The condition mapping is hand-checked for 17 concepts only; the rest rely on name matches and OMOP ancestors.
 - The curator's name is what they type: the app has no sign-in, so a decision records who said they made it, not a verified identity.
 - This tool includes data from the gnomAD v4 release. For research and demonstration; not for clinical use.
