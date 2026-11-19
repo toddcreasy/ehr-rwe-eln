@@ -1,0 +1,38 @@
+# A clinical sequencing panel for the genomics study's subjects: real ClinVar variants at
+# their real GRCh38 positions, planted in synthetic people. Genes are from the ACMG secondary
+# findings list whose condition Synthea records.
+#
+# Carrier rates are set here, not learned. Among people with the condition they are about
+# twice what studies report (BRCA1 and BRCA2 together in about 5% of breast cancers; Lynch
+# syndrome and FAP in about 3% to 5% of colon cancers; familial hypercholesterolemia in a few
+# percent of high cholesterol), so a 5,000-person study has enough carriers to test with.
+# Without the condition they are near population rates (1 in 300 to 1 in 250).
+clinvar_release: "20261115"
+gnomad_dataset: gnomad_r4
+seed: 0
+# Variants chosen per gene. Pathogenic and uncertain variants need at least min_stars in
+# ClinVar (2: several submitters agree; 3: an expert panel); benign ones also need a gnomAD
+# frequency of at least benign_min_frequency, so they are common enough to see.
+pathogenic_per_gene: 3
+benign_per_gene: 3
+uncertain_per_gene: 2
+min_stars: 2
+benign_min_frequency: 0.01
+# Each person carries each uncertain variant with this probability, whatever their record.
+uncertain_carriers: 0.004
+conditions:
+  - name: breast_cancer
+    concept_id: 4112853  # Malignant neoplasm of breast, with its descendants
+    genes: [BRCA1, BRCA2]
+    carriers_with: 0.10
+    carriers_without: 0.003
+  - name: colon_cancer
+    concept_id: 4180790  # Malignant neoplasm of colon, with its descendants
+    genes: [MLH1, MSH2, APC]
+    carriers_with: 0.10
+    carriers_without: 0.003
+  - name: hyperlipidemia
+    concept_id: 432867  # Hyperlipidemia, with its descendants
+    genes: [LDLR]
+    carriers_with: 0.05
+    carriers_without: 0.004

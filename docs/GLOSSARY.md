@@ -297,6 +297,18 @@ Lambda: the middle of the observed test statistics divided by what chance alone 
 
 A simulator of genomes under the coalescent, a model that traces sampled chromosomes back through shared ancestors with recombination. Its output looks like real data in allele frequencies and linkage disequilibrium. [msprime](https://tskit.dev/msprime/)
 
+### ClinVar
+
+NCBI's public archive of what labs and expert panels have concluded about human variants: pathogenic, benign, or of uncertain significance, with a review status shown as zero to four stars (three is an expert panel). The clinical panel plants real ClinVar variants. [ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/)
+
+### gnomAD
+
+The Genome Aggregation Database: variant frequencies from hundreds of thousands of exomes and genomes, released under CC0. A variant too common in gnomAD to cause a rare disease is evidence that it is benign. [gnomAD](https://gnomad.broadinstitute.org)
+
+### ACMG secondary findings
+
+The American College of Medical Genetics and Genomics list of genes where a pathogenic variant is worth reporting even when found by chance, because something can be done about it (BRCA1 and BRCA2, the Lynch syndrome genes, LDLR, and others). The panel's genes come from it. [ACMG SF list in ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/docs/acmg/)
+
 ### VCF
 
 Variant call format: the standard text file of genotypes, one line per variant and one column per sample. [VCF 4.2 specification](https://samtools.github.io/hts-specs/VCFv4.2.pdf)
