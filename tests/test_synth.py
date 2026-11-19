@@ -27,6 +27,7 @@ def spec(*columns, seed=0, releases=None) -> Spec:
         name="t",
         description="t",
         data_use_limitations="None: synthetic test data.",
+        source_access="synthetic",
         seed=seed,
         releases=releases or [{"method": "bayes_net", "epsilon": 1}],
         columns=list(columns),

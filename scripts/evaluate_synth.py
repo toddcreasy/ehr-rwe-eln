@@ -136,7 +136,12 @@ def main() -> None:
             save_report(con, release_id, "fidelity", report)
             con.commit()
             print(row(f"{release_id}: {method} {epsilon:g}", report, tstr, trtr))
-            if len(holdout):
+            if len(holdout) and not spec.attacks_allowed:
+                privacy_lines.append(
+                    f"{release_id}: {method} {epsilon:g}: not run; controlled source without"
+                    " attack_approval"
+                )
+            elif len(holdout):
                 copy_key = ("copy", key)
                 if copy_key not in sources:
                     sources[copy_key] = privacy_report(train, holdout, train, spec)

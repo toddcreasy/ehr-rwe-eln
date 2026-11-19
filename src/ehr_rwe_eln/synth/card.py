@@ -286,6 +286,21 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
         "",
         spec.data_use_limitations,
         "",
+        *(
+            [
+                "Derived from controlled-access data, so it is shared only with the approved users"
+                " named in the data access request"
+                + (f" ({', '.join(spec.approved_users)})" if spec.approved_users else "")
+                + (
+                    f", or as the DAC has allowed: {spec.dac_sharing_approval}."
+                    if spec.dac_sharing_approval
+                    else ", unless the DAC approves wider sharing."
+                ),
+                "",
+            ]
+            if spec.source_access == "controlled"
+            else []
+        ),
         "## How it was made",
         "",
         "Every category list and numeric range below is fixed in the spec, never read from the"
@@ -320,6 +335,15 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
         lines += ["", *_trial(trial)]
     if "privacy" in reports:
         lines += ["", *_privacy(reports["privacy"])]
+    elif not spec.attacks_allowed:
+        lines += [
+            "",
+            "## Privacy risk",
+            "",
+            "Not assessed: on a controlled source the attacks are attempts to identify"
+            " participants, and the data access request has not approved them. Its protection"
+            " rests on the differential privacy budget alone.",
+        ]
     elif not release["holdout_rows"]:
         lines += [
             "",
