@@ -1,6 +1,6 @@
 """Make every release a synthetic data spec lists, and store each with its provenance.
 
-Usage: DB_NAME=ehr_rwe_eln_tte uv run python scripts/synthesize.py [--spec path/to/spec.yaml]
+Usage: uv run python scripts/synthesize.py [--spec path/to/spec.yaml]
 
 The default spec is src/ehr_rwe_eln/synth/specs/person_summary.yaml. Each release is trained on
 the spec's training split; the holdout is kept for scripts/evaluate_synth.py. Each run adds new

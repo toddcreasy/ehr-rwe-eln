@@ -42,10 +42,10 @@ The reports read real data, so they are for internal review, not for release.
 
 ```bash
 export SPEC=src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/synthesize.py
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/synthesize.py --spec $SPEC
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/evaluate_synth.py
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/synth_cards.py
+uv run python scripts/synthesize.py
+uv run python scripts/synthesize.py --spec $SPEC
+uv run python scripts/evaluate_synth.py
+uv run python scripts/synth_cards.py
 ```
 
 Synthesis takes under a minute and evaluation about a minute. Data cards go to `data/synth/cards/`. The page at http://127.0.0.1:8000/synth/ compares the releases and shows each card (start the app with the same `DB_NAME`).

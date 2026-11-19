@@ -15,7 +15,7 @@ Everything runs on one machine in [Docker Compose](https://docs.docker.com/compo
 | Module | What it does | Result |
 |---|---|---|
 | [Cohort pipeline](docs/modules/cohort.md) | Synthea patients to OMOP CDM v5.4; cohorts from YAML | Checked against [OHDSI](https://www.ohdsi.org) [ETL-Synthea](https://github.com/OHDSI/ETL-Synthea), [every difference explained](docs/etl_synthea_comparison.md) |
-| [Data quality](docs/modules/data_quality.md) | All 2,384 OHDSI [DataQualityDashboard](https://github.com/OHDSI/DataQualityDashboard) checks, scored, with a dashboard | [Identical to DQD](docs/dqd_comparison.md) on every check; 99.62% pass |
+| [Data quality](docs/modules/data_quality.md) | All 2,384 OHDSI [DataQualityDashboard](https://github.com/OHDSI/DataQualityDashboard) checks, scored, with a dashboard | [Identical to DQD](docs/dqd_comparison.md) on every check; 99.41% pass |
 | [Target trial emulation](docs/modules/trial_emulation.md) | Trial protocols in YAML; propensity weighting, survival, a bias report | Weighted hazard ratios with negative controls; says "not estimable" when arms don't overlap |
 | [ELN to EHR bridge](docs/modules/eln.md) | Claude extracts samples and results from notebook text into OMOP and [FHIR R4](https://hl7.org/fhir/R4/) | Precision and recall 1.000 on 300 entries; resists prompt injection |
 | [Synthetic genomics](docs/modules/genomics.md) | A [dbGaP](https://www.ncbi.nlm.nih.gov/gap/)-style genotype study with a planted effect, and a GWAS | Finds the planted effect; calibration still open |

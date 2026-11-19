@@ -44,7 +44,7 @@ Open `.env` and set two values: `DB_PASSWORD` (any long random string; `openssl 
 | Variable | Default | Notes |
 |---|---|---|
 | `DB_HOST`, `DB_PORT`, `DB_USER` | `localhost`, `5432`, `postgres` | Match `docker-compose.yml` |
-| `DB_NAME` | `ehr_rwe_eln` | Which database the scripts and the app use. Trial emulation, synthetic data, and genomics use `ehr_rwe_eln_tte` |
+| `DB_NAME` | `ehr_rwe_eln` | The database the scripts and the app use |
 | `DB_PASSWORD` | none | Required |
 | `ANTHROPIC_API_KEY` | none | Required for extraction, the agent, and evals |
 | `MODEL` | `claude-opus-5-5` | Every model call uses it |
@@ -62,13 +62,6 @@ uv run python scripts/db_check.py
 
 Postgres 18 with [pgvector](https://github.com/pgvector/pgvector) listens on 127.0.0.1:5432. `alembic upgrade head` creates the `dq`, `tte`, `eln`, and `synth` schemas. `db_check.py` runs a pgvector round trip and leaves nothing behind.
 
-Trial emulation, the synthetic data, and genomics need a second, larger database. Create it once and migrate it:
-
-```bash
-docker compose exec -T db psql -U postgres -c "CREATE DATABASE ehr_rwe_eln_tte"
-DB_NAME=ehr_rwe_eln_tte uv run alembic upgrade head
-```
-
 ## Get the vocabularies
 
 [OMOP](https://ohdsi.github.io/CommonDataModel/cdm54.html) stores every diagnosis, drug, and lab test as a numeric concept. The tables that define those concepts come from [OHDSI Athena](https://athena.ohdsi.org), under each vocabulary's own license, so they are never committed and you download them yourself. Make two downloads:
@@ -82,46 +75,44 @@ The published counts were built from SNOMED 2026-03 US, LOINC 2.82, RxNorm 2026-
 
 ## Build the data
 
-Two Synthea populations, each loaded into its own database:
+One Synthea population, loaded into `ehr_rwe_eln`:
 
 ```bash
 uv run python scripts/generate_synthea.py
-uv run python scripts/generate_synthea.py --patients 20000 --output data/synthea_20k/output
 uv run python scripts/build_omop.py
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/build_omop.py --synthea data/synthea_20k/output/csv
 uv run python scripts/build_cohorts.py
 ```
 
-`generate_synthea.py` downloads Synthea 3.3.0, checks its SHA-256, and runs it with a fixed seed and reference date, so the same arguments always give the same people: 1,172 for the default (1,000 living plus those who died during the simulation) and 23,421 for the larger build. `build_omop.py` loads the vocabularies, runs the ETL (extract, transform, load), builds condition and drug eras, then adds keys and indices. The small build takes about a minute; the large one about five.
+`generate_synthea.py` downloads Synthea 3.3.0, checks its SHA-256, and runs it with a fixed seed and reference date, so the same arguments always give the same people: 23,421 by default (20,000 living plus those who died during the simulation). `build_omop.py` loads the vocabularies, runs the ETL (extract, transform, load), builds condition and drug eras, then adds keys and indices. The build takes about five minutes.
 
 ## Run the modules
 
 Each module has its own page with what it does and how to read its output. The commands, in build order:
 
 ```bash
-# Data quality, on the default database (about 20 s)
+# Data quality (about 2 minutes)
 uv run python scripts/run_dq.py
 
-# Target trial emulation, on the large database (about 1 minute)
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/run_tte.py
+# Target trial emulation (about 1 minute)
+uv run python scripts/run_tte.py
 
-# ELN bridge, on the default database (extraction about 8 minutes, billed)
+# ELN bridge (extraction takes minutes and is billed)
 uv run python scripts/generate_eln.py
 uv run python scripts/extract_eln.py
 uv run python scripts/write_eln_omop.py
 uv run python scripts/export_eln_fhir.py
 
-# Synthetic genomics, on the large database
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/generate_genomics.py
+# Synthetic genomics
+uv run python scripts/generate_genomics.py
 uv run python scripts/run_gwas.py
 docker compose run --rm --build hail      # optional: the same GWAS in Hail, a 2.4 GB image
 
-# Synthetic data, on the large database
+# Synthetic data
 export SPEC=src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/synthesize.py
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/synthesize.py --spec $SPEC
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/evaluate_synth.py
-DB_NAME=ehr_rwe_eln_tte uv run python scripts/synth_cards.py
+uv run python scripts/synthesize.py
+uv run python scripts/synthesize.py --spec $SPEC
+uv run python scripts/evaluate_synth.py
+uv run python scripts/synth_cards.py
 ```
 
 Details: [cohort pipeline](modules/cohort.md), [data quality](modules/data_quality.md), [target trial emulation](modules/trial_emulation.md), [ELN bridge](modules/eln.md), [synthetic genomics](modules/genomics.md), [synthetic data](modules/synthetic_data.md).
@@ -132,8 +123,6 @@ Details: [cohort pipeline](modules/cohort.md), [data quality](modules/data_quali
 (cd frontend && npm ci && npm run build)   # once, and after frontend changes
 uv run fastapi dev                         # http://127.0.0.1:8000, reloads on save
 ```
-
-The app reads one database, the one `DB_NAME` names. The data quality and ELN pages use the default; the trial and synthetic data pages need `DB_NAME=ehr_rwe_eln_tte uv run fastapi dev`.
 
 To run the app in Docker instead, `docker compose up -d --build --wait` builds the frontend into the image and serves everything on http://127.0.0.1:8000. Both ports bind to 127.0.0.1 only, because there is no sign-in.
 
@@ -171,5 +160,3 @@ Generated files live under `data/`, which is gitignored: Synthea output, vocabul
 **`schema cdm already exists`.** `build_omop.py` refuses to load over an existing build. Drop it first: `docker compose exec -T db psql -U postgres -d <database> -c "DROP SCHEMA cdm CASCADE"`.
 
 **`StaticFiles directory 'frontend/out' does not exist`.** The frontend has not been built in this checkout. Run `npm ci && npm run build` in `frontend/`.
-
-**The synthetic data page is empty.** The app is reading the default database; restart it with `DB_NAME=ehr_rwe_eln_tte`.

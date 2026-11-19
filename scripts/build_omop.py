@@ -3,8 +3,7 @@ Synthea ETL, condition and drug eras, then primary keys, foreign keys, and indic
 
 Usage: uv run python scripts/build_omop.py [--synthea data/synthea/output/csv]
 
-The database comes from DB_NAME (default ehr_rwe_eln). Module 4's larger population:
-  DB_NAME=ehr_rwe_eln_tte uv run python scripts/build_omop.py --synthea data/synthea_20k/output/csv
+The database comes from DB_NAME (default ehr_rwe_eln).
 
 Needs the Athena downloads in data/vocab/ (clinical vocabularies) and data/vocab_extra/
 (Gender, Race, Ethnicity), scripts/generate_synthea.py output, and the database running

@@ -3,7 +3,7 @@
 Our [Synthea](https://github.com/synthetichealth/synthea) to [OMOP](https://ohdsi.github.io/CommonDataModel/cdm54.html) ETL (`src/ehr_rwe_eln/cohort/etl.py`) checked against [OHDSI](https://www.ohdsi.org) [ETL-Synthea](https://github.com/OHDSI/ETL-Synthea), the
 reference implementation, on the same input. Run on 2026-10-12.
 
-**Inputs, identical on both sides:** 1,172 Synthea 3.3.0 patients (`scripts/generate_synthea.py`,
+**Inputs, identical on both sides:** 1,172 Synthea 3.3.0 patients (`scripts/generate_synthea.py --patients 1000`,
 seed 42, reference date 2026-01-01) and the same [Athena](https://athena.ohdsi.org) vocabulary download ([SNOMED](https://www.snomed.org) 2026-03 US,
 [LOINC](https://loinc.org) 2.82, [RxNorm](https://www.nlm.nih.gov/research/umls/rxnorm/index.html) 2026-06-01, [CVX](https://www2.cdc.gov/vaccines/iis/iisstandards/vaccines.asp?rpt=cvx) 2026-04, [ICD10CM](https://www.cdc.gov/nchs/icd/icd-10-cm/index.html) FY2027).
 

@@ -3,7 +3,6 @@ Prints each bias report: attrition, arms, balance, positivity diagnostics, risks
 and negative controls. Stores the run in the tte schema for the /tte page.
 
 Usage: uv run python scripts/run_tte.py
-Module 4's larger population: DB_NAME=ehr_rwe_eln_tte uv run python scripts/run_tte.py
 
 Needs migrations applied (uv run alembic upgrade head), against the same DB_NAME.
 

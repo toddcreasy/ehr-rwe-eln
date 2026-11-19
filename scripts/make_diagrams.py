@@ -1,4 +1,5 @@
-"""Draw docs/architecture.svg: what runs where, how data moves between the modules, and the checks.
+"""Draw docs/architecture.svg (what runs where, how data moves between the modules, the checks) and
+docs/schema.svg (the database's schemas, tables, and keys).
 
 Each box has a hover note and links to its docs or source when the SVG is opened in a browser.
 GitHub shows it as a plain image. The drawing helpers follow methyl-flow's make_diagrams.py.
@@ -151,9 +152,8 @@ s += [
         "runtime",
         "db container",
         "Postgres 18 + pgvector 0.8.7",
-        "One Postgres holds two databases built the same way: ehr_rwe_eln (1,172 people) and "
-        "ehr_rwe_eln_tte (23,421 people, for trial emulation, synthetic data, and genomics). "
-        "Schemas: cdm, dq, tte, eln, synth. Data lives in the ehr-rwe-eln-db volume.",
+        "One database, ehr_rwe_eln, with 23,421 people. Schemas: cdm, dq, tte, eln, synth. "
+        "Tests use ehr_rwe_eln_test. Data lives in the ehr-rwe-eln-db volume.",
         REPO + "docker-compose.yml",
     ),
     node(
@@ -165,7 +165,7 @@ s += [
         "scripts/*.py",
         "uv run on the host",
         "Every build and analysis step is a script run with uv run python scripts/<name>.py. "
-        "Each writes to the database DB_NAME names.",
+        "Each writes to ehr_rwe_eln.",
         REPO + "scripts",
     ),
     node(
@@ -210,7 +210,7 @@ s += [
         "Synthea 3.3.0",
         "synthetic patients, CSV",
         "Open-source synthetic patient generator. Seed and reference date are fixed, so the same "
-        "arguments give the same people: 1,172 for the default build, 23,421 for trial emulation.",
+        "arguments give the same people: 23,421 by default.",
         "https://github.com/synthetichealth/synthea",
     ),
     node(
@@ -518,3 +518,276 @@ for i, (kind, name, sub) in enumerate(
 s.append("</svg>")
 (OUT / "architecture.svg").write_text("\n".join(s) + "\n")
 print("wrote", OUT / "architecture.svg")
+
+# Schema: one database, the OMOP tables in cdm, one schema per module, and what lives outside.
+CDM = "https://ohdsi.github.io/CommonDataModel/cdm54.html#"
+MIG = REPO + "migrations/versions/"
+TW, TH = 165, 48
+X = [75, 250, 425, 600]
+MX = [820, 1030]
+MW = 150
+s = header(
+    1240,
+    860,
+    "ehr-rwe-eln database: OMOP tables in cdm, one schema per module",
+    "One Postgres database, ehr_rwe_eln. The cdm schema holds the OMOP CDM v5.4 tables: clinical "
+    "events keyed to person, derived eras and cohorts, and the Athena vocabularies keyed to "
+    "concept. The dq, tte, eln, and synth schemas hold each module's results. Genotypes, "
+    "registries, the FHIR bundle, and data cards are files under data/.",
+)
+s.append('<text x="40" y="26" class="t" font-size="15" font-weight="700">ehr_rwe_eln</text>')
+s.append(
+    '<text x="140" y="26" class="s">Row counts are from the 23,421-person build. '
+    "Open the SVG on its own and hover a table for what it holds.</text>"
+)
+
+
+def label(x, y, text):
+    return f'<text x="{x}" y="{y}" class="t" font-size="12" font-weight="600">{esc(text)}</text>'
+
+
+def table(x, y, kind, name, sub, note, link, w=TW):
+    return node(x, y, w, TH, kind, name, sub, note, link)
+
+
+s.append(
+    panel(
+        40,
+        40,
+        1160,
+        560,
+        "Postgres database ehr_rwe_eln",
+        "Every module reads and writes this one database. Alembic migrations create the module "
+        "schemas and record their version in public.alembic_version; scripts/build_omop.py "
+        "builds cdm. A second patient population would be a second CDM schema here, not a "
+        "second database.",
+    )
+)
+
+# cdm.
+s.append(
+    panel(
+        55,
+        70,
+        735,
+        515,
+        "cdm schema: OMOP CDM v5.4",
+        "The OHDSI standard tables. 17 foreign keys point at person and 118 at concept.",
+    )
+)
+s.append(label(75, 112, "Clinical data: every row has person_id, a foreign key to person"))
+clinical = [
+    ("person", "23,421 people", "One row per patient: birth year, sex, race, ethnicity."),
+    (
+        "observation_period",
+        "one per person",
+        "The span of time each person's records cover. Analyses count events only inside it.",
+    ),
+    ("death", "3,421 rows", "Date and cause for people who died during the simulation."),
+    ("visit_occurrence", "1.7M rows", "Encounters: outpatient, inpatient, emergency, and others."),
+    ("condition_occurrence", "418K rows", "Diagnoses, coded in SNOMED."),
+    ("drug_exposure", "1.9M rows", "Prescriptions and administrations, coded in RxNorm and CVX."),
+    ("procedure_occurrence", "2.1M rows", "Procedures, coded in SNOMED."),
+    (
+        "measurement",
+        "16.3M rows",
+        "Lab results and vital signs, coded in LOINC. The ELN bridge adds its lab results here.",
+    ),
+    ("observation", "7.9M rows", "Facts that are not measurements: history, social, survey."),
+    ("device_exposure", "41K rows", "Devices used on or implanted in a person."),
+    ("specimen", "ELN samples", "Samples from lab notebook entries, written by the ELN bridge."),
+    (
+        "fact_relationship",
+        "sample to result",
+        "Links each ELN specimen to the measurements taken from it. Written by the ELN bridge.",
+    ),
+]
+for i, (name, sub, note) in enumerate(clinical):
+    s.append(table(X[i % 4], 120 + (i // 4) * 58, "data", name, sub, note, CDM + name))
+
+s.append(label(75, 310, "Derived: built from the clinical tables"))
+derived = [
+    ("condition_era", "396K rows", "Spans of continuous diagnosis, built by the cohort pipeline."),
+    ("drug_era", "213K rows", "Spans of continuous drug use, built by the cohort pipeline."),
+    ("cohort", "YAML cohorts", "People and index dates for each cohort definition in YAML."),
+    ("cdm_source", "build metadata", "Source name, ETL date, and vocabulary version."),
+]
+for i, (name, sub, note) in enumerate(derived):
+    s.append(table(X[i], 318, "data", name, sub, note, CDM + name))
+
+s.append(label(75, 392, "Vocabularies from Athena: every *_concept_id is a foreign key to concept"))
+vocab = [
+    (
+        "concept",
+        "2.0M concepts",
+        "Every code from every vocabulary, with its standard concept. A diagnosis or drug in "
+        "the clinical tables is a concept_id here.",
+    ),
+    (
+        "concept_relationship",
+        "14.0M rows",
+        "Mappings between concepts, such as a source code to its standard concept.",
+    ),
+    (
+        "concept_ancestor",
+        "11.1M rows",
+        "Every concept's ancestors, so a cohort can ask for a drug class instead of each drug.",
+    ),
+    ("concept_synonym", "2.5M rows", "Alternative names for concepts."),
+    ("vocabulary", "45 rows", "SNOMED, LOINC, RxNorm, CVX, ICD10CM, and the small ones."),
+    ("domain", "50 rows", "Which table a concept belongs in: Condition, Drug, Measurement."),
+    ("concept_class", "433 rows", "Kinds of concept within a vocabulary."),
+    ("drug_strength", "210K rows", "Ingredient amounts per drug, for dose calculations."),
+]
+for i, (name, sub, note) in enumerate(vocab):
+    s.append(table(X[i % 4], 400 + (i // 4) * 58, "ops", name, sub, note, CDM + name))
+s.append(
+    '<text x="75" y="540" class="s">Also defined, empty in this build: provider, care_site, '
+    "location, cost, payer_plan_period, note, note_nlp,</text>"
+)
+s.append(
+    '<text x="75" y="556" class="s">visit_detail, episode, episode_event, dose_era, metadata, '
+    "source_to_concept_map, cohort_definition, relationship (724 rows).</text>"
+)
+
+# Module schemas.
+s.append(
+    panel(
+        805,
+        70,
+        380,
+        515,
+        "Module schemas",
+        "Each module's results, created by Alembic migrations. Arrows are foreign keys.",
+    )
+)
+mods = [
+    (
+        112,
+        "dq: data quality",
+        ("dq.run", "one per check run", "When a run happened and its overall scores."),
+        ("dq.result", "2,384 per run", "One row per DQD check: threshold, violations, pass."),
+        "run_id",
+        MIG + "003_dq_results.py",
+    ),
+    (
+        198,
+        "tte: target trial emulation",
+        ("tte.run", "one per analysis", "When the trial protocols ran, and on how many people."),
+        ("tte.report", "one per protocol", "The bias report: attrition, balance, estimates."),
+        "run_id",
+        MIG + "005_tte_reports.py",
+    ),
+    (
+        284,
+        "eln: ELN bridge",
+        ("eln.entry", "300 entries", "The free-text lab notebook entries."),
+        ("eln.extraction", "one per entry", "What Claude extracted, as validated JSON."),
+        "entry_id",
+        MIG + "006_eln.py",
+    ),
+    (
+        428,
+        "synth: synthetic data",
+        ("synth.release", "one per release", "Method, privacy budget, seed, and provenance."),
+        ("synth.row", "synthetic rows", "The released rows, as JSON per row."),
+        "release_id",
+        MIG + "007_synth.py",
+    ),
+]
+for y, title, parent, child, key, link in mods:
+    s.append(label(820, y, title))
+    s.append(table(MX[0], y + 8, "module", *parent, link, MW))
+    s.append(table(MX[1], y + 8, "module", *child, link, MW))
+    my = y + 8 + TH // 2
+    s.append(arrow([(MX[1], my), (MX[0] + MW, my)]))
+    s.append(f'<text x="{MX[0] + MW + 4}" y="{my - 6}" class="e">{key}</text>')
+s.append(
+    table(
+        MX[0],
+        350,
+        "module",
+        "eln.subject",
+        "code to person_id",
+        "Links each notebook subject code to a person in cdm.person. Kept as data, not a foreign "
+        "key, the way a lab keeps its subject registry apart from its notebooks.",
+        MIG + "006_eln.py",
+        MW,
+    )
+)
+s.append(
+    table(
+        MX[1],
+        494,
+        "module",
+        "synth.report",
+        "fidelity, privacy",
+        "Fidelity, utility, trial parity, and privacy risk reports per release.",
+        MIG + "008_synth_reports.py",
+        MW,
+    )
+)
+s.append(arrow([(MX[1], 518), (MX[0] + MW / 2, 518), (MX[0] + MW / 2, 484)]))
+s.append(f'<text x="{MX[0] + MW / 2 + 6}" y="512" class="e">release_id</text>')
+
+# Outside the database.
+s.append(
+    panel(
+        40,
+        620,
+        1160,
+        110,
+        "Outside this database",
+        "Files under data/, which is gitignored, and the test database.",
+    )
+)
+outside = [
+    (
+        "ehr_rwe_eln_test",
+        "same schemas, pytest only",
+        "Where pytest writes and rolls back, so tests never touch ehr_rwe_eln. Holds no patients.",
+        REPO + "tests/conftest.py",
+    ),
+    (
+        "data/genomics",
+        "VCF, PLINK, phenotypes",
+        "The simulated genotype study, laid out as dbGaP distributes one. GWAS tools read files, "
+        "not tables.",
+        MOD + "genomics.md",
+    ),
+    (
+        "data/registry",
+        "study code to person_id",
+        "Links the genomics and ELN study codes to OMOP persons, kept apart from the study files.",
+        MOD + "genomics.md",
+    ),
+    (
+        "data/eln",
+        "entries, FHIR R4 bundle",
+        "The generated entries with their answers, and the FHIR R4 Specimen and Observation "
+        "export.",
+        MOD + "eln.md",
+    ),
+    (
+        "data/synth/cards",
+        "a data card per release",
+        "What each synthetic release is, how it was made, and what it is safe to use for.",
+        MOD + "synthetic_data.md",
+    ),
+]
+for i, (name, sub, note, link) in enumerate(outside):
+    s.append(node(C[i], 655, DW, NH, "outside", name, sub, note, link))
+
+s.append(panel(40, 750, 1160, 100, "Key", "Box colors."))
+for i, (kind, name, sub) in enumerate(
+    [
+        ("data", "OMOP table", "clinical or derived"),
+        ("ops", "Vocabulary table", "from Athena"),
+        ("module", "Module table", "dq, tte, eln, synth"),
+        ("outside", "Outside", "files, test database"),
+    ]
+):
+    s.append(node(60 + i * 230, 780, DW, NH, kind, name, sub, f"{name}: {sub}"))
+s.append("</svg>")
+(OUT / "schema.svg").write_text("\n".join(s) + "\n")
+print("wrote", OUT / "schema.svg")
