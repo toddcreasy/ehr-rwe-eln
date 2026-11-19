@@ -38,7 +38,7 @@ This is a single-maintainer project on synthetic data. Some categories are about
 |---|---|---|
 | MEASURE 1: appropriate methods and metrics identified and applied | Fidelity (total variation distance per column and pair, KS, correlation gap), utility (train on synthetic, test on real), trial parity over 20 draws, three privacy attacks, quasi-identifier uniqueness; ELN precision and recall per trap. Each metric defined in its module and in the methodology. | None. |
 | MEASURE 2: evaluated for trustworthy characteristics | See the table below. | Fairness across three-way intersections; the VAE's distortion of older people. |
-| MEASURE 3: tracking identified risks over time | Every release and every report records the code version it came from; data cards are regenerated from them. The data quality module keeps every run. | `synth.report` keeps only the latest report per release and kind; history is in git, not the database. No scheduled re-evaluation. |
+| MEASURE 3: tracking identified risks over time | Every release and every report records the code version it came from; data cards are regenerated from them. The data quality module keeps every run. | `synth.report` keeps only the latest report per release and kind; history is in git, not the database. Scheduled privacy checks keep a row per run (`synth.monitor_run`), but not the reports they replace. |
 | MEASURE 4: feedback about the efficacy of measurement | The measurements are themselves checked: the noise floor and the copy of the training data show what the metrics read at their limits; the independent-columns baseline must score as useless and does (AUC 0.465); tests confirm a shuffled relationship is caught and a copy leaks. A weak copy result led to adding the uniqueness metric, which explained it. | None. |
 
 Trustworthy characteristics (MEASURE 2):
@@ -60,13 +60,13 @@ Trustworthy characteristics (MEASURE 2):
 | MANAGE 1: risks prioritized and responded to | Findings become tracked items: give the trial outcome a confounder as a parent, load location for linkage testing, tune the VAE on a public stand-in. | Prioritization is informal (a TODO list), not a risk register. |
 | MANAGE 2: strategies to maximize benefits and minimize negative impacts | Intended-use limits on every card; warnings where trial parity found spurious effects; a holdout kept out of every release; budgets enforced in code; unsafe configurations refused (unseeded VAE). | None. |
 | MANAGE 3: third-party risks and benefits | Version constraints and lockfile; the accountant switched after a numerical warning; model changes gated by evals. | No scanning or alerting on new dependency advisories. |
-| MANAGE 4: risk treatments, response and recovery, and communication | Data cards and the methodology communicate risk to reviewers. Every export is recorded with its recipient and purpose; a withdrawal marks the release, stops further exports, rewrites its card, and drafts a notice for each recipient (methodology section 6). Each evaluation run lists releases whose privacy checks drift past halfway to a copy of the training data. | Notices are drafted, not sent, and no one confirms deletion in the system. Monitoring runs when someone reruns the evaluation, not on a schedule. |
+| MANAGE 4: risk treatments, response and recovery, and communication | Data cards and the methodology communicate risk to reviewers. Every export is recorded with its recipient and purpose; a withdrawal marks the release, stops further exports, rewrites its card, and drafts a notice for each recipient (methodology section 6). Each evaluation run, and a scheduled check every 24 hours when a source or the code changed, lists releases whose privacy checks drift past halfway to a copy of the training data. | Notices are drafted, not sent, and no one confirms deletion in the system. Scheduled checks flag drift on the `/synth/` page and in the logs; nobody is notified outside the machine. |
 
 ## Gaps, in order of importance
 
 1. The VAE's distortion of older people, worst for older men; age and race unlinked in the Bayesian network's structure (linking them was tested and hurt the smallest races at epsilon 1); three-way intersections (MEASURE 2).
 2. Location in the source, so the linkage attack reflects real risk (MEASURE 2, privacy-enhanced).
 3. Report history in the database, not only the latest report (MEASURE 3).
-4. Scheduled re-evaluation of released data, and confirmed deletion after a withdrawal (MANAGE 4).
+4. Confirmed deletion after a withdrawal, and alerts that reach someone off the machine (MANAGE 4).
 5. Outside review by a DAC or red team (GOVERN 5), and separated roles (GOVERN 2), for any use beyond this project.
 6. A written policy for choosing epsilon on real data (GOVERN 1) and dependency advisory scanning (GOVERN 6, MANAGE 3).

@@ -43,6 +43,21 @@ services:
       timeout: 3s
       retries: 30
 
+  # Scheduled privacy checks on the synthetic releases (ehr_rwe_eln.synth.monitor): every
+  # MONITOR_INTERVAL_HOURS it reruns the attacks if a source or the synth code changed, and
+  # records each run in synth.monitor_run. Same image as the app, no ports.
+  monitor:
+    build: .
+    command: ["python", "-m", "ehr_rwe_eln.synth.monitor"]
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   # Hail, for the synthetic genotyping study. Off by default (a profile); run it with
   #   docker compose run --rm --build hail
   # after scripts/generate_genomics.py. No network ports; it reads and writes data/genomics.

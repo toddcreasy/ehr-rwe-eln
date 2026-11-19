@@ -192,6 +192,8 @@ The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.26) fo
 
 **After release.** Each run of `scripts/evaluate_synth.py` rescores every release and lists for review any whose membership inference AUC or nearer-a-member share has moved more than halfway from chance (0.5) toward what a plain copy of the training data shows (0.650 and 62.9% on the person summary, so 0.575 and 56.5%). That is a trigger to investigate and possibly withdraw, not proof of a leak. No current release is flagged.
 
+**On a schedule.** The Compose `monitor` service (`ehr_rwe_eln.synth.monitor`) runs the same privacy check every `MONITOR_INTERVAL_HOURS`, 24 by default. The attacks are seeded, so on unchanged data and code they give the same answer; a release can only drift when its source changes (a rebuild, or the ELN bridge adding lab results) or the code does. Each run therefore fingerprints every spec's source table and the synth code, reruns the attacks only when a fingerprint changed, and records the run, skipped or not, in `synth.monitor_run`. A full check of the 11 releases with a holdout takes about 25 seconds; a skipped one, a few. The `/synth/` page shows the last check and any release it flagged. Trial parity is not rerun on the schedule: it redraws releases, and measures how a synthesizer behaves rather than drift.
+
 ## 7. Limitations
 
 - Synthea output is cleaner and more regular than real records. Fidelity and attack results on real data will differ.
