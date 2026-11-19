@@ -246,6 +246,22 @@ def write_panel_vcf(
             f.write("\t".join(fixed) + "\t" + "\t".join(GENOTYPES[dosage[v]]) + "\n")
 
 
+def read_panel_carriers(path: Path) -> dict[str, list[str]]:
+    """The samples carrying each variant in a panel VCF (any genotype other than 0/0), by the
+    variant's ID column."""
+    out = {}
+    with gzip.open(path, "rt") as f:
+        for line in f:
+            if line.startswith("##"):
+                continue
+            cols = line.rstrip("\n").split("\t")
+            if line.startswith("#"):
+                samples = cols[9:]
+                continue
+            out[cols[2]] = [s for s, gt in zip(samples, cols[9:], strict=True) if gt != "0/0"]
+    return out
+
+
 def write_panel(
     out: Path, variants: pl.DataFrame, dosage: np.ndarray, samples: list[str], truth: dict
 ) -> None:

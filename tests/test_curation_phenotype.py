@@ -6,6 +6,7 @@ from ehr_rwe_eln.curation.phenotype import (
     information_content,
     load_manual,
     map_conditions,
+    percentiles,
     read_gene_terms,
     read_obo,
     similarity,
@@ -108,6 +109,11 @@ def test_similarity_rewards_the_most_specific_shared_term(ont, genes):
     assert similarity(both, genes["LDLR"], ont, ic) == pytest.approx(math.log(3) / 2)
     assert similarity(both, genes["LDLR"], ont, ic, "max") == pytest.approx(math.log(3))
     assert similarity(set(), genes["LDLR"], ont, ic) == 0
+
+
+def test_percentiles_are_the_share_scoring_at_or_below(ont):
+    score = [0.1, 0.5, 0.5, 0.9, 0.2]
+    assert percentiles(score, [3, 1, 0]) == [100.0, 80.0, 20.0]
 
 
 def test_conditions_map_by_table_then_name_then_nearest_ancestor(ont):

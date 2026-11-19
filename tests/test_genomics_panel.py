@@ -13,6 +13,7 @@ from ehr_rwe_eln.genomics.panel import (
     finalize,
     genotype_panel,
     panel_truth,
+    read_panel_carriers,
     write_panel,
 )
 
@@ -251,6 +252,10 @@ def test_vcf_has_real_coordinates_and_the_truth_has_the_answers(clinvar_vcf, tmp
     )
     assert {r[7] for r in body} == {"."}  # no classification in the VCF
     assert not any("Pathogenic" in line or "Benign" in line for line in lines)
+    carriers_of = read_panel_carriers(tmp_path / "panel.vcf.gz")
+    assert list(carriers_of) == [r[2] for r in body]
+    for v, variant_id in enumerate(carriers_of):
+        assert carriers_of[variant_id] == [samples[i] for i in np.flatnonzero(dosage[v])]
 
     saved = json.loads((tmp_path / "panel_truth.json").read_text())
     assert saved == json.loads(json.dumps(truth))
