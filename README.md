@@ -1,6 +1,6 @@
 # ehr-rwe-eln
 
-Real world evidence (RWE) from synthetic electronic health records (EHR), linked to electronic lab notebook (ELN) data. Six modules share one [OMOP CDM v5.4](https://ohdsi.github.io/CommonDataModel/cdm54.html) database: they build it from synthetic patients, check its quality, emulate target trials on it, write lab results into it, release private synthetic copies of it, and simulate a genotyping study on its people.
+Real world evidence (RWE) from synthetic electronic health records (EHR), linked to electronic lab notebook (ELN) data. Seven modules share one [OMOP CDM v5.4](https://ohdsi.github.io/CommonDataModel/cdm54.html) database: they build it from synthetic patients, check its quality, emulate target trials on it, write lab results into it, release private synthetic copies of it, simulate a genotyping study on its people, and curate the real variants planted in them.
 
 ELN platforms capture bench data well, and few reach past the lab. Revvity's Signals Translational joins biomarker results to clinical trial data, and LabKey links assay results to study participants, but none of them writes notebook results into OMOP or EHR data. The ELN bridge works in that gap: it reads free-text notebook entries with Claude and writes the results next to the clinical record. [Background on ELN platforms and the gap](docs/modules/eln.md#background-what-eln-platforms-do).
 
@@ -19,6 +19,7 @@ Everything runs on one machine in [Docker Compose](https://docs.docker.com/compo
 | [Target trial emulation](docs/modules/trial_emulation.md) | Trial protocols in YAML; propensity weighting, survival, a bias report | Weighted hazard ratios with negative controls; says "not estimable" when arms don't overlap |
 | [ELN to EHR bridge](docs/modules/eln.md) | Claude extracts samples and results from notebook text into OMOP and [FHIR R4](https://hl7.org/fhir/R4/) | Precision and recall 1.000 on 300 entries; resists prompt injection |
 | [Synthetic genomics](docs/modules/genomics.md) | A [dbGaP](https://www.ncbi.nlm.nih.gov/gap/)-style genotype study with a planted effect, and a GWAS; a clinical panel of real ClinVar variants at their GRCh38 positions | Finds the planted effect; calibrated across 16 rebuilt studies |
+| [Variant curation](docs/modules/curation.md) | ACMG/AMP criteria with each gene's [ClinGen](https://clinicalgenome.org) expert panel thresholds, from gnomAD and Ensembl VEP | On 578 ClinVar expert-panel variants, its pathogenic calls agree 92% of the time and its benign calls 97%; 1 reversal, explained |
 | [Synthetic data](docs/modules/synthetic_data.md) | Differentially private releases with fidelity, privacy, and trial parity reports | Every release at chance on every privacy attack; [methodology](docs/synthetic_data_methodology.md) |
 
 The table is in run order: the cohort pipeline builds the OMOP tables every other module reads, and the rest follow.

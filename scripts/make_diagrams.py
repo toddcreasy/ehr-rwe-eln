@@ -368,8 +368,22 @@ s += [
         "Synthetic genomics",
         "msprime study, GWAS",
         "5,000 adults on three simulated chromosomes, with an odds ratio of 1.4 planted on "
-        "hypertension. A GWAS is checked against the planted effect.",
+        "hypertension. A GWAS is checked against the planted effect. A clinical panel puts "
+        "real ClinVar variants at their GRCh38 positions in the same people.",
         MOD + "genomics.md",
+    ),
+    node(
+        C[3],
+        R[4],
+        DW,
+        NH,
+        "module",
+        "Variant curation",
+        "ACMG rules, expert panels",
+        "Classifies the panel's variants with each gene's ClinGen expert panel thresholds, "
+        "from gnomAD v4 frequencies and Ensembl VEP consequences, and scores the rules "
+        "against ClinVar expert panels. Results in the curation schema.",
+        MOD + "curation.md",
     ),
     node(
         C[4],
@@ -456,6 +470,7 @@ for i in range(4):
     s.append(arrow([(C[2] + DW, m[i]), (C[3], m[i])]))
     s.append(arrow([(C[3] + DW, m[i]), (C[4], m[i])]))
 s.append(arrow([(C[4] + DW / 2, R[3] + NH), (C[4] + DW / 2, R[4])]))
+s.append(arrow([(C[3] + DW / 2, R[3] + NH), (C[3] + DW / 2, R[4])]))
 
 # Quality checks.
 RQ = 685
@@ -550,13 +565,15 @@ TW, TH = 165, 48
 X = [75, 250, 425, 600]
 MX = [820, 1030]
 MW = 150
+# Everything below the module schemas moves down this far, to fit the curation schema.
+SHIFT_SCHEMA = 90
 s = header(
     1240,
-    860,
+    860 + SHIFT_SCHEMA,
     "ehr-rwe-eln database: OMOP tables in cdm, one schema per module",
     "One Postgres database, ehr_rwe_eln. The cdm schema holds the OMOP CDM v5.4 tables: clinical "
     "events keyed to person, derived eras and cohorts, and the Athena vocabularies keyed to "
-    "concept. The dq, tte, eln, and synth schemas hold each module's results. Genotypes, "
+    "concept. The dq, tte, eln, synth, and curation schemas hold each module's results. Genotypes, "
     "registries, the FHIR bundle, and data cards are files under data/.",
 )
 s.append('<text x="40" y="26" class="t" font-size="15" font-weight="700">ehr_rwe_eln</text>')
@@ -579,7 +596,7 @@ s.append(
         40,
         40,
         1160,
-        560,
+        560 + SHIFT_SCHEMA,
         "Postgres database ehr_rwe_eln",
         "Every module reads and writes this one database. Alembic migrations create the module "
         "schemas and record their version in public.alembic_version; scripts/build_omop.py "
@@ -680,7 +697,7 @@ s.append(
         805,
         70,
         380,
-        515,
+        515 + SHIFT_SCHEMA,
         "Module schemas",
         "Each module's results, created by Alembic migrations. Arrows are foreign keys.",
     )
@@ -753,6 +770,35 @@ s.append(
 )
 s.append(arrow([(MX[1], 518), (MX[0] + MW / 2, 518), (MX[0] + MW / 2, 484)]))
 s.append(f'<text x="{MX[0] + MW / 2 + 6}" y="512" class="e">release_id</text>')
+s.append(label(820, 572, "curation: variant curation"))
+s.append(
+    table(
+        MX[0],
+        580,
+        "module",
+        "curation.run",
+        "one per run",
+        "Which variants were curated, every source and version used, and for eval runs the"
+        " agreement with ClinVar expert panels.",
+        MIG + "013_curation.py",
+        MW,
+    )
+)
+s.append(
+    table(
+        MX[1],
+        580,
+        "module",
+        "curation.assessment",
+        "one per variant",
+        "Evidence, criteria met and not assessed with reasons, points, and class.",
+        MIG + "013_curation.py",
+        MW,
+    )
+)
+s.append(arrow([(MX[1], 604), (MX[0] + MW, 604)]))
+s.append(f'<text x="{MX[0] + MW + 4}" y="598" class="e">run_id</text>')
+s.append(f'<g transform="translate(0,{SHIFT_SCHEMA})">')
 
 # Outside the database.
 s.append(
@@ -807,11 +853,12 @@ for i, (kind, name, sub) in enumerate(
     [
         ("data", "OMOP table", "clinical or derived"),
         ("ops", "Vocabulary table", "from Athena"),
-        ("module", "Module table", "dq, tte, eln, synth"),
+        ("module", "Module table", "dq, tte, eln, synth, curation"),
         ("outside", "Outside", "files, test database"),
     ]
 ):
     s.append(node(60 + i * 230, 780, DW, NH, kind, name, sub, f"{name}: {sub}"))
+s.append("</g>")
 s.append("</svg>")
 (OUT / "schema.svg").write_text("\n".join(s) + "\n")
 print("wrote", OUT / "schema.svg")

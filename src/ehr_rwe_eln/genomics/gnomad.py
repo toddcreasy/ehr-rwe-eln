@@ -43,14 +43,16 @@ def _frequency(found: dict | None) -> dict | None:
     return {"ac": ac, "an": an, "af": ac / an if an else None}
 
 
-def frequencies(
+def _cached(
     ids: list[str],
     cache: Path,
-    dataset: str = "gnomad_r4",
-    post: Callable[[str, dict], dict] = _post,
-    wait: float = WAIT,
+    fields: str,
+    parse: Callable[[dict | None], dict | None],
+    dataset: str,
+    post: Callable[[str, dict], dict],
+    wait: float,
 ) -> dict[str, dict | None]:
-    """Exome and genome allele counts combined, per gnomAD variant id (chrom-pos-ref-alt).
+    """Ask gnomAD for fields of each variant, BATCH per request, caching parse(answer) per id.
     Reads the cache first and fetches only what it lacks."""
     known = json.loads(cache.read_text()) if cache.exists() else {}
     missing = [i for i in dict.fromkeys(ids) if i not in known]
@@ -64,7 +66,7 @@ def frequencies(
             + ", ".join(f"${n}: String!" for n in names)
             + ") { "
             + " ".join(
-                f"{n}: variant(variantId: ${n}, dataset: {dataset}) {{ {FIELDS} }}" for n in names
+                f"{n}: variant(variantId: ${n}, dataset: {dataset}) {{ {fields} }}" for n in names
             )
             + " }"
         )
@@ -76,7 +78,59 @@ def frequencies(
             raise RuntimeError(f"gnomAD API: {other or answer}")
         data = answer["data"]
         for name, variant_id in zip(names, batch, strict=True):
-            known[variant_id] = _frequency(data.get(name))
+            known[variant_id] = parse(data.get(name))
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(known, indent=1, sort_keys=True) + "\n")
     return {i: known[i] for i in ids}
+
+
+def frequencies(
+    ids: list[str],
+    cache: Path,
+    dataset: str = "gnomad_r4",
+    post: Callable[[str, dict], dict] = _post,
+    wait: float = WAIT,
+) -> dict[str, dict | None]:
+    """Exome and genome allele counts combined, per gnomAD variant id (chrom-pos-ref-alt)."""
+    return _cached(ids, cache, FIELDS, _frequency, dataset, post, wait)
+
+
+# gnomAD v4's grpmax: the highest-frequency genetic ancestry group, leaving out the
+# bottlenecked groups (Amish, Ashkenazi Jewish, Finnish) and "remaining", where a founder
+# variant can be common without being benign. Middle Eastern is kept for exome and joint data
+# (gnomAD help, "Group maximum allele frequency").
+GRPMAX_GROUPS = ("afr", "amr", "eas", "mid", "nfe", "sas")
+DETAIL_FIELDS = "joint { ac an faf95 { popmax popmax_population } populations { id ac an } }"
+
+
+def _details(found: dict | None) -> dict | None:
+    joint = (found or {}).get("joint")
+    if not joint or not joint.get("an"):
+        return None
+    groups = {p["id"]: p for p in joint.get("populations") or []}
+    grpmax = [
+        groups[g]["ac"] / groups[g]["an"] for g in GRPMAX_GROUPS if groups.get(g, {}).get("an")
+    ]
+    faf = joint.get("faf95") or {}
+    return {
+        "ac": joint["ac"],
+        "an": joint["an"],
+        "af": joint["ac"] / joint["an"],
+        "grpmax_af": max(grpmax) if grpmax else None,
+        "faf95": faf.get("popmax"),
+        "faf95_group": faf.get("popmax_population"),
+    }
+
+
+def details(
+    ids: list[str],
+    cache: Path,
+    dataset: str = "gnomad_r4",
+    post: Callable[[str, dict], dict] = _post,
+    wait: float = WAIT,
+) -> dict[str, dict | None]:
+    """What curation needs from gnomAD, exomes and genomes joined: allele count and number,
+    overall frequency, the grpmax frequency, and the 95% filtering allele frequency (FAF95) in
+    the group where it is highest, the measure ClinGen expert panels set thresholds on. None
+    when gnomAD has no call at the site."""
+    return _cached(ids, cache, DETAIL_FIELDS, _details, dataset, post, wait)
