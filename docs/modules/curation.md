@@ -4,7 +4,7 @@ Package: `ehr_rwe_eln.curation`. Back to the [README](../../README.md). Terms ar
 
 Classifies variants the way a clinical lab starts to: it applies the [ACMG/AMP](https://doi.org/10.1038/gim.2015.30) criteria that data alone can decide, with each gene's thresholds from its [ClinGen](https://clinicalgenome.org) expert panel, adds them up on the Bayesian points scale, and says what it could not decide and why. It curates the [clinical panel](genomics.md#clinical-panel) planted in the synthetic study, and is scored against ClinVar's expert-panel classifications, which it never reads.
 
-This is the rules step. Literature evidence (C2) and a curator's review and sign-off (C3) come next; until then nothing here is a final classification.
+Two kinds of evidence: what the rules decide from data, and what Claude proposes from the literature, each claim quoted from its paper and checked in code. Proposals never change a classification. A curator's review and sign-off come next; until then nothing here is a final classification.
 
 ## What it does
 
@@ -35,12 +35,17 @@ This is the rules step. Literature evidence (C2) and a curator's review and sign
 3. **Add up the points** ([Tavtigian et al. 2020](https://doi.org/10.1002/humu.24088)): supporting 1, moderate 2, strong 4, very strong 8, benign evidence negative. 10 or more is pathogenic, 6 to 9 likely pathogenic, 0 to 5 uncertain significance, -1 to -6 likely benign, -7 or less benign. BA1 is benign on its own.
 4. **Store the run** (`curate.py`) in the `curation` schema: every assessment with its evidence, the criteria met and not assessed (each with its reason), the points, and the class; and on the run, every source and version (gnomAD dataset, Ensembl release, ClinVar release, each panel's CSpec version, a hash of `rules.yaml`, the git commit).
 
+5. **Propose literature evidence** (`literature.py`). For PS3 and BS3 (functional studies), PS4 (case-control or proband counts), and PP1 (segregation), Claude reads what papers say about the variant and proposes criteria, each claim with a PMID and a quoted sentence. Retrieval: [LitVar2](https://www.ncbi.nlm.nih.gov/research/litvar2/), NCBI's index of variant mentions, gives the PMIDs; [PubTator3](https://www.ncbi.nlm.nih.gov/research/pubtator3/) gives each paper's text (full text for open-access PMC articles, the abstract otherwise); only passages that name the variant are sent, under any of its names, including older numbering (LDLR residues without the signal peptide; BRCA1 and BRCA2 BIC nucleotides). Claude Opus 5.5 replies in a typed schema. Every claim is then verified in code: its PMID must be one that was sent and its quote must appear in a passage sent from that paper; a claim that fails is stored as rejected, with the reason. Verified claims go to `curation.proposal`, apart from the rules' assessments.
+
 ## Run it
 
 ```bash
 uv run python scripts/curate_variants.py --set panel   # the clinical panel's 48 variants
 uv run python scripts/curate_variants.py --set eval    # ClinVar expert-panel variants, scored
 uv run python scripts/curate_variants.py --set erepo   # Evidence Repository curations, by criterion
+uv run python scripts/curate_literature.py --dry-run   # retrieval and input tokens only, free
+uv run python scripts/curate_literature.py             # Claude proposes literature evidence, about $0.25 for 10
+uv run pytest evals/test_curation_literature.py -s     # the literature eval, about $0.15
 ```
 
 `uv run python scripts/import_enigma_pvs1.py` and `scripts/import_enigma_functional.py` refresh ENIGMA's tables when the panel releases a new version. The `erepo` run downloads ClinGen's Evidence Repository export (33 MB, CC0) to `data/reference/clingen/` the first time. Both curation runs read positions and alleles only. gnomAD, VEP, and exon answers are cached under `data/reference/` per release, so reruns make no requests. A first run asks gnomAD about several hundred variants at its limit of 10 requests a minute, about 10 minutes; when gnomAD answers that it is overloaded, the client waits and retries, and never records a busy answer as "absent".
@@ -82,9 +87,23 @@ When a rule fires it is nearly always the criterion the panel used, at the panel
 
 **What the panel tables changed.** Before them, PVS1 followed only the NMD rule. The pathogenic calls agreed with the panels 114 of 124 times (92%), with ten over-calls and one reversal. Over-calls are the costlier error. ENIGMA's table removed all seven in BRCA1 and BRCA2: exon 9 truncations rescued by a natural isoform, splice sites it rates supporting or not applicable, and a deletion it does not list, now left to the curator. APC's codon boundaries removed the two at codons 12 and 24. The table added one, p.Glu3309Ter, which the NMD rule had left to the curator. And its last-exon rule turned the reversal, a BRCA2 frameshift in exon 27, from likely benign to likely pathogenic, as ENIGMA has it.
 
+**Literature proposals.** Ten Evidence Repository variants the panels scored with PS3, BS3, PS4, or PP1 and that have passages to read, in a fixed order, 2026-11-19, $0.25:
+
+| | |
+|---|---|
+| Claims | 13, all verified: every PMID was sent, every quote is in its passage |
+| Criteria proposed that the panel also applied | 7 (PS3 3, BS3 2, PS4 1, PP1 1) |
+| Proposed, the panel did not apply | 3 (2 the panel marked not met) |
+| Applied by the panel, not proposed | 7 |
+
+Precision 70%, recall 50%; where both applied PS3 the strength matched every time. One LDLR variant drew both PS3 Moderate and BS3 Supporting from different papers, the kind of conflict the curator resolves. The eval in `evals/` (6 cases) gave 8 claims, all verified, precision 83%. Ten variants is a pilot, not a measurement.
+
+The ceiling is retrieval, not reading. Of 20 such variants, 7 are not in LitVar2 at all, and of the 24 papers the panels cited, none has a passage naming the variant in text PubTator3 provides: the panels' evidence sits in supplementary tables (multiplexed assays such as [Findlay et al. 2018](https://doi.org/10.1038/s41586-018-0461-z), which ENIGMA's Table 9 already captures), or in papers that do not name the variant in reachable text. Adding older numbering found no more. So the proposals come from other papers about the variant, and their agreement with the panels is at the level of criteria, not citations.
+
 ## Limits
 
-- Only the criteria data alone decides. Missense variants, which need functional studies, case data, or segregation, come out uncertain until the literature step (C2).
+- The rules decide only what data alone can. Missense variants, which need functional studies, case data, or segregation, come out uncertain; literature proposals can point a curator to that evidence but do not change the class.
+- Literature retrieval reads abstracts and open-access full text, not supplementary tables, so variant-level results from multiplexed assays are out of reach (ENIGMA's Table 9 covers them for BRCA1 and BRCA2).
 - PS1 and PM5 (the same or a nearby amino acid change as a known pathogenic variant) are not applied yet: each panel sets its own strengths for them.
 - PVS1 follows each panel only as far as data allows. For LDLR, MLH1, and MSH2 splice sites it does not check whether a stop falls in the last 50 nucleotides of the penultimate exon (which also escapes NMD), or a panel's list of critical domains. APC splice sites, initiation codon variants, and exon-level deletions and duplications are left to the curator. ENIGMA's RNA-based codes ("PVS1 (RNA)") are applied at the table's strength without re-reading the RNA data.
 - PVS1 from RNA evidence for variants outside the canonical sites (the panels' "PVS1 (RNA)"), and initiation codon (start-loss) variants, are not applied: they need lab data the rules do not have.
