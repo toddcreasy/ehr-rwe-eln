@@ -27,9 +27,17 @@ Three commercial platforms lead, each from a different scientific tradition:
 | Strength | Usability, molecular biology tools, a modern API | ChemDraw, chemistry workflows, Spotfire analytics | GxP compliance, the handoff from development to manufacturing |
 | Weakness | Fewer chemistry tools; cost rises at scale | Weaker biology tooling | Older interface; customers moving from E-WorkBook to the newer Polar platform |
 
-None of the three solves the problem this module targets. They capture bench data well, but each one stops at the edge of the lab. None of them links results to patient outcomes in OMOP or EHR data.
+None of the three solves the problem this module targets. They capture bench data well, and only Revvity reaches past the lab: [Signals Translational](https://revvitysignals.com/solutions/clinical-translational1) joins biomarker results to clinical trial data for cross-study analysis. That is trial data, not real world data. None of the three writes notebook results into OMOP or EHR data.
 
-That join is the gap this module works in. Take a translational question such as "do patients with high baseline IL-6 respond worse to this drug?" Answering it means joining bench biomarker results to clinical outcomes, and today that join is often done by hand: export the notebooks, clean them in a spreadsheet, map sample IDs to subjects, and send a file to the real world evidence team. Again for every question.
+Outside the ELN category, a few systems do link lab results to patients, each by a different route:
+
+- [LabKey Server](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3062597/), open source, matches assay samples to participants and dates within a clinical study, and has been connected to Medidata Rave and REDCap. It takes structured assay uploads, not free-text entries, and does not write OMOP.
+- [Flatiron Health](https://resources.flatiron.com/our-journey-to-integrating-real-world-clinical-outcomes-and-genomics) links Foundation Medicine's genomic results to outcomes from its EHR database, inside one company's data.
+- Biobanks such as [GlioBank](https://doi.org/10.1093/noajnl/vdaf015) keep samples, research results, and clinical data together in an ELN by hand, with no common data model.
+
+Getting lab and specimen data into OMOP is itself an open problem. [Michael et al. (2020)](https://pubmed.ncbi.nlm.nih.gov/32477663/) found no earlier study that had populated the OMOP `specimen` table from a biobank, and mapped only 26% of their own records. In eMERGE, laboratory data was the hardest part of moving EHR-linked biobanks to OMOP ([Hripcsak et al. 2019](https://doi.org/10.1016/j.jbi.2019.103253)). As of November 2026, searches of PubMed, arXiv, and GitHub turned up no project that extracts free-text notebook entries with a language model and writes them into OMOP.
+
+Joining notebook results to the clinical record is the gap this module works in. Take a translational question such as "do patients with high baseline IL-6 respond worse to this drug?" Answering it means joining bench biomarker results to clinical outcomes, and today that join is often done by hand: export the notebooks, clean them in a spreadsheet, map sample IDs to subjects, and send a file to the real world evidence team. Again for every question.
 
 ## What it does
 
