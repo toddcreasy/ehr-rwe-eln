@@ -47,6 +47,23 @@ def releases() -> list[dict]:
         return con.execute(RELEASES_SQL + " ORDER BY r.spec_name, r.release_id").fetchall()
 
 
+@router.get("/monitor")
+def monitor() -> dict | None:
+    """The latest scheduled privacy check, and the latest one that ran the attacks."""
+    with connect() as con:
+        latest = con.execute(
+            "SELECT run_id, finished_at, skipped, releases_checked, flags"
+            " FROM synth.monitor_run ORDER BY run_id DESC LIMIT 1"
+        ).fetchone()
+        if latest is None:
+            return None
+        evaluated = con.execute(
+            "SELECT run_id, finished_at, releases_checked, flags FROM synth.monitor_run"
+            " WHERE NOT skipped ORDER BY run_id DESC LIMIT 1"
+        ).fetchone()
+    return {"latest": latest, "last_evaluated": evaluated}
+
+
 @router.get("/releases/{release_id}")
 def release(release_id: int) -> dict:
     with connect() as con:

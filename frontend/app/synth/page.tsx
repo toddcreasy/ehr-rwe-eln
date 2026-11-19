@@ -23,6 +23,33 @@ type Release = {
   trial_spurious: number | null;
 };
 
+type MonitorRun = { run_id: number; finished_at: string; releases_checked: number; flags: { release_id: number; release: string; flag: string }[] };
+type Monitor = { latest: MonitorRun & { skipped: boolean }; last_evaluated: MonitorRun | null } | null;
+
+const day = (iso: string) => new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+
+function MonitorStatus({ monitor }: { monitor: Monitor }) {
+  if (monitor === null) {
+    return (
+      <p className={`text-sm ${muted}`}>
+        Scheduled privacy checks have not run yet. The Compose <code>monitor</code> service runs them, or once with{" "}
+        <code>uv run python -m ehr_rwe_eln.synth.monitor --once</code>.
+      </p>
+    );
+  }
+  const run = monitor.last_evaluated;
+  const flags = run?.flags ?? [];
+  return (
+    <p className={`text-sm ${flags.length ? "font-medium text-red-800 dark:text-red-300" : muted}`}>
+      Privacy last checked {day(monitor.latest.finished_at)}
+      {monitor.latest.skipped && run ? `; sources and code unchanged since ${day(run.finished_at)}, when ${run.releases_checked} releases were checked` : run ? `, ${run.releases_checked} releases` : ""}.{" "}
+      {flags.length
+        ? `Review: ${flags.map((f) => `release ${f.release_id} (${f.release})`).join(", ")} drifted toward leakage.`
+        : "No release has drifted toward leakage."}
+    </p>
+  );
+}
+
 const METHODS: Record<string, string> = {
   bayes_net: "Bayesian network",
   independent: "Independent columns",
@@ -163,6 +190,7 @@ export default function SyntheticData() {
   const [card, setCard] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [monitor, setMonitor] = useState<Monitor | undefined>(undefined);
 
   function loadCard(id: number) {
     setSelected(id);
@@ -182,6 +210,10 @@ export default function SyntheticData() {
         if (list.length) loadCard(list[0].release_id);
       })
       .catch((e) => setError(`Could not load releases (${e.message}).`));
+    fetch("/api/synth/monitor")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`${res.status}`))))
+      .then((m: Monitor) => setMonitor(m))
+      .catch(() => setMonitor(undefined));
   }, []);
 
   const specs = releases ? [...new Set(releases.map((r) => r.spec_name))] : [];
@@ -208,6 +240,8 @@ export default function SyntheticData() {
         the release and tested on held-out real people, against one trained on real data. Membership AUC is how well an
         attacker tells training people from held-out ones: 0.5 is a coin flip.
       </p>
+
+      {monitor !== undefined && <MonitorStatus monitor={monitor} />}
 
       {error && <p className="text-sm text-zinc-900 dark:text-zinc-100">{error}</p>}
       {releases && releases.length === 0 && (

@@ -49,3 +49,15 @@ def test_releases_carry_headline_numbers_and_detail_has_the_card(pg, client):
 
 def test_unknown_release_is_404(client):
     assert client.get("/api/synth/releases/999999").status_code == 404
+
+
+def test_monitor_reports_the_latest_check(pg, client):
+    assert client.get("/api/synth/monitor").json() is None
+    pg.execute(
+        "INSERT INTO synth.monitor_run (started_at, finished_at, fingerprints, skipped,"
+        " releases_checked, flags) VALUES (now(), now(), '{}', false, 3, '[]'),"
+        " (now(), now(), '{}', true, 0, '[]')"
+    )
+    found = client.get("/api/synth/monitor").json()
+    assert found["latest"]["skipped"] is True
+    assert found["last_evaluated"]["releases_checked"] == 3

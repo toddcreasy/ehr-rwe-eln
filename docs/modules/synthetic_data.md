@@ -52,7 +52,7 @@ uv run python scripts/export_release.py --release 3 --recipient "Pipeline team" 
 uv run python scripts/withdraw_release.py --release 3 --reason "what is wrong with it"
 ```
 
-Exports go to `data/synth/exports/` with the release's data card, and each is recorded with its recipient. A withdrawal marks the release, stops further exports, rewrites its card, and drafts a notice per recipient in `data/synth/withdrawals/` for you to send. Each evaluation run lists any release whose privacy checks have drifted toward leakage.
+Exports go to `data/synth/exports/` with the release's data card, and each is recorded with its recipient. A withdrawal marks the release, stops further exports, rewrites its card, and drafts a notice per recipient in `data/synth/withdrawals/` for you to send. Each evaluation run lists any release whose privacy checks have drifted toward leakage, and the Compose `monitor` service runs that check every 24 hours when a source or the synth code has changed; the `/synth/` page shows the last check.
 
 Synthesis takes under a minute and evaluation about a minute. Data cards go to `data/synth/cards/`. The page at http://127.0.0.1:8000/synth/ compares the releases and shows each card.
 

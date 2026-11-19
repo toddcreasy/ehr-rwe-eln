@@ -124,7 +124,7 @@ Details: [cohort pipeline](modules/cohort.md), [data quality](modules/data_quali
 uv run fastapi dev                         # http://127.0.0.1:8000, reloads on save
 ```
 
-To run the app in Docker instead, `docker compose up -d --build --wait` builds the frontend into the image and serves everything on http://127.0.0.1:8000. Both ports bind to 127.0.0.1 only, because there is no sign-in.
+To run the app in Docker instead, `docker compose up -d --build --wait` builds the frontend into the image and serves everything on http://127.0.0.1:8000. Both ports bind to 127.0.0.1 only, because there is no sign-in. The same command starts the `monitor` service, which reruns the privacy checks on the synthetic releases every `MONITOR_INTERVAL_HOURS` (default 24) when a source or the synth code has changed; outside Docker, `uv run python -m ehr_rwe_eln.synth.monitor --once` runs one check.
 
 ```bash
 curl localhost:8000/api/health/db
