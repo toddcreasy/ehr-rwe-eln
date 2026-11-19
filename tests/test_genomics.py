@@ -7,7 +7,14 @@ import polars as pl
 import pytest
 from bed_reader import open_bed
 
-from ehr_rwe_eln.genomics.gwas import check_truth, compare_with_hail, run_gwas, score_test
+from ehr_rwe_eln.genomics.gwas import (
+    calibration,
+    check_truth,
+    compare_with_hail,
+    null_statistics,
+    run_gwas,
+    score_test,
+)
 from ehr_rwe_eln.genomics.simulate import assign_genomes
 from ehr_rwe_eln.genomics.study import build_study, write_study
 
@@ -75,6 +82,9 @@ def test_gwas_finds_the_planted_variant_and_nothing_else(study):
     assert check["planted_found"] and check["other_loci"] == 0
     assert check["planted_p"] < 5e-8
     assert len(results) == s.truth["variants"]
+    low, high = check["calibration_null_chromosomes"]["null_range"]
+    assert low < 1 < high
+    assert set(summary["calibration_by_chromosome"]) == {"chr1", "chr2"}
 
 
 def test_assign_genomes_puts_carriers_with_cases():
@@ -95,6 +105,26 @@ def test_score_test_matches_a_planted_null():
     genotypes = rng.binomial(2, 0.3, (n, 2000)).astype(np.float32)
     statistics = score_test(genotypes, y, covariates)
     assert np.median(statistics) / 0.4549 == pytest.approx(1.0, abs=0.1)
+
+
+def test_null_runs_center_on_one():
+    rng = np.random.default_rng(3)
+    n = 3000
+    covariates = np.column_stack([np.ones(n), rng.normal(size=n)])
+    y = (rng.random(n) < 1 / (1 + np.exp(-covariates[:, 1]))).astype(float)
+    genotypes = rng.binomial(2, 0.3, (n, 1000)).astype(np.float32)
+    null = null_statistics(genotypes, y, covariates, runs=20)
+    assert null.shape == (20, 1000)
+    assert (np.median(null, axis=1) / 0.4549).mean() == pytest.approx(1.0, abs=0.05)
+
+
+def test_calibration_places_lambda_among_null_runs():
+    # Null runs whose lambdas are 0.5, 1.0, ... 5.0 times the chi-squared median.
+    null = np.outer(np.arange(1, 11) / 2, np.full(5, 0.4549))
+    result = calibration(np.full(5, 0.4549 * 2.0), null)
+    assert result["lambda"] == pytest.approx(2.0, abs=1e-3)
+    assert result["percentile"] == 40.0  # 0.5, 1.0, 1.5, 2.0 of the ten are at or below
+    assert result["null_range"][0] < 1.0 and result["null_range"][1] > 4.5
 
 
 def test_compare_with_hail_joins_on_variant_id(tmp_path):

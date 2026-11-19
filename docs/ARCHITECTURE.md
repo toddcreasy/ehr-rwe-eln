@@ -89,7 +89,6 @@ OHDSI's reference tools (ETL-Synthea, [DataQualityDashboard](https://github.com/
 
 ## Known gaps
 
-- **GWAS calibration.** On the current build the GWAS finds the planted effect, but genomic inflation on the chromosomes without it is 0.80, below what chance allows. See [genomics](modules/genomics.md#results).
 - **Synthetic data fairness.** Fidelity is not measured by subgroup, and small groups are distorted most. See the [NIST AI RMF mapping](nist_ai_rmf.md#gaps-in-order-of-importance).
 - **Release withdrawal.** There is no process to withdraw a synthetic release or notify its users.
 - **Real data readiness.** What a controlled-access source would add is listed in [NIH and HHS requirements](nih_hhs_requirements.md#gaps-and-fixes).
