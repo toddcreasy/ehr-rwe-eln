@@ -2,7 +2,7 @@
 
 Real world evidence (RWE) from synthetic electronic health records (EHR), linked to electronic lab notebook (ELN) data. Six modules share one [OMOP CDM v5.4](https://ohdsi.github.io/CommonDataModel/cdm54.html) database: they build it from synthetic patients, check its quality, emulate target trials on it, write lab results into it, release private synthetic copies of it, and simulate a genotyping study on its people.
 
-ELN platforms capture bench data well, and each one stops at the edge of the lab. None links results to patient outcomes in OMOP or EHR data. The ELN bridge works in that gap: it reads free-text notebook entries with Claude and writes the results next to the clinical record. [Background on ELN platforms and the gap](docs/modules/eln.md#background-what-eln-platforms-do).
+ELN platforms capture bench data well, and few reach past the lab. Revvity's Signals Translational joins biomarker results to clinical trial data, and LabKey links assay results to study participants, but none of them writes notebook results into OMOP or EHR data. The ELN bridge works in that gap: it reads free-text notebook entries with Claude and writes the results next to the clinical record. [Background on ELN platforms and the gap](docs/modules/eln.md#background-what-eln-platforms-do).
 
 Acronyms and services are defined in the [glossary](docs/GLOSSARY.md).
 
