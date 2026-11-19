@@ -2,9 +2,9 @@
 
 How the pieces fit, why each tool fills its slot, and what is still missing. Setup is in [INSTALL.md](INSTALL.md); the build history, including the AWS version this replaced, is in [SETUP.md](SETUP.md). Terms are defined in the [glossary](GLOSSARY.md).
 
-<img src="architecture.svg" alt="ehr-rwe-eln architecture. Top: a browser reaches the app container (FastAPI plus a static Next.js frontend), which reads Postgres 18 with pgvector; scripts on the host write to Postgres; a Hail container runs on request. Middle: Synthea output and Athena vocabularies feed the cohort pipeline, which builds the OMOP CDM v5.4 tables. Data quality, target trial emulation, synthetic data, and synthetic genomics read OMOP and write their own schemas and files. The ELN bridge sends free-text entries to Claude on the Anthropic API and writes specimen and measurement rows into OMOP and a FHIR R4 bundle. Bottom: pre-commit, pull requests, GitHub Actions, pytest, and evals." width="100%">
+<a href="https://toddcreasy.github.io/ehr-rwe-eln/architecture.svg"><img src="architecture.svg" alt="ehr-rwe-eln architecture. Top: a browser reaches the app container (FastAPI plus a static Next.js frontend), which reads Postgres 18 with pgvector; scripts on the host write to Postgres; a Hail container runs on request. Middle: Synthea output and Athena vocabularies feed the cohort pipeline, which builds the OMOP CDM v5.4 tables. Data quality, target trial emulation, synthetic data, and synthetic genomics read OMOP and write their own schemas and files. The ELN bridge sends free-text entries to Claude on the Anthropic API and writes specimen and measurement rows into OMOP and a FHIR R4 bundle. Bottom: pre-commit, pull requests, GitHub Actions, pytest, and evals." width="100%"></a>
 
-GitHub shows the diagram as a plain image. Opened in a browser, [`architecture.svg`](architecture.svg) is interactive: hover a box for what it does and why, and click it for its source or docs. `uv run python scripts/make_diagrams.py` redraws it.
+Click the diagram for [the interactive version](https://toddcreasy.github.io/ehr-rwe-eln/architecture.svg): hover a box for what it does and why, and click it for its source or docs. `uv run python scripts/make_diagrams.py` redraws it.
 
 ## Contents
 
