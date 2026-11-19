@@ -75,6 +75,23 @@ def test_sets_list_rules_runs_only_and_variants_count_the_latest_proposals(clien
     detail = client.get(f"/api/curation/runs/{rules}/variants/{V}").json()
     assert len(detail["proposals"]) == 5 and detail["sources"] == {"gnomad": "gnomad_r4"}
     assert client.get(f"/api/curation/runs/{rules}/variants/nope").status_code == 404
+    assert detail["phenotype"] is None
+
+
+def test_detail_shows_the_latest_release_of_carrier_phenotypes(client, curated, pg):
+    rules, _ = curated
+    for release, pct in [("2026-01-01", [10.0]), ("2026-09-01", [97.5, 40.0])]:
+        pg.execute(
+            "INSERT INTO curation.phenotype VALUES (%s, %s, 'BRCA1', %s, %s, %s, now())",
+            [release, V, ["BRCA1", "BRCA2"], len(pct), pct],
+        )
+    found = client.get(f"/api/curation/runs/{rules}/variants/{V}").json()["phenotype"]
+    assert found == {
+        "hpo_release": "2026-09-01",
+        "gene_group": ["BRCA1", "BRCA2"],
+        "subjects": 2,
+        "percentiles": [97.5, 40.0],
+    }
 
 
 def test_accepted_proposals_add_points_once_each(client, curated):

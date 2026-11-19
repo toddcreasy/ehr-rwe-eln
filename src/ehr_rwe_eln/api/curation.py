@@ -149,7 +149,13 @@ def variant(run_id: int, variant_id: str) -> dict:
             " ORDER BY decision_id DESC",
             [run_id, variant_id],
         ).fetchall()
-    return {**found, "proposals": proposals, "decisions": decisions}
+        # Carriers in the genomics study, from the latest HPO release scored. Context only.
+        phenotype = con.execute(
+            "SELECT hpo_release, gene_group, subjects, percentiles FROM curation.phenotype"
+            " WHERE variant_id = %s ORDER BY hpo_release DESC LIMIT 1",
+            [variant_id],
+        ).fetchone()
+    return {**found, "proposals": proposals, "decisions": decisions, "phenotype": phenotype}
 
 
 @router.post("/score")

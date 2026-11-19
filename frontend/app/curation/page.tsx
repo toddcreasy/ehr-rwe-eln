@@ -55,6 +55,7 @@ type Detail = Row & {
   not_assessed: NotAssessed[];
   proposals: Proposal[];
   decisions: Decision[];
+  phenotype: { hpo_release: string; gene_group: string[]; subjects: number; percentiles: number[] } | null;
 };
 type Score = { criteria: Criterion[]; points: number | null; classification: string };
 
@@ -304,6 +305,37 @@ function History({ decisions }: { decisions: Decision[] }) {
   );
 }
 
+function Phenotypes({ p }: { p: NonNullable<Detail["phenotype"]> }) {
+  const high = p.percentiles.filter((x) => x >= 90).length;
+  return (
+    <section className={`${box} flex flex-col gap-2 text-sm`}>
+      <h3 className={h3}>Carriers&apos; phenotypes (context, not evidence)</h3>
+      {p.subjects === 0 ? (
+        <p className={muted}>No one in the synthetic genomics study carries this variant.</p>
+      ) : (
+        <>
+          <p>
+            {p.subjects.toLocaleString("en-US")} {p.subjects === 1 ? "carrier" : "carriers"} in the synthetic genomics
+            study; {high} in the top 10% of 5,000 subjects for phenotype match with {p.gene_group.join(", ")}.
+          </p>
+          {p.subjects <= 40 && (
+            <p className={muted}>Percentiles: {p.percentiles.map((x) => Math.round(x)).join(", ")}</p>
+          )}
+        </>
+      )}
+      <p className={`text-xs ${muted}`}>
+        Not scored as PP4: PP4 is judged for one patient under each expert panel&apos;s rules, which this score does not
+        follow, and the score finds the right gene group only about as well as knowing who has the condition. This
+        service/product is using the Human Phenotype Ontology (release {p.hpo_release}). Find out more at{" "}
+        <a className="underline" href="http://www.human-phenotype-ontology.org" target="_blank" rel="noreferrer">
+          http://www.human-phenotype-ontology.org
+        </a>
+        .
+      </p>
+    </section>
+  );
+}
+
 function VariantDetail({ v, onSaved }: { v: Detail; onSaved: () => void }) {
   return (
     <article className="flex flex-col gap-4">
@@ -337,6 +369,8 @@ function VariantDetail({ v, onSaved }: { v: Detail; onSaved: () => void }) {
           )}
         </section>
       </div>
+
+      {v.phenotype && <Phenotypes p={v.phenotype} />}
 
       <DecisionForm key={`${v.run_id} ${v.variant_id}`} v={v} onSaved={onSaved} />
 

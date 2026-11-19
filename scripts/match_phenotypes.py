@@ -4,11 +4,14 @@ Ontology, and check the scores against the panel's answer key.
 Usage: uv run python scripts/match_phenotypes.py   (after scripts/generate_panel.py)
 
 Downloads the HPO release named below to data/reference/hpo/<release>/ the first time, and
-never changes it. Each subject's OMOP conditions become HPO terms (src/ehr_rwe_eln/curation/
-phenotype.py); each gene gets a Resnik similarity score. Writes data/genomics/phenotype_scores.tsv
-(by subject_id; the OMOP person_id stays in the registry) and phenotype_eval.json: per gene, how
-well the score ranks the gene's pathogenic carriers above everyone else (AUC), next to the most
-any phenotype could do here, the AUC of knowing who has the gene's condition.
+never changes it. Each subject's OMOP conditions become HPO terms
+(src/ehr_rwe_eln/curation/phenotype.py); each gene gets a Resnik similarity score. Writes:
+- data/genomics/phenotype_scores.tsv, by subject_id (the OMOP person_id stays in the registry);
+- curation.phenotype: for each panel variant, where its carriers fall on the score for the
+  variant's gene group, shown on /curation/ as context, never as evidence;
+- data/genomics/phenotype_eval.json: per gene and gene group, how well the score ranks the
+  pathogenic carriers above everyone else (AUC), next to the AUC of knowing who has the
+  group's condition.
 
 This service/product is using the Human Phenotype Ontology (release 2026-09-01). Find out more
 at http://www.human-phenotype-ontology.org
@@ -28,11 +31,12 @@ from ehr_rwe_eln.curation.phenotype import (
     information_content,
     load_manual,
     map_conditions,
+    percentiles,
     read_gene_terms,
     read_obo,
     similarity,
 )
-from ehr_rwe_eln.genomics.panel import load_panel_spec
+from ehr_rwe_eln.genomics.panel import load_panel_spec, read_panel_carriers
 
 RELEASE = "2026-09-01"
 FILES = ["hp.obo", "genes_to_phenotype.txt"]
@@ -163,6 +167,29 @@ def main() -> None:
         results[aggregate] = {"genes": by_gene, "groups": by_group}
     out.to_csv(STUDY / "phenotype_scores.tsv", sep="\t", index=False)
 
+    # Context for the curator: where each carrier of a panel variant falls on the phenotype
+    # score for the variant's gene group. Carriers come from the genotypes, not the answer key.
+    row_of = {s: i for i, s in enumerate(subjects)}
+    subject_of = dict(zip(mapping["sample_id"], mapping["subject_id"], strict=True))
+    members_of = {g: members for members in groups.values() for g in members}
+    gene_of = {v["id"]: v["gene"] for v in truth["variants"]}
+    context = []
+    for variant_id, samples in read_panel_carriers(STUDY / "panel.vcf.gz").items():
+        members = members_of[gene_of[variant_id]]
+        group_score = out[members].max(axis=1).tolist()
+        picked = [row_of[subject_of[s]] for s in samples]
+        found = sorted(percentiles(group_score, picked), reverse=True)
+        context.append([ont.release, variant_id, gene_of[variant_id], members, len(found), found])
+    with DatabaseSettings().connect() as con:
+        con.execute("DELETE FROM curation.phenotype WHERE hpo_release = %s", [ont.release])
+        with con.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO curation.phenotype (hpo_release, variant_id, gene, gene_group,"
+                " subjects, percentiles, created_at) VALUES (%s, %s, %s, %s, %s, %s, now())",
+                context,
+            )
+        con.commit()
+
     seen = {c for _, c in rows}
     summary = {
         "hpo_release": ont.release,
@@ -177,6 +204,7 @@ def main() -> None:
         "score": "Resnik best match average, standardized per gene over the study",
         **results["mean"],
         "sensitivity_single_best_term": results["max"],
+        "variants_with_carrier_context": len(context),
     }
     (STUDY / "phenotype_eval.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary, indent=2))

@@ -8,7 +8,9 @@ out more at http://www.human-phenotype-ontology.org. HPO files are read, never c
 import csv
 import math
 import re
+from bisect import bisect_right
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -108,6 +110,13 @@ def similarity(
     above = set().union(*(ont.ancestors(t) for t in gene))
     best = [max((ic.get(a, 0.0) for a in ont.ancestors(t) & above), default=0.0) for t in person]
     return sum(best) / len(best) if aggregate == "mean" else max(best)
+
+
+def percentiles(score: Sequence[float], picked: Sequence[int]) -> list[float]:
+    """Where each picked person's score falls among everyone's: the share of people scoring
+    at or below it, in percent."""
+    ranked = sorted(score)
+    return [round(100 * bisect_right(ranked, score[i]) / len(ranked), 1) for i in picked]
 
 
 def normalize(name: str) -> str:
