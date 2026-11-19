@@ -60,7 +60,7 @@ uv run alembic upgrade head
 uv run python scripts/db_check.py
 ```
 
-Postgres 18 with [pgvector](https://github.com/pgvector/pgvector) listens on 127.0.0.1:5432. `alembic upgrade head` creates the `dq`, `tte`, `eln`, and `synth` schemas. `db_check.py` runs a pgvector round trip and leaves nothing behind.
+Postgres 18 with [pgvector](https://github.com/pgvector/pgvector) listens on 127.0.0.1:5432. `alembic upgrade head` creates the `dq`, `tte`, `eln`, `synth`, and `curation` schemas. `db_check.py` runs a pgvector round trip and leaves nothing behind.
 
 ## Get the vocabularies
 
