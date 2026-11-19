@@ -87,7 +87,7 @@ def arrow(points, label="", lx=None, ly=None, anchor="start"):
     return out + "</g>"
 
 
-W, H = 1240, 990
+W, H = 1240, 1020
 # Everything below the runtime panel moves down this far, to fit the monitor under the database.
 SHIFT = 70
 NH, DW = 56, 190
@@ -95,11 +95,12 @@ C = [60, 290, 520, 750, 980]
 s = header(
     W,
     H,
-    "ehr-rwe-eln: one OMOP database, six modules, all on one machine",
+    "ehr-rwe-eln: one OMOP database, seven modules, all on one machine",
     "Synthea patients and Athena vocabularies become an OMOP CDM v5.4 database in Postgres. Data "
     "quality checks, target trial emulation, synthetic data releases, and a synthetic genotype "
-    "study read it; the ELN bridge writes lab results into it with Claude. A FastAPI app serves "
-    "the results on 127.0.0.1.",
+    "study read it; the ELN bridge writes lab results into it with Claude; variant curation "
+    "classifies the study's clinical panel, with literature evidence proposed by Claude. A "
+    "FastAPI app serves the results on 127.0.0.1.",
 )
 s.append('<text x="40" y="26" class="t" font-size="15" font-weight="700">ehr-rwe-eln</text>')
 s.append(
@@ -217,7 +218,7 @@ s.append(
         40,
         190,
         1160,
-        440,
+        470,
         "Modules and data flow",
         "The cohort pipeline builds the OMOP tables every other module reads. The ELN bridge "
         "writes lab results back into them.",
@@ -269,8 +270,9 @@ s += [
         "outside",
         "Anthropic API",
         "Claude Opus 5.5, your key",
-        "The only outside service. Extraction runs through the Message Batches API at half "
-        "price. ANTHROPIC_API_KEY lives only in .env.",
+        "The only outside service. ELN extraction runs through the Message Batches API at half "
+        "price; variant curation sends it passages that name a variant. ANTHROPIC_API_KEY lives "
+        "only in .env.",
         "https://docs.claude.com",
     ),
     node(
@@ -381,8 +383,10 @@ s += [
         "Variant curation",
         "ACMG rules, expert panels",
         "Classifies the panel's variants with each gene's ClinGen expert panel thresholds, "
-        "from gnomAD v4 frequencies and Ensembl VEP consequences, and scores the rules "
-        "against ClinVar expert panels. Results in the curation schema.",
+        "from gnomAD v4 frequencies and Ensembl VEP consequences, scored against ClinVar and "
+        "ClinGen expert panels. Claude proposes literature evidence, every quote checked in code; "
+        "HPO phenotype scores add context; a curator decides on /curation/. Results in the "
+        "curation schema.",
         MOD + "curation.md",
     ),
     node(
@@ -471,11 +475,26 @@ for i in range(4):
     s.append(arrow([(C[3] + DW, m[i]), (C[4], m[i])]))
 s.append(arrow([(C[4] + DW / 2, R[3] + NH), (C[4] + DW / 2, R[4])]))
 s.append(arrow([(C[3] + DW / 2, R[3] + NH), (C[3] + DW / 2, R[4])]))
+# Below the bottom row: Claude proposes literature evidence for variant curation.
+low = R[4] + NH + 18
+s.append(
+    arrow(
+        [
+            (C[0] + DW / 2, R[4] + NH),
+            (C[0] + DW / 2, low),
+            (C[3] + DW / 2, low),
+            (C[3] + DW / 2, R[4] + NH),
+        ],
+        "literature",
+        C[0] + DW / 2 + 8,
+        low - 6,
+    )
+)
 
 # Quality checks.
-RQ = 685
+RQ = 715
 mq = RQ + NH // 2
-s.append(panel(40, 650, 1160, 110, "Quality checks", "What runs before code reaches main."))
+s.append(panel(40, 680, 1160, 110, "Quality checks", "What runs before code reaches main."))
 s += [
     node(
         C[0],
@@ -534,8 +553,8 @@ s += [
         "ops",
         "evals",
         "real model, run by hand",
-        "Golden cases for the agent and ELN extraction against Claude. Slow and billed, so "
-        "never in CI.",
+        "Golden cases for the agent, ELN extraction, and literature evidence against Claude. "
+        "Slow and billed, so never in CI.",
         REPO + "evals",
     ),
     arrow([(C[0] + DW, mq), (C[1], mq)]),
@@ -544,7 +563,7 @@ s += [
 ]
 
 # Legend.
-LY = 780
+LY = 810
 s.append(panel(40, LY, 1160, 120, "Key", "Box colors."))
 for i, (kind, name, sub) in enumerate(
     [
@@ -569,7 +588,7 @@ X = [75, 250, 425, 600]
 MX = [820, 1030]
 MW = 150
 # Everything below the module schemas moves down this far, to fit the curation schema.
-SHIFT_SCHEMA = 90
+SHIFT_SCHEMA = 230
 s = header(
     1240,
     860 + SHIFT_SCHEMA,
@@ -801,6 +820,51 @@ s.append(
 )
 s.append(arrow([(MX[1], 604), (MX[0] + MW, 604)]))
 s.append(f'<text x="{MX[0] + MW + 4}" y="598" class="e">run_id</text>')
+s.append(
+    table(
+        MX[0],
+        660,
+        "module",
+        "curation.proposal",
+        "one per claim",
+        "Literature evidence Claude proposed, with its PMID and quote, verified or rejected with"
+        " the reason. Changes nothing until a curator accepts it.",
+        MIG + "015_curation_proposals.py",
+        MW,
+    )
+)
+s.append(
+    table(
+        MX[1],
+        660,
+        "module",
+        "curation.decision",
+        "added to, never changed",
+        "A curator's decision: who, when, the proposals accepted, the criteria, points, and the"
+        " class chosen, with a note when it differs from the score.",
+        MIG + "016_curation_decisions.py",
+        MW,
+    )
+)
+s.append(
+    table(
+        MX[0],
+        740,
+        "module",
+        "curation.phenotype",
+        "per variant, HPO release",
+        "Where each carrier's HPO phenotype score falls among the study's subjects. Context for"
+        " the curator, not evidence. No foreign key: matched by variant_id.",
+        MIG + "017_curation_phenotype.py",
+        MW,
+    )
+)
+s.append(arrow([(MX[0] + MW / 2, 660), (MX[0] + MW / 2, 628)]))
+s.append(f'<text x="{MX[0] + MW / 2 + 6}" y="648" class="e">run_id</text>')
+s.append(arrow([(MX[1] + MW / 2, 660), (MX[1] + MW / 2, 628)]))
+s.append(
+    f'<text x="{MX[1] + MW / 2 - 6}" y="648" class="e" text-anchor="end">run_id, variant_id</text>'
+)
 s.append(f'<g transform="translate(0,{SHIFT_SCHEMA})">')
 
 # Outside the database.

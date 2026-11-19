@@ -6,7 +6,16 @@ Classifies variants the way a clinical lab starts to: it applies the [ACMG/AMP](
 
 It also matches each study subject's conditions against the panel genes with the [Human Phenotype Ontology](#phenotype-matching) (HPO), and checks whether that finds the planted carriers.
 
-Two kinds of evidence: what the rules decide from data, and what Claude proposes from the literature, each claim quoted from its paper and checked in code. Proposals never change a classification on their own. A curator does, on the `/curation/` page: they accept the proposals they agree with, see the points and class that gives, and record a decision with their name and the time. Only a decision is final.
+## Who decides what
+
+| | Decides | Stored in | Can change a class? |
+|---|---|---|---|
+| The rules (`rules.py`) | The criteria data alone can settle: frequency (BA1, BS1, PM2), null variants (PVS1, PM5_PTC), ENIGMA's calibrated assays (PS3, BS3). Each with its reason, and what it could not decide | `curation.assessment` | Yes: the points and class come from these |
+| Claude (`literature.py`) | Nothing. It proposes PS3, BS3, PS4, or PP1 from passages that name the variant; code rejects any claim whose PMID was not sent or whose quote is not in the passage | `curation.proposal` | No |
+| HPO phenotype (`phenotype.py`) | Nothing. Where the variant's carriers fall on a phenotype score for the gene's group | `curation.phenotype` | No: context, not PP4 |
+| The curator (`/curation/`) | The class. Accepts the verified proposals they agree with, sees the rescored points, records a class with their name and the time; a class other than the score needs a note | `curation.decision`, added to and never changed | Yes, and only a decision is final |
+
+The rules' points and class stand until a curator decides. Nothing Claude writes reaches a class without a person accepting it.
 
 ## What it does
 
