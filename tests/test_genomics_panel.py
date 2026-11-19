@@ -131,7 +131,11 @@ def test_gnomad_batches_caches_and_records_absent_variants(tmp_path):
     assert len(calls) == 3  # the second call is answered from the cache
 
 
-def test_gnomad_errors_other_than_not_found_are_never_cached(tmp_path):
+def test_gnomad_errors_other_than_not_found_are_never_cached(tmp_path, monkeypatch):
+    import ehr_rwe_eln.genomics.gnomad as gnomad
+
+    monkeypatch.setattr(gnomad.time, "sleep", lambda s: None)  # retried, then raised
+
     def limited(query, variables):
         return {"data": None, "errors": [{"message": "Rate limit exceeded"}]}
 
@@ -139,6 +143,32 @@ def test_gnomad_errors_other_than_not_found_are_never_cached(tmp_path):
     with pytest.raises(RuntimeError, match="Rate limit"):
         frequencies(["17-1-C-T"], cache, post=limited, wait=0)
     assert not cache.exists()
+
+    def broken(query, variables):  # not transient: raised at once
+        return {"data": None, "errors": [{"message": "Cannot query field"}]}
+
+    calls = []
+    with pytest.raises(RuntimeError, match="Cannot query field"):
+        frequencies(["17-1-C-T"], cache, post=lambda q, v: calls.append(1) or broken(q, v), wait=0)
+    assert len(calls) == 1
+
+
+def test_gnomad_retries_an_overloaded_service_and_caches_only_answers(tmp_path, monkeypatch):
+    import ehr_rwe_eln.genomics.gnomad as gnomad
+
+    monkeypatch.setattr(gnomad.time, "sleep", lambda s: None)
+    answers = iter(
+        [
+            {"data": None, "errors": [{"message": "Service overloaded"}]},
+            {"data": {"v0": {"exome": {"ac": 1, "an": 10}, "genome": None}}},
+        ]
+    )
+    found = frequencies(["17-1-C-T"], tmp_path / "g.json", post=lambda q, v: next(answers), wait=0)
+    assert found["17-1-C-T"]["ac"] == 1
+    always_busy = lambda q, v: {"data": None, "errors": [{"message": "Service overloaded"}]}  # noqa: E731
+    with pytest.raises(RuntimeError, match="overloaded"):
+        frequencies(["17-2-C-T"], tmp_path / "g.json", post=always_busy, wait=0)
+    assert "17-2-C-T" not in json.loads((tmp_path / "g.json").read_text())
 
 
 def chosen_variants(clinvar_vcf, tmp_path, s):

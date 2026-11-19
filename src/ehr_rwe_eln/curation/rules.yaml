@@ -19,6 +19,10 @@
 #   ptc_codons           cut-offs on the codon of the premature stop
 #   ptc_window           codons where a truncation counts whatever its exon
 # otherwise the NMD rule. splice_to_curator leaves canonical splice sites to the curator.
+#
+# functional_table: enigma   PS3 and BS3 from ENIGMA's Specifications Table 9, calibrated
+#                            functional assays per variant (enigma_functional.tsv, from
+#                            scripts/import_enigma_functional.py)
 
 genes:
   BRCA1:
@@ -33,6 +37,7 @@ genes:
     pm2:
       - {strength: supporting, measure: absent}
     pvs1_table: enigma
+    functional_table: enigma
     notes: >-
       The panel reads gnomAD v2.1 and v3.1 non-cancer subsets and requires read depth of at
       least 25 for PM2; this uses gnomAD v4 joined and does not check depth. PVS1 and PM5_PTC
@@ -50,6 +55,7 @@ genes:
     pm2:
       - {strength: supporting, measure: absent}
     pvs1_table: enigma
+    functional_table: enigma
     notes: >-
       As BRCA1.
   MLH1:

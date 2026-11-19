@@ -30,6 +30,8 @@ This is the rules step. Literature evidence (C2) and a curator's review and sign
    - **LDLR**, and splice sites in MLH1 and MSH2, use the NMD rule: a nonsense or frameshift variant outside the last exon is PVS1, since nonsense-mediated decay destroys its mRNA; one in the last exon is left to the curator. A canonical splice-site variant (±1, ±2) is PVS1 when skipping the exon it serves shifts the reading frame (its length is not a multiple of three); when skipping keeps the frame, whether the lost region matters is left to the curator.
 
    Where a panel's rule says PVS1 does not apply, the assessment records that as decided, so a curator can tell "ruled out by the panel" from "the rules could not tell".
+
+   **Functional evidence (PS3, BS3).** For BRCA1 and BRCA2, ENIGMA's Specifications Table 9 gives the code its calibrated functional assays support for 4,731 variants: PS3 (damaging, 931), BS3 (no damaging effect, 3,363), or none (inconclusive, 437). `scripts/import_enigma_functional.py` transcribes it to `enigma_functional.tsv`, and the rules apply it by the variant's c. name. Functional evidence for the other genes comes from the literature (the next step).
 3. **Add up the points** ([Tavtigian et al. 2020](https://doi.org/10.1002/humu.24088)): supporting 1, moderate 2, strong 4, very strong 8, benign evidence negative. 10 or more is pathogenic, 6 to 9 likely pathogenic, 0 to 5 uncertain significance, -1 to -6 likely benign, -7 or less benign. BA1 is benign on its own.
 4. **Store the run** (`curate.py`) in the `curation` schema: every assessment with its evidence, the criteria met and not assessed (each with its reason), the points, and the class; and on the run, every source and version (gnomAD dataset, Ensembl release, ClinVar release, each panel's CSpec version, a hash of `rules.yaml`, the git commit).
 
@@ -38,9 +40,10 @@ This is the rules step. Literature evidence (C2) and a curator's review and sign
 ```bash
 uv run python scripts/curate_variants.py --set panel   # the clinical panel's 48 variants
 uv run python scripts/curate_variants.py --set eval    # ClinVar expert-panel variants, scored
+uv run python scripts/curate_variants.py --set erepo   # Evidence Repository curations, by criterion
 ```
 
-`uv run python scripts/import_enigma_pvs1.py` refreshes ENIGMA's table when the panel releases a new version. Both curation runs read positions and alleles only. gnomAD, VEP, and exon answers are cached under `data/reference/` per release, so reruns make no requests. The first eval run asks gnomAD about several hundred variants at gnomAD's limit of 10 requests a minute, about 10 minutes.
+`uv run python scripts/import_enigma_pvs1.py` and `scripts/import_enigma_functional.py` refresh ENIGMA's tables when the panel releases a new version. The `erepo` run downloads ClinGen's Evidence Repository export (33 MB, CC0) to `data/reference/clingen/` the first time. Both curation runs read positions and alleles only. gnomAD, VEP, and exon answers are cached under `data/reference/` per release, so reruns make no requests. A first run asks gnomAD about several hundred variants at its limit of 10 requests a minute, about 10 minutes; when gnomAD answers that it is overloaded, the client waits and retries, and never records a busy answer as "absent".
 
 ## Results
 
@@ -53,13 +56,27 @@ uv run python scripts/curate_variants.py --set eval    # ClinVar expert-panel va
 | Expert panel (rows), rules (columns) | P/LP | VUS | B/LB |
 |---|---|---|---|
 | Pathogenic or likely pathogenic | 120 | 120 | 0 |
-| Uncertain significance | 2 | 110 | 4 |
-| Benign or likely benign | 0 | 81 | 141 |
+| Uncertain significance | 2 | 108 | 6 |
+| Benign or likely benign | 0 | 78 | 144 |
 
-Agreement is 64.2% overall, from 48% (LDLR) to 74% (MSH2), with no reversals. The number to read first is how often a decision is right when the rules make one: 120 of 122 pathogenic or likely pathogenic calls (98%) and 141 of 145 benign or likely benign calls (97%). Most of the rest is evidence data alone cannot reach:
+Agreement is 64.4% overall, from 48% (LDLR) to 74% (MSH2), with no reversals. The number to read first is how often a decision is right when the rules make one: 120 of 122 pathogenic or likely pathogenic calls (98%) and 144 of 150 benign or likely benign calls (96%). ENIGMA's functional table adds PS3 to 43 of these variants and BS3 to 8. Most of the rest is evidence data alone cannot reach:
 
 - Pathogenic variants called uncertain (120): 81 missense, which need functional, case, or segregation evidence (the literature step); 21 splice-region variants outside the canonical ±1, ±2 sites; 17 truncations or splice sites the rules leave to the curator (MSH2 7, APC 6, LDLR 3, MLH1 1); 1 in-frame deletion. One BRCA2 variant is pathogenic to ENIGMA though its own Table 4 rules PVS1 out for it, so its classification rests on other evidence.
-- Benign variants called uncertain (81): 49 synonymous and 23 missense. Synonymous variants are usually benign by BP7, which needs a splicing prediction; gnomAD's SpliceAI scores are licensed for non-commercial use only and are not used here.
+- Benign variants called uncertain (78): 46 synonymous and 23 missense. Synonymous variants are usually benign by BP7, which needs a splicing prediction; gnomAD's SpliceAI scores are licensed for non-commercial use only and are not used here.
+
+**Criterion by criterion, against the Evidence Repository.** ClinGen's Evidence Repository lists, for each expert panel curation, every criterion the panel applied ("Met") and considered and rejected ("Not Met"). All 883 short-variant curations in the six genes (LDLR 557, BRCA1 102, APC 101, BRCA2 95, MLH1 16, MSH2 12), scored against the criteria the rules apply:
+
+| Criterion | Agreed | Rules only (panel said not met) | Panel only | Precision | Recall | Same strength |
+|---|---|---|---|---|---|---|
+| BA1 | 32 | 3 (1) | 1 | 91% | 97% | 32 of 32 |
+| BS1 | 27 | 8 (6) | 4 | 77% | 87% | 25 of 27 |
+| PM2 | 683 | 18 (18) | 40 | 97% | 94% | 680 of 683 |
+| PVS1 | 56 | 2 (2) | 55 | 97% | 50% | 54 of 56 |
+| PS3 | 90 | 4 (4) | 139 | 96% | 39% | 90 of 90 |
+| BS3 | 13 | 6 (5) | 36 | 68% | 27% | 13 of 13 |
+| PM5 | 3 | 1 (0) | 71 | 75% | 4% | 3 of 3 |
+
+When a rule fires it is nearly always the criterion the panel used, at the panel's strength (PM2, PVS1, PS3 at 96% to 97%). Recall is low where the evidence lives outside these rules: PS3 for LDLR and the colorectal genes comes from published functional studies; of the 55 PVS1 misses, 35 are missense or splice-region variants the panels gave PVS1 from RNA assays showing aberrant splicing, 14 are null variants the rules leave to the curator, and 6 are LDLR start-loss variants the rules do not handle; and PM5 the panels mostly apply to missense changes at a residue with a known pathogenic change, which is not implemented. BS3 is the weak spot: of its 6 extras, 5 are variants the panel marked not met though ENIGMA's own Table 9 gives BS3, which suggests curations made before Table 9 v1.2. By class the run has no reversals; pathogenic calls are right 50 of 53 times and benign calls 67 of 73, and agreement is 56.9%, lower than the ClinVar sample because most of these curations are LDLR missense variants classified on literature evidence.
 
 **Where the rules and the panels differ.** Two variants the panels call uncertain come out pathogenic, both by the panels' own rules: BRCA2 p.Glu3309Ter, the last codon before ENIGMA's cut-off at 3310, gets PVS1 and PM5_PTC from Table 4; MLH1 p.Tyr750Ter falls inside InSiGHT's PVS1 cut-off at codon 753. The panels' classifications must rest on evidence beyond these rules.
 
@@ -70,5 +87,6 @@ Agreement is 64.2% overall, from 48% (LDLR) to 74% (MSH2), with no reversals. Th
 - Only the criteria data alone decides. Missense variants, which need functional studies, case data, or segregation, come out uncertain until the literature step (C2).
 - PS1 and PM5 (the same or a nearby amino acid change as a known pathogenic variant) are not applied yet: each panel sets its own strengths for them.
 - PVS1 follows each panel only as far as data allows. For LDLR, MLH1, and MSH2 splice sites it does not check whether a stop falls in the last 50 nucleotides of the penultimate exon (which also escapes NMD), or a panel's list of critical domains. APC splice sites, initiation codon variants, and exon-level deletions and duplications are left to the curator. ENIGMA's RNA-based codes ("PVS1 (RNA)") are applied at the table's strength without re-reading the RNA data.
+- PVS1 from RNA evidence for variants outside the canonical sites (the panels' "PVS1 (RNA)"), and initiation codon (start-loss) variants, are not applied: they need lab data the rules do not have.
 - Thresholds are read on gnomAD v4 joined. ENIGMA's are defined on gnomAD v2.1 and v3.1 non-cancer subsets, and PM2 for BRCA1 and BRCA2 also requires read depth of at least 25, not checked. Founder variants, which InSiGHT excludes from BA1 and BS1, are not excepted.
 - This tool includes data from the gnomAD v4 release. For research and demonstration; not for clinical use.

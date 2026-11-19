@@ -317,6 +317,10 @@ The 2015 American College of Medical Genetics and Genomics and Association for M
 
 A ClinGen Variant Curation Expert Panel adapts the ACMG/AMP criteria to its genes: frequency thresholds, which criteria apply, at what strength. The adaptations are published in the Criteria Specification (CSpec) registry; `curation/rules.yaml` cites each one. [CSpec registry](https://cspec.genome.network)
 
+### Evidence Repository
+
+ClinGen's public record of expert panel curations: for each variant, the classification and every ACMG/AMP criterion the panel applied or rejected, with the papers cited. Curation is scored against it criterion by criterion. [ClinGen ERepo](https://erepo.clinicalgenome.org)
+
 ### Bayesian points
 
 A way to combine ACMG/AMP criteria by adding points: supporting 1, moderate 2, strong 4, very strong 8, benign evidence negative. 10 or more is pathogenic, 6 to 9 likely pathogenic, 0 to 5 uncertain significance (VUS), -1 to -6 likely benign, -7 or less benign. [Tavtigian et al. 2020](https://doi.org/10.1002/humu.24088)

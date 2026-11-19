@@ -20,6 +20,7 @@ What a rule cannot decide is listed as not assessed, with the reason, for the cu
 Nothing here reads the variant's ClinVar classification.
 """
 
+import csv
 import re
 from functools import cache
 from pathlib import Path
@@ -33,6 +34,8 @@ from ehr_rwe_eln.cohort.spec import Strict
 RULES = Path(__file__).parent / "rules.yaml"
 # ENIGMA's PVS1 decision table for BRCA1 and BRCA2 (scripts/import_enigma_pvs1.py).
 ENIGMA = Path(__file__).parent / "enigma_pvs1.yaml"
+# ENIGMA's calibrated functional assay results, PS3 and BS3 (scripts/import_enigma_functional.py).
+FUNCTIONAL = Path(__file__).parent / "enigma_functional.tsv"
 Strength = Literal["stand_alone", "very_strong", "strong", "moderate", "supporting"]
 POINTS = {"very_strong": 8, "strong": 4, "moderate": 2, "supporting": 1}
 # Each code's strength as originally defined; a different strength is written CODE_Strength.
@@ -42,8 +45,10 @@ DEFAULT = {
     "PM2": "moderate",
     "PVS1": "very_strong",
     "PM5": "moderate",
+    "PS3": "strong",
+    "BS3": "strong",
 }
-BENIGN = {"BA1", "BS1"}
+BENIGN = {"BA1", "BS1", "BS3"}
 CLASSES = [
     (10, "Pathogenic"),
     (6, "Likely pathogenic"),
@@ -106,6 +111,8 @@ class GeneRules(Strict):
     # codon cut-offs for the premature stop (InSiGHT, MLH1 and MSH2); a window of codons where
     # truncations count whatever the exon (InSiGHT, APC). Otherwise the NMD rule.
     pvs1_table: Literal["enigma"] | None = None
+    # PS3 and BS3 from the panel's table of calibrated functional assays (ENIGMA Table 9).
+    functional_table: Literal["enigma"] | None = None
     ptc_codons: list[Codons] = []
     ptc_window: Window | None = None
     splice_to_curator: bool = False
@@ -142,6 +149,27 @@ def _not(reason: str, decided: bool = False) -> dict:
     """PVS1 not applied: decided (the panel's rules say it does not apply) or left to the
     curator (the rules cannot tell)."""
     return {"code": "PVS1", "reason": reason, "decided": decided}
+
+
+@cache
+def _functional_table() -> dict[tuple[str, str], dict]:
+    with FUNCTIONAL.open() as f:
+        lines = [line for line in f if not line.startswith("#")]
+    return {(r["gene"], r["hgvsc"]): r for r in csv.DictReader(lines, delimiter="\t")}
+
+
+def _functional(gene: str, vep: dict) -> tuple[list[dict], dict | None]:
+    """PS3 or BS3 from ENIGMA Table 9, or a decided note when its assays were inconclusive."""
+    row = _functional_table().get((gene, vep.get("hgvsc")))
+    if row is None:
+        return [], None
+    if row["code"] in ("PS3", "BS3") and row["strength"]:
+        return [_criterion(row["code"], row["strength"], f"ENIGMA Table 9: {row['text']}")], None
+    return [], {
+        "code": "PS3/BS3",
+        "reason": f"ENIGMA Table 9: no code from calibrated assays. {row['text']}",
+        "decided": True,
+    }
 
 
 @cache
@@ -329,6 +357,11 @@ def assess(
         met += criteria
         if note:
             not_assessed.append(note)
+        if rules.functional_table == "enigma":
+            criteria, note = _functional(gene, vep)
+            met += criteria
+            if note:
+                not_assessed.append(note)
     return {"met": met, "not_assessed": not_assessed} | classify(met)
 
 
