@@ -11,6 +11,8 @@ data_use_limitations: >-
   here, word for word from the study's data use certification.
 # Judged against the data it learned from, so nothing is held out: the cohort has 26 events.
 holdout_fraction: 0
+# Fidelity is also reported within each age bin and sex; with no holdout there is no floor.
+subgroups: [male, age]
 seed: 0
 releases:
   - {method: bayes_net, epsilon: 1}

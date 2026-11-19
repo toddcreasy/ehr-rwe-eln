@@ -28,16 +28,16 @@ This is a single-maintainer project on synthetic data. Some categories are about
 |---|---|---|
 | MAP 1: context established and understood | Purpose, users, and setting are written down: synthetic test and development data so teams can build and red-team systems without the source; a local stack with no real data (methodology sections 1 and 2). | None for this setting. |
 | MAP 2: categorization of the AI system | Synthesizers categorized by method (statistical, generative, baseline) in each release record and card. ELN extraction categorized as structured extraction on a small model. | None. |
-| MAP 3: capabilities, goals, benefits, and costs compared with benchmarks | Every synthetic release is read against benchmarks from real data: a real-against-real noise floor, a model trained on real data (TRTR AUC 0.809), and the real trial hazard ratio (0.97). ELN extraction has a 0.95 precision and recall bar. | None. |
+| MAP 3: capabilities, goals, benefits, and costs compared with benchmarks | Every synthetic release is read against benchmarks from real data: a real-against-real noise floor, a model trained on real data (TRTR AUC 0.804), and the real trial hazard ratio (0.97). ELN extraction has a 0.95 precision and recall bar. | None. |
 | MAP 4: risks and benefits mapped for all components, including third-party | Component risks found and recorded: diffprivlib's zero-truncated noise inflates sparse counts (70 events against 26); Opacus's default accountant warned of divergent integration, so the RDP accountant is used; the LLM missed replicate and dilution rules until the hard eval caught them; prompt injections that asked it to add a fabricated sample worked on 6 of 11 entries until the prompt said entry text is data, never instructions. | None found unrecorded. |
-| MAP 5: impacts on individuals, groups, communities, organizations, and society | Threat model for individuals: membership, attribute, and identity disclosure (methodology section 2). Impact of misuse: synthetic trial tables produce effects that are not there, so cards forbid reporting estimates from them. | Impact on small groups not measured (see MEASURE 2, fair). |
+| MAP 5: impacts on individuals, groups, communities, organizations, and society | Threat model for individuals: membership, attribute, and identity disclosure (methodology section 2). Impact of misuse: synthetic trial tables produce effects that are not there, so cards forbid reporting estimates from them. | Impact on groups measured by race, ethnicity, sex, and age; intersections not measured (see MEASURE 2, fair). |
 
 ## Measure
 
 | Category | In place | Gap |
 |---|---|---|
 | MEASURE 1: appropriate methods and metrics identified and applied | Fidelity (total variation distance per column and pair, KS, correlation gap), utility (train on synthetic, test on real), trial parity over 20 draws, three privacy attacks, quasi-identifier uniqueness; ELN precision and recall per trap. Each metric defined in its module and in the methodology. | None. |
-| MEASURE 2: evaluated for trustworthy characteristics | See the table below. | Fairness. |
+| MEASURE 2: evaluated for trustworthy characteristics | See the table below. | Fairness across intersections of groups. |
 | MEASURE 3: tracking identified risks over time | Every release and every report records the code version it came from; data cards are regenerated from them. The data quality module keeps every run. | `synth.report` keeps only the latest report per release and kind; history is in git, not the database. No scheduled re-evaluation. |
 | MEASURE 4: feedback about the efficacy of measurement | The measurements are themselves checked: the noise floor and the copy of the training data show what the metrics read at their limits; the independent-columns baseline must score as useless and does (AUC 0.465); tests confirm a shuffled relationship is caught and a copy leaks. A weak copy result led to adding the uniqueness metric, which explained it. | None. |
 
@@ -51,7 +51,7 @@ Trustworthy characteristics (MEASURE 2):
 | Accountable and transparent | Provenance per release (spec as run, spend per mechanism, source, counts, seed, code version); data cards; methodology; PR history. | None. |
 | Explainable and interpretable | The Bayesian network's structure is declared and printed on each card; each privacy report has a plain-language summary. | The VAE is not interpretable beyond its metrics. |
 | Privacy-enhanced | DP at epsilon 0.25 to 4 on the person summary; all three attacks at chance on every release. | No location in the source, so linkage risk is understated. |
-| Fair, with harmful bias managed | Not measured. | DP noise is the same size for every count, so small groups are distorted most; 99 of 23,421 people are recorded as Native American. Needed: fidelity and utility by race, ethnicity, sex, and age group. |
+| Fair, with harmful bias managed | Fidelity and utility within each race, ethnicity, sex, and age group, each read against the group's own noise floor (methodology section 5). Age is the main finding: the VAE has 19 to 28% too few people aged 70 and over and distorts them most. Each data card names any group whose share is off by more than 20% and says not to study it in that release. | Intersections (for example age by race) are not measured; groups under 11 people are not reported. The VAE's age distortion is reported, not fixed. |
 
 ## Manage
 
@@ -64,8 +64,8 @@ Trustworthy characteristics (MEASURE 2):
 
 ## Gaps, in order of importance
 
-1. Fairness: measure fidelity and utility by subgroup (MEASURE 2).
-2. Release withdrawal and notification process (MANAGE 4).
+1. Release withdrawal and notification process (MANAGE 4).
+2. Fairness across intersections of groups, and the VAE's distortion of older people (MEASURE 2).
 3. Location in the source, so the linkage attack reflects real risk (MEASURE 2, privacy-enhanced).
 4. Report history in the database, not only the latest report (MEASURE 3).
 5. Outside review by a DAC or red team (GOVERN 5), and separated roles (GOVERN 2), for any use beyond this project.

@@ -132,6 +132,9 @@ class Spec(Strict):
     protocol: str | None = None
     # A 0/1 column to predict in the utility test (train on synthetic, test on real).
     utility_target: str | None = None
+    # Columns to report fidelity within, one group per category or numeric bin: a release can
+    # match its source overall and still distort a small group.
+    subgroups: list[str] = []
     columns: list[Column] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -158,6 +161,9 @@ class Spec(Strict):
             target = next((c for c in self.columns if c.name == self.utility_target), None)
             if target is None or target.categories != [0, 1]:
                 raise ValueError(f"utility_target {self.utility_target} must be a 0/1 column")
+        for name in self.subgroups:
+            if name not in seen:
+                raise ValueError(f"subgroup {name} is not a column")
         return self
 
 

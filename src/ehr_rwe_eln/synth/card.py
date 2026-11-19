@@ -4,6 +4,7 @@ fit for. Built only from the release record and its stored reports, so it can be
 and checked against them.
 """
 
+from ehr_rwe_eln.synth.fidelity import MIN_GROUP
 from ehr_rwe_eln.synth.privacy import signed_percent
 from ehr_rwe_eln.synth.spec import Column, Spec
 
@@ -91,6 +92,68 @@ def _fidelity(report: dict) -> list[str]:
     return out
 
 
+# A group whose share of the release is off by more than this is named under intended use.
+SHARE_WARNING = 0.2
+
+
+def _misrepresented(rows: list[dict]) -> list[dict]:
+    return [r for r in rows if abs(r["share_ratio"] - 1) > SHARE_WARNING]
+
+
+def _subgroups(rows: list[dict], target: str | None) -> list[str]:
+    has_floor = any(r["noise_floor"] is not None for r in rows)
+    out = [
+        "## Fidelity by subgroup",
+        "",
+        "The same reading within each group: its share of this release against its share of the"
+        " real data (1.00 is right, 0.80 is 20% too few), and the mean column TVD of the other"
+        " columns within the group"
+        + (
+            ", next to the group's own noise floor (two real samples of a small group differ"
+            " more, so its floor is higher)."
+            if has_floor
+            else ". This spec keeps no holdout, so there is no floor to read it against."
+        )
+        + f" Groups under {MIN_GROUP} people are left out.",
+        "",
+    ]
+    ranked = sorted((r for r in rows if r["excess"] is not None), key=lambda r: -r["excess"])
+    if ranked:
+        out += [
+            "Furthest past their floor: "
+            + "; ".join(
+                f"{r['column']} {r['group']} ({r['column_tvd_mean']:.3f} against"
+                f" {r['noise_floor']:.3f})"
+                for r in ranked[:3]
+            )
+            + ".",
+            "",
+        ]
+    utility = target is not None and any("tstr_auc" in r for r in rows)
+    header = "| Group | Training people | Share in release | Column TVD | Noise floor |"
+    rule = "|---|---|---|---|---|"
+    if utility:
+        header += f" {target} AUC, release / real |"
+        rule += "---|"
+    out += [header, rule]
+    for r in rows:
+        line = (
+            f"| {r['column']}: {r['group']} | {r['train_people']:,} | {r['share_ratio']:.2f}"
+            f" | {_num(r['column_tvd_mean'])} | {_num(r['noise_floor'])} |"
+        )
+        if utility:
+            line += f" {_num(r.get('tstr_auc'))} / {_num(r.get('trtr_auc'))} |"
+        out.append(line)
+    if utility:
+        out += [
+            "",
+            f"The {target} models are trained on the whole release and on the whole real"
+            f" training data, then scored on the group's held-out people; n/a means fewer than"
+            f" {MIN_GROUP} of them on one side of the outcome.",
+        ]
+    return out
+
+
 def _trial(report: dict) -> list[str]:
     real, release, r = report["real"], report["release"], report["repeated"]
 
@@ -162,6 +225,8 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
     }[release["method"]]
     trial = reports.get("trial")
     spurious = trial["repeated"]["spurious_effect"] if trial else None
+    subgroups = reports.get("fidelity", {}).get("subgroups") or []
+    misrepresented = _misrepresented(subgroups)
     lines = [
         f"# Data card: synthetic release {release['release_id']}",
         "",
@@ -191,6 +256,16 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
             f" In trial parity, {spurious:.0%} of draws at this setting showed an effect the real"
             " data does not, so do not read effect estimates from it."
             if spurious
+            else ""
+        )
+        + (
+            " Some groups are misrepresented, so do not study them in it: "
+            + "; ".join(
+                f"{r['column']} {r['group']} at {r['share_ratio']:.2f} times its real share"
+                for r in misrepresented
+            )
+            + "."
+            if misrepresented
             else ""
         ),
         "",
@@ -229,6 +304,8 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
         ]
     if "fidelity" in reports:
         lines += ["", *_fidelity(reports["fidelity"])]
+    if subgroups:
+        lines += ["", *_subgroups(subgroups, spec.utility_target)]
     if trial:
         lines += ["", *_trial(trial)]
     if "privacy" in reports:
