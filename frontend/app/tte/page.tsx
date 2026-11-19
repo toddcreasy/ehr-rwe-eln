@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type Run = {
@@ -317,7 +316,6 @@ export default function TargetTrials() {
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-12">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <Link href="/" className={`text-sm underline ${muted}`}>ehr-rwe-eln</Link>
           <h1 className="text-2xl font-semibold">Target trial emulation</h1>
           <p className={`text-sm ${muted}`}>Bias diagnostics for each protocol: who was eligible, how well weighting balanced the arms, the estimates, and negative controls.</p>
         </div>

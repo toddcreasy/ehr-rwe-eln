@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { type CheckResult, STATUSES, STATUS_META, type Status, StatusBadge, statusOf } from "./status";
 
@@ -277,7 +276,6 @@ export default function DataQuality() {
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-12">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <Link href="/" className="text-sm text-zinc-600 underline dark:text-zinc-400">ehr-rwe-eln</Link>
           <h1 className="text-2xl font-semibold">Data quality</h1>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
             OHDSI DataQualityDashboard v2.9.0 checks on the OMOP CDM.
