@@ -4,6 +4,8 @@ fit for. Built only from the release record and its stored reports, so it can be
 and checked against them.
 """
 
+import math
+
 from ehr_rwe_eln.synth.fidelity import MIN_GROUP
 from ehr_rwe_eln.synth.privacy import signed_percent
 from ehr_rwe_eln.synth.spec import Column, Spec
@@ -92,15 +94,58 @@ def _fidelity(report: dict) -> list[str]:
     return out
 
 
-# A group whose share of the release is off by more than this is named under intended use.
+# A group whose share of the release is off by more than this, and by more than sampling noise
+# explains, is named under intended use.
 SHARE_WARNING = 0.2
+# The warning names at most this many, furthest off first.
+WARN_AT_MOST = 5
+
+
+def _single(rows: list[dict]) -> list[dict]:
+    """Reported groups of one column; intersections are summarized separately."""
+    return [r for r in rows if not r.get("suppressed") and " x " not in r["column"]]
 
 
 def _misrepresented(rows: list[dict]) -> list[dict]:
-    return [r for r in rows if abs(r["share_ratio"] - 1) > SHARE_WARNING]
+    """Groups and intersection cells whose share of the release is off by more than
+    SHARE_WARNING and by more than three standard errors of a count that size (about
+    3 / sqrt(people)), so a small cell is not flagged for sampling noise alone."""
+    flagged = [
+        r
+        for r in rows
+        if not r.get("suppressed")
+        and abs(r["share_ratio"] - 1) > max(SHARE_WARNING, 3 / math.sqrt(r["train_people"]))
+    ]
+    return sorted(flagged, key=lambda r: -abs(r["share_ratio"] - 1))
 
 
-def _subgroups(rows: list[dict], target: str | None) -> list[str]:
+def _intersections(rows: list[dict]) -> list[str]:
+    cells = [r for r in rows if " x " in r["column"]]
+    if not cells:
+        return []
+    reported = [r for r in cells if not r["suppressed"]]
+    names = ", ".join(dict.fromkeys(r["column"] for r in cells))
+    out = [
+        "",
+        f"Intersections ({names}): {len(reported)} groups reported, {len(cells) - len(reported)}"
+        f" left out under {MIN_GROUP} people.",
+    ]
+    ranked = sorted((r for r in reported if r["excess"] is not None), key=lambda r: -r["excess"])
+    if ranked:
+        out[-1] += (
+            " Furthest past their floor: "
+            + "; ".join(
+                f"{r['group']} ({r['train_people']:,} people, {r['column_tvd_mean']:.3f} against"
+                f" {r['noise_floor']:.3f}, share {r['share_ratio']:.2f})"
+                for r in ranked[:5]
+            )
+            + "."
+        )
+    return out
+
+
+def _subgroups(all_rows: list[dict], target: str | None) -> list[str]:
+    rows = _single(all_rows)
     has_floor = any(r["noise_floor"] is not None for r in rows)
     out = [
         "## Fidelity by subgroup",
@@ -151,7 +196,7 @@ def _subgroups(rows: list[dict], target: str | None) -> list[str]:
             f" training data, then scored on the group's held-out people; n/a means fewer than"
             f" {MIN_GROUP} of them on one side of the outcome.",
         ]
-    return out
+    return out + _intersections(all_rows)
 
 
 def _trial(report: dict) -> list[str]:
@@ -272,9 +317,13 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
             " Some groups are misrepresented, so do not study them in it: "
             + "; ".join(
                 f"{r['column']} {r['group']} at {r['share_ratio']:.2f} times its real share"
-                for r in misrepresented
+                for r in misrepresented[:WARN_AT_MOST]
             )
-            + "."
+            + (
+                f"; and {len(misrepresented) - WARN_AT_MOST} more, listed in its fidelity report."
+                if len(misrepresented) > WARN_AT_MOST
+                else "."
+            )
             if misrepresented
             else ""
         ),

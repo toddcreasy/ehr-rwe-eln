@@ -51,7 +51,7 @@ Synthetic rows are not real people, so a match between a synthetic row and a rea
 - Kolmogorov-Smirnov statistic for numeric columns.
 - Correlation gap: mean absolute difference between the two Pearson correlation matrices.
 - Read against a **noise floor**: the same measures between two real samples (holdout against training). No release can be expected to beat it.
-- **By subgroup**: the spec names columns to split by (race, ethnicity, sex, and age by its ten-year bins). Within each group of at least 11 people: its share of the release against its share of the real data, its mean column TVD, and its own noise floor, which is higher for a small group because two small samples differ more. Groups under 11 are left out, as CMS suppresses cells under 11.
+- **By subgroup**: the spec names columns to split by (race, ethnicity, sex, and age by its ten-year bins). Within each group of at least 11 people: its share of the release against its share of the real data, its mean column TVD, and its own noise floor, which is higher for a small group because two small samples differ more. Groups under 11 are left out, as CMS suppresses cells under 11. The spec also names pairs of columns (age by race, age by sex, race by sex), reported cell by cell the same way; cells under 11 are listed without numbers, so the report shows how much of an intersection is too small to read.
 
 **Utility.** Train on synthetic, test on real (TSTR): a logistic regression predicting death, trained on the release and scored on held-out real people by AUC (the chance that a random person who died ranks above one who did not; 0.5 is guessing). Compared with the same model trained on real data (TRTR). Both models are also scored within each subgroup's held-out people, where the group has at least 11 people on each side of the outcome.
 
@@ -135,7 +135,20 @@ Column TVD within each group, past the group's own noise floor (excess), and the
 - Race is close to the floor in the Bayesian network. The VAE at epsilon 1 makes Native American people 1.69 times as common as they are; DP noise is the same size for every count, so the smallest groups move most.
 - The VAE distorts men two to three times as much as women; the Bayesian network treats them alike.
 - Utility within groups: release models lose about as much AUC for Black patients (0.687 to 0.722 against 0.780 for the real-data model) as for white patients (0.688 to 0.732 against 0.806). Native American, Hawaiian, and other groups have too few deaths in the holdout to score.
-- Each data card lists every group and names any whose share is off by more than 20% under intended use, with an instruction not to study it in that release. No Bayesian network release has one.
+- Each data card lists every group and, under intended use, names any group or intersection cell whose share is off by more than 20% and by more than sampling explains (three standard errors, about 3 / sqrt(people)), with an instruction not to study it in that release.
+
+**Intersections.** Age by race, age by sex, and race by sex give 92 cells; 81 have at least 11 training people. The 11 too small to report are all age by race: Native American people in every age band but 40 to 49, and Hawaiian and "other" from 80 up.
+
+| Release | Worst cell, excess over its floor (share) | Worst single group |
+|---|---|---|
+| Bayesian network, epsilon 1 | Men 90 or more, +0.074 (0.86); share: Black, 80 to 89, 2.03 | Ages 90 or more, +0.047 |
+| Bayesian network, epsilon 4 | Black, 50 to 59, +0.028 (0.97); share: Black, 80 to 89, 2.03 | Men, +0.014 |
+| VAE, epsilon 1 | Men 90 or more, +0.259 (0.77); men 80 to 89, +0.238 (0.62) | Ages 90 or more, +0.223 |
+| VAE, epsilon 4 | Men 90 or more, +0.218 (0.80) | Ages 90 or more, +0.187 |
+
+- Within each cell, the Bayesian network at epsilon 4 is faithful: all 81 reported cells are within 0.028 of their floor on the other columns.
+- The VAE's trouble with older people falls hardest on older men. At epsilon 1 it has 38% too few men aged 80 to 89, against 28% too few of everyone that age.
+- Cell sizes are where the Bayesian network falls short: Black people aged 80 to 89 appear at 2.03 times their real share at both epsilons, and Black teenagers at 0.78 at epsilon 4. That is the spec's structure, not noise: neither age nor race is a parent of the other, so the release draws race independently of age (the independent-columns baseline shows the same 2.03). In the source, older people are less often Black (5.2% of those 80 to 89, against 8.8% overall); a structure with race depending on age would keep that. The cards flag such cells, since an age-by-race analysis on these releases would be wrong.
 - The person summary reads 74 HbA1c results the ELN bridge wrote to OMOP after releases 1 to 6 were made, which moves their figures at the third decimal; releases 13 and 14 were made after.
 
 ### Trial table (1,890 people, 26 events)
@@ -175,7 +188,7 @@ The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.26) fo
 - The Bayesian network keeps only declared relationships, with at most two parents per column.
 - The VAE's training settings were not tuned. Tuning on a separate public stand-in would likely improve it.
 - On real data only the Bayesian network can run here: the VAE needs a seed, because secure noise for it is not installable (section 3).
-- Subgroup fidelity covers race, ethnicity, sex, and age one at a time, not their intersections (older Black women, for example), which would be smaller still. Groups under 11 people are not reported.
+- Intersections cover pairs of columns; three-way cells (older Black women, for example) would be smaller still, and most would fall under the 11-person cutoff. Cells under 11 people are listed without numbers.
 - One spec per table kind and one trial protocol; results on other cohorts will differ.
 
 ## 8. Reproducing and provenance

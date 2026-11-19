@@ -263,3 +263,13 @@ def test_subgroups_must_be_columns():
     assert Spec(**{**fields, "subgroups": ["sex", "age"]}).subgroups == ["sex", "age"]
     with pytest.raises(ValidationError, match="subgroup race is not a column"):
         Spec(**{**fields, "subgroups": ["race"]})
+
+
+def test_intersections_need_two_or_three_different_columns():
+    fields = spec(AGE, SEX).model_dump()
+    assert Spec(**{**fields, "subgroups": [["age", "sex"]]}).subgroups == [["age", "sex"]]
+    for bad in (["age"], ["age", "age"]):
+        with pytest.raises(ValidationError, match="two or three different columns"):
+            Spec(**{**fields, "subgroups": [bad]})
+    with pytest.raises(ValidationError, match="subgroup race is not a column"):
+        Spec(**{**fields, "subgroups": [["age", "race"]]})

@@ -47,7 +47,9 @@ def test_utility_auc_beats_guessing_on_a_real_relationship_and_not_on_noise():
 
 
 def with_sex(t: pd.DataFrame, seed: int) -> pd.DataFrame:
-    return t.assign(sex=np.random.default_rng(seed).choice(["female", "male"], len(t)))
+    # Its own seed stream: toy() draws ages from default_rng(seed), and the same stream here
+    # would tie sex to age.
+    return t.assign(sex=np.random.default_rng([seed, 1]).choice(["female", "male"], len(t)))
 
 
 def test_subgroups_find_the_group_a_release_distorts():
@@ -58,15 +60,17 @@ def test_subgroups_find_the_group_a_release_distorts():
     release = release[(release.sex == "female") | (np.arange(len(release)) % 2 == 0)]
     release = release.assign(lisinopril=np.where(release.sex == "male", 0, release.lisinopril))
     rows = subgroup_report(train, holdout, release, columns, ["sex", "age"], "hypertension")
-    by = {(r["column"], r["group"]): r for r in rows}
+    by = {(r["column"], r["group"]): r for r in rows if not r["suppressed"]}
     men, women = by[("sex", "male")], by[("sex", "female")]
     assert men["share_ratio"] == pytest.approx(2 / 3, abs=0.05)
     assert women["share_ratio"] == pytest.approx(4 / 3, abs=0.05)
     assert men["excess"] > 0.05 > women["excess"]
     assert men["noise_floor"] < 0.03  # two real samples of thousands of men barely differ
     assert men["tstr_auc"] is not None and men["trtr_auc"] > 0.5
-    # Ages 20 to 89: the empty bins below 20 are left out, not reported as zero.
+    # Ages 20 to 89: the empty bins below 20 are listed as suppressed, with no numbers.
     assert [g for c, g in by if c == "age"][0] == "20 to 30"
+    empty = next(r for r in rows if r["group"] == "0 to 10")
+    assert empty == {"column": "age", "group": "0 to 10", "suppressed": True}
 
 
 def test_subgroups_without_a_holdout_have_no_floor():
@@ -75,3 +79,21 @@ def test_subgroups_without_a_holdout_have_no_floor():
     rows = subgroup_report(train, train.iloc[:0], train, columns, ["sex"], "hypertension")
     assert all(r["noise_floor"] is None and r["excess"] is None for r in rows)
     assert all(r["column_tvd_mean"] == 0 and "tstr_auc" not in r for r in rows)
+
+
+def test_an_intersection_finds_what_its_columns_hide():
+    columns = spec(AGE, SEX, FLAG, DRUG).columns
+    train, holdout = with_sex(toy(8000, 1), 1), with_sex(toy(4000, 2), 2)
+    # Lisinopril removed only for men in their 70s: too few people to move either column much.
+    release = with_sex(toy(8000, 3), 3)
+    target = (release.sex == "male") & (release.age // 10 == 7)
+    release = release.assign(lisinopril=np.where(target, 0, release.lisinopril))
+    rows = subgroup_report(train, holdout, release, columns, ["sex", ["age", "sex"]])
+    by = {(r["column"], r["group"]): r for r in rows if not r["suppressed"]}
+    hit = by[("age x sex", "70 to 80, male")]
+    assert hit["excess"] > 0.1
+    assert hit["excess"] > 3 * by[("sex", "male")]["excess"]
+    assert by[("age x sex", "70 to 80, female")]["excess"] < 0.03
+    # Three age bins with nobody in them (under 20, 90 and over), times two sexes: listed,
+    # without numbers.
+    assert sum(r["suppressed"] for r in rows if r["column"] == "age x sex") == 6
