@@ -148,7 +148,19 @@ Column TVD within each group, past the group's own noise floor (excess), and the
 
 - Within each cell, the Bayesian network at epsilon 4 is faithful: all 81 reported cells are within 0.028 of their floor on the other columns.
 - The VAE's trouble with older people falls hardest on older men. At epsilon 1 it has 38% too few men aged 80 to 89, against 28% too few of everyone that age.
-- Cell sizes are where the Bayesian network falls short: Black people aged 80 to 89 appear at 2.03 times their real share at both epsilons, and Black teenagers at 0.78 at epsilon 4. That is the spec's structure, not noise: neither age nor race is a parent of the other, so the release draws race independently of age (the independent-columns baseline shows the same 2.03). In the source, older people are less often Black (5.2% of those 80 to 89, against 8.8% overall); a structure with race depending on age would keep that. The cards flag such cells, since an age-by-race analysis on these releases would be wrong.
+- Cell sizes are where the Bayesian network falls short: Black people aged 80 to 89 appear at 2.03 times their real share at both epsilons, and Black teenagers at 0.78 at epsilon 4. That is the spec's structure, not noise: neither age nor race is a parent of the other, so the release draws race independently of age (the independent-columns baseline shows the same 2.03). In the source, older people are less often Black (5.2% of those 80 to 89, against 8.8% overall). The cards flag such cells, since an age-by-race analysis on these releases would be wrong.
+
+**Race with age as its parent, tested and not kept.** Making race depend on age (releases 15 and 16, against 13 and 14) turns race's 6-cell histogram into 60 age-by-race cells under the same budget:
+
+| | Epsilon 1 (13 → 15) | Epsilon 4 (14 → 16) |
+|---|---|---|
+| Black, 80 to 89, share | 2.03 → 0.82 | 2.03 → 1.17 |
+| Black, 10 to 19, share | 0.79 → 0.93 | 0.78 → 0.92 |
+| Native American, share | 1.01 → 1.65 | 0.96 → 0.96 |
+| Groups flagged on the card | 1 → 17 | 2 → 2 |
+| TSTR AUC | 0.709 → 0.690 | 0.685 → 0.675 |
+
+At epsilon 4 it removes the structural error. At epsilon 1 the noise swamps the cells of the smallest races, many holding 11 to 30 people: seven come out empty (none did before) and Native American people overall reach 1.65 times their share. One structure serves every epsilon, and trading one group's error for noise across all the smallest groups is the wrong direction for fairness, so race keeps no parent and the doubled share of older Black people stays a documented, flagged limitation.
 - The person summary reads 74 HbA1c results the ELN bridge wrote to OMOP after releases 1 to 6 were made, which moves their figures at the third decimal; releases 13 and 14 were made after.
 
 ### Trial table (1,890 people, 26 events)

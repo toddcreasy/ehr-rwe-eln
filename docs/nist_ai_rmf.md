@@ -64,7 +64,7 @@ Trustworthy characteristics (MEASURE 2):
 
 ## Gaps, in order of importance
 
-1. The VAE's distortion of older people, worst for older men; age and race unlinked in the Bayesian network's structure; three-way intersections (MEASURE 2).
+1. The VAE's distortion of older people, worst for older men; age and race unlinked in the Bayesian network's structure (linking them was tested and hurt the smallest races at epsilon 1); three-way intersections (MEASURE 2).
 2. Location in the source, so the linkage attack reflects real risk (MEASURE 2, privacy-enhanced).
 3. Report history in the database, not only the latest report (MEASURE 3).
 4. Scheduled re-evaluation of released data, and confirmed deletion after a withdrawal (MANAGE 4).

@@ -35,6 +35,9 @@ columns:
   # Demographics. Age is at the end of the person's observation period.
   - {name: age, demographic: age, numeric: {low: 0, high: 100, bins: 10, integer: true, open_top: true}}
   - {name: sex, demographic: sex, categories: [female, male]}
+  # Race has no parent, so releases draw it independently of age. Age as its parent (releases
+  # 15 and 16) fixed older Black people's share at epsilon 4 but spread noise over the smallest
+  # races at epsilon 1 (methodology section 5, intersections), so it was not kept.
   - {name: race, demographic: race, categories: [white, black, asian, hawaiian, native, other]}
   - {name: ethnicity, demographic: ethnicity, categories: [hispanic, nonhispanic], parents: [race]}
 
