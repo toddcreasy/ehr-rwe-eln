@@ -15,11 +15,15 @@ way. The lead variant of each hit is then fit in full for its odds ratio.
 - Genomic inflation (lambda): the median test statistic over its expected value under no
   association, on common variants (frequency 5% or more, where the test's chi-squared
   approximation holds best). Near 1.0 means the tests are calibrated; well above means
-  something such as population structure is inflating every test. On a small simulated genome
-  it is noisy: over 20 random phenotypes with no effect, 5,000 people and three 3 Mb
-  chromosomes gave a mean of 0.99 and a standard deviation of 0.06. A strong real signal also
+  something such as population structure is inflating every test. A strong real signal also
   lifts its whole chromosome through weak long-range LD, so the truth check reads lambda on the
   chromosomes without the planted variant.
+- Calibration: on a small simulated genome lambda is noisy, because LD leaves a few thousand
+  variants behaving like a few dozen independent tests. On 5,000 people and two 3 Mb
+  chromosomes, lambda with no effect has a standard deviation of about 0.10. So lambda is read
+  against its own null: the phenotype is redrawn NULL_RUNS times from the age-and-sex model
+  alone, the score test rerun, and the observed lambda placed among those null lambdas. A
+  percentile near 0 or 100 on every rebuild points at the pipeline; one low draw does not.
 """
 
 from pathlib import Path
@@ -35,6 +39,7 @@ LOCUS_WINDOW = 500_000
 CHI2_MEDIAN = chi2.ppf(0.5, 1)
 CHUNK = 2000
 COMMON = 0.05
+NULL_RUNS = 100
 
 
 def load(directory: Path) -> tuple[np.ndarray, pl.DataFrame, pl.DataFrame]:
@@ -78,6 +83,34 @@ def score_test(genotypes: np.ndarray, y: np.ndarray, covariates: np.ndarray) -> 
     return statistics
 
 
+def null_statistics(
+    genotypes: np.ndarray, y: np.ndarray, covariates: np.ndarray, runs: int, seed: int = 0
+) -> np.ndarray:
+    """Score statistics (runs by variants) for phenotypes with no genetic effect: each run
+    draws every person's phenotype from the fitted covariate-only model, so only chance links
+    it to any variant."""
+    mu = sm.Logit(y, covariates).fit(disp=0).predict(covariates)
+    rng = np.random.default_rng(seed)
+    return np.stack(
+        [
+            score_test(genotypes, (rng.random(len(y)) < mu).astype(float), covariates)
+            for _ in range(runs)
+        ]
+    )
+
+
+def calibration(observed: np.ndarray, null: np.ndarray) -> dict:
+    """Lambda on these variants, and where it falls among the null runs' lambdas on the same
+    variants: the share of null lambdas at or below it, and their middle 95%."""
+    value = float(np.median(observed) / CHI2_MEDIAN)
+    nulls = np.median(null, axis=1) / CHI2_MEDIAN
+    return {
+        "lambda": value,
+        "percentile": float(100 * np.mean(nulls <= value)),
+        "null_range": [float(np.percentile(nulls, 2.5)), float(np.percentile(nulls, 97.5))],
+    }
+
+
 def loci(results: pl.DataFrame) -> list[dict]:
     """Group significant variants into loci around their strongest one."""
     significant = results.filter(pl.col("p") < SIGNIFICANCE).sort("p").to_dicts()
@@ -103,14 +136,19 @@ def inflation(results: pl.DataFrame) -> float:
     return float(results["chi2"].median() / CHI2_MEDIAN)
 
 
-def run_gwas(directory: Path, phenotype: str) -> tuple[pl.DataFrame, dict]:
+def run_gwas(
+    directory: Path, phenotype: str, null_runs: int = NULL_RUNS
+) -> tuple[pl.DataFrame, dict]:
     genotypes, variants, people = load(directory)
     y = people[phenotype].to_numpy().astype(float)
     age = people["age"].to_numpy().astype(float)
     male = (people["sex"] == "male").to_numpy().astype(float)
     covariates = np.column_stack([np.ones(len(people)), (age - age.mean()) / age.std(), male])
     statistics = score_test(genotypes, y, covariates)
+    null = null_statistics(genotypes, y, covariates, null_runs)
     frequency = genotypes.mean(axis=0) / 2
+    is_common = np.minimum(frequency, 1 - frequency) >= COMMON
+    chromosome = variants["chromosome"].to_numpy()
     results = variants.with_columns(
         pl.Series("alt_frequency", frequency),
         pl.Series("chi2", statistics),
@@ -131,15 +169,23 @@ def run_gwas(directory: Path, phenotype: str) -> tuple[pl.DataFrame, dict]:
             name: inflation(group)
             for (name,), group in common.group_by("chromosome", maintain_order=True)
         },
+        "calibration_by_chromosome": {
+            name: calibration(statistics[mask], null[:, mask])
+            for name in dict.fromkeys(chromosome)
+            if (mask := is_common & (chromosome == name)).any()
+        },
         "significant_variants": int((results["p"] < SIGNIFICANCE).sum()),
         "loci": found,
+        # Runs by variants, aligned with results; check_truth reads it for its own variants.
+        "null_statistics": null,
     }
     return results, summary
 
 
 def check_truth(results: pl.DataFrame, summary: dict, truth: dict) -> dict:
     """Did the GWAS find the planted variant, and nothing else? Also the planted variant's own
-    p, and lambda on the chromosomes it is not on (where nothing should be found)."""
+    p, and lambda on the chromosomes it is not on (where nothing should be found), placed
+    among the null runs' lambdas on the same variants."""
     planted = truth["variant"]
     hits = [
         locus
@@ -147,16 +193,18 @@ def check_truth(results: pl.DataFrame, summary: dict, truth: dict) -> dict:
         if locus["chromosome"] == planted["chromosome"]
         and abs(locus["position"] - planted["position"]) <= LOCUS_WINDOW
     ]
-    null = results.filter(
-        (pl.col("chromosome") != planted["chromosome"])
-        & (pl.min_horizontal(pl.col("alt_frequency"), 1 - pl.col("alt_frequency")) >= COMMON)
+    frequency = results["alt_frequency"].to_numpy()
+    mask = (results["chromosome"].to_numpy() != planted["chromosome"]) & (
+        np.minimum(frequency, 1 - frequency) >= COMMON
     )
+    null = calibration(results["chi2"].to_numpy()[mask], summary["null_statistics"][:, mask])
     return {
         "planted_found": bool(hits),
         "lead_is_planted": bool(hits) and hits[0]["id"] == planted["id"],
         "planted_p": float(results.filter(pl.col("id") == planted["id"])["p"][0]),
         "other_loci": len(summary["loci"]) - len(hits),
-        "genomic_inflation_null_chromosomes": inflation(null) if len(null) else None,
+        "genomic_inflation_null_chromosomes": null["lambda"] if mask.any() else None,
+        "calibration_null_chromosomes": null if mask.any() else None,
     }
 
 

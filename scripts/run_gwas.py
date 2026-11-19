@@ -3,7 +3,8 @@
 Usage: uv run python scripts/run_gwas.py
 
 Run scripts/generate_genomics.py first. Writes data/genomics/gwas.parquet (one row per
-variant) and prints the loci, the genomic inflation, and whether the planted variant was found.
+variant) and prints the loci, the genomic inflation with its percentile among phenotypes
+simulated with no genetic effect, and whether the planted variant was found.
 If the Hail container has run (docker compose run --rm --build hail), also compares the two.
 """
 
@@ -11,7 +12,13 @@ import json
 import time
 from pathlib import Path
 
-from ehr_rwe_eln.genomics.gwas import SIGNIFICANCE, check_truth, compare_with_hail, run_gwas
+from ehr_rwe_eln.genomics.gwas import (
+    NULL_RUNS,
+    SIGNIFICANCE,
+    check_truth,
+    compare_with_hail,
+    run_gwas,
+)
 
 DIRECTORY = Path(__file__).resolve().parent.parent / "data" / "genomics"
 
@@ -21,11 +28,14 @@ def main() -> None:
     start = time.time()
     results, summary = run_gwas(DIRECTORY, truth["phenotype"])
     results.write_parquet(DIRECTORY / "gwas.parquet")
-    by_chromosome = summary["genomic_inflation_by_chromosome"]
+    by_chromosome = ", ".join(
+        f"{c} {v['lambda']:.2f} p{v['percentile']:.0f}"
+        for c, v in summary["calibration_by_chromosome"].items()
+    )
     print(
         f"{summary['variants']:,} variants, {summary['people']:,} people,"
         f" {time.time() - start:.0f}s; genomic inflation {summary['genomic_inflation']:.3f}"
-        f" (by chromosome: {', '.join(f'{c} {v:.2f}' for c, v in by_chromosome.items())});"
+        f" (by chromosome, with its percentile among {NULL_RUNS} null runs: {by_chromosome});"
         f" {summary['significant_variants']} variants below p {SIGNIFICANCE:g}"
     )
     for locus in summary["loci"]:
@@ -35,12 +45,14 @@ def main() -> None:
             f" ({low:.2f} to {high:.2f}), alternate allele frequency {locus['alt_frequency']:.3f}"
         )
     check = check_truth(results, summary, truth)
+    null = check["calibration_null_chromosomes"]
     print(
         f"planted {truth['variant']['id']} (odds ratio {truth['odds_ratio_planted']}):"
         f" found {check['planted_found']} at p {check['planted_p']:.2e}; lead variant is the"
         f" planted one {check['lead_is_planted']}; other loci {check['other_loci']};"
-        f" genomic inflation without its chromosome"
-        f" {check['genomic_inflation_null_chromosomes']:.3f}"
+        f" genomic inflation without its chromosome {null['lambda']:.3f}, percentile"
+        f" {null['percentile']:.0f} of {NULL_RUNS} null runs (their middle 95%:"
+        f" {null['null_range'][0]:.2f} to {null['null_range'][1]:.2f})"
     )
     hail_path = DIRECTORY / "hail_gwas.tsv"
     if hail_path.exists() and hail_path.stat().st_mtime < (DIRECTORY / "study.bed").stat().st_mtime:
