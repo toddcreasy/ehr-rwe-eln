@@ -13,8 +13,8 @@ stores releases in Postgres.
 import argparse
 from pathlib import Path
 
-from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.config import DatabaseSettings
+from ehr_rwe_eln.omop import connect_omop
 from ehr_rwe_eln.synth import bayes_net, vae
 from ehr_rwe_eln.synth.release import save_release
 from ehr_rwe_eln.synth.source import build_source, split

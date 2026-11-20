@@ -2,11 +2,12 @@ from contextlib import AbstractContextManager
 from typing import Literal
 
 import psycopg
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field, field_validator
 
+from ehr_rwe_eln.api.demo import not_in_public_demo
 from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.curation.rules import POINTS, classify, label
 
@@ -164,7 +165,7 @@ def preview(draft: Draft) -> dict:
         return score(con, draft)
 
 
-@router.post("/decisions", status_code=201)
+@router.post("/decisions", status_code=201, dependencies=[Depends(not_in_public_demo)])
 def decide(decision: Decision) -> dict:
     if not decision.curator:
         raise HTTPException(status_code=422, detail="say who is deciding")

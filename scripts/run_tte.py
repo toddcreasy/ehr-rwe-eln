@@ -13,8 +13,8 @@ Demonstration on synthetic data only; no clinical claims.
 
 from datetime import UTC, datetime
 
-from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.config import DatabaseSettings
+from ehr_rwe_eln.omop import connect_omop
 from ehr_rwe_eln.tte.protocol import PROTOCOLS, load_protocol
 from ehr_rwe_eln.tte.report import build_report, omop_summary, save_run
 

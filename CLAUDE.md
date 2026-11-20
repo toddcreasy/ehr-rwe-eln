@@ -31,7 +31,7 @@ Decided 2026-11-19, reversing the local-first move below: the app runs on AWS (t
 - [x] 1. `CLAUDE.md` and the Terraform foundation (`infra/terraform/`): VPC, S3 Tables lake, Lake Formation and Glue catalog, Redshift Serverless, Aurora Serverless v2, budget
 - [x] 2. OMOP in the lake: the ETL still builds in a staging Postgres (decided 2026-11-19, stage then publish); `scripts/publish_omop.py` copies all 39 tables (60,890,645 rows) to Iceberg in S3 Tables, and `scripts/reconcile_lake.py` checks every column of every table through Redshift (1,038 checks, cohorts 550 and 885)
 - [x] 3. OMOP readers on Redshift: trial emulation, synthetic data sources, and the genomics, curation, and ELN scripts read the lake through `connect_omop()` (Redshift Data API, `OMOP_SOURCE=staging` for the staging Postgres), in SQL that runs unchanged on both. `scripts/compare_omop_sources.py`: identical tables for 4 protocols, 14 negative controls, 2 synthetic specs. Decided 2026-11-19: OMOP writers (ETL, cohorts, ELN bridge) stay on staging and republish; data quality stays on staging until DQD in R (step 6)
-- [ ] 4. App on ECS behind a load balancer, with Cognito auth
+- [x] 4. App on ECS Express Mode (`infra/terraform/app/`), a public demo with no sign-in (decided 2026-11-20, as glia-nav): `/api/agent` bounded by a daily token limit and a per-address limit, curator decisions off (`PUBLIC_DEMO`). Module data in Aurora (migrations and a data-only copy through the bastion tunnel, row counts identical). The privacy monitor runs daily as a scheduled ECS task on the lake
 - [ ] 5. Bedrock (Claude Opus 4.6) replaces the Anthropic API; every eval re-runs
 - [ ] 6. R and HADES, LangGraph for literature curation, then the genomics, curation, and synthetic data items in `notes/TODO_IMPROVEMENTS.md`
 
@@ -145,8 +145,8 @@ AWS, from 2026-11-19: OMOP in a lakehouse (S3 Tables, Lake Formation, Redshift S
 | Warehouse SQL | Redshift Serverless | The AWS engine OHDSI's DatabaseConnector supports; billed per second of query time, capped at 60 RPU-hours a month. |
 | App database + vector | Aurora Serverless v2 PostgreSQL 18.6 + pgvector | Row-by-row app writes and vector search, which Redshift is not built for. Pauses to 0 when idle. Never holds OMOP. Compose Postgres until steps 2 to 4. |
 | Secrets and settings | `pydantic-settings`; `.env` locally, Secrets Manager on AWS | One code path; database passwords are managed by RDS and Redshift in Secrets Manager. |
-| Auth | Cognito | The app is public once hosted. None (127.0.0.1 only) until step 4. |
-| App hosting | ECS behind a load balancer, in public subnets | No NAT gateway or interface endpoints, which would cost more than the whole budget. FastAPI serves the API under `/api` and the static frontend at `/`. Compose `app` container until step 4. |
+| Auth | None: a public portfolio demo, as glia-nav (decided 2026-11-20) | Bounded instead: `/api/agent` has a daily token limit and 10 calls an hour per address (`api/limits.py`); `PUBLIC_DEMO=true` turns off curator decisions; one task; a daily token alarm. See `infra/terraform/README.md`, Public demo limits. |
+| App hosting | ECS Express Mode, one ARM task in the public subnets, image in ECR tagged with its git commit | Express Mode builds the load balancer, HTTPS certificate, and URL; the task gets a public IP, so no NAT gateway or interface endpoints, which would cost more than the whole budget. FastAPI serves the API under `/api` and the static frontend at `/`. Migrations and data copies go through an on-demand bastion task and an SSM tunnel. |
 | Infrastructure as code | Terraform, state in `ehr-rwe-eln-tfstate-<account>` | Same tool as methyl-flow's newest infra; `bootstrap/` made the state bucket, `foundation/` holds the shared resources. |
 | Backend framework | FastAPI + Pydantic | Typed request and response models, OpenAPI for free. |
 | Python toolchain | uv, ruff, pytest | Fast, one tool per job, lockfile pinned. |
@@ -176,7 +176,7 @@ How each piece was built, verified, and what it costs: see `docs/SETUP.md`.
 │   └── synth/             # privacy-preserving synthetic data releases
 ├── tests/                 # fast tests; local services only (the Compose Postgres), nothing off the machine
 ├── migrations/            # Alembic versioned schema changes
-├── infra/terraform/       # bootstrap/ (state bucket), foundation/ (network, lake, Redshift, Aurora, budget)
+├── infra/terraform/       # bootstrap/ (state bucket), foundation/ (network, lake, Redshift, Aurora, budget), app/ (ECR, ECS, monitor, alarm)
 ├── frontend/              # Next.js app, static export served by FastAPI
 ├── evals/                 # golden set; hits a real model, so slow and costs money
 ├── scripts/               # one-shot operational scripts, never imported
@@ -192,7 +192,8 @@ What each directory is for, which of these are real conventions and which are ch
 ## Conventions
 
 - AWS resources are Terraform only, never created by hand in the console. Show `terraform plan` and get approval before every `apply`. Every resource carries the `project = ehr-rwe-eln` tag (provider default tags), which the budget filters on.
-- Local dev still runs in `docker-compose.yml` until its parts move. Bind every published port to 127.0.0.1; there is no auth locally.
+- Local dev runs in `docker-compose.yml`. Bind every published port to 127.0.0.1; there is no auth locally, and `PUBLIC_DEMO` stays off.
+- Any route that writes records or spends money is either bounded (like `/api/agent`) or guarded by `not_in_public_demo` before it ships: the deployed app has no sign-in.
 - One model: every call uses `MODEL`. Prompt caching on for any repeated prefix. Batch API (Bedrock batch inference from step 5) for offline jobs.
 
 ## Settled decisions
@@ -202,7 +203,8 @@ Do not re-ask. Rationale and history in `docs/SETUP.md`.
 | Decision | Value |
 |---|---|
 | AWS account and region | The `default` AWS CLI profile (SSO, AdministratorAccess), `us-east-1`. Decided 2026-11-19 |
-| AWS budget | $100 a month on resources tagged `project = ehr-rwe-eln`; email at 80% actual and 100% forecast. Decided 2026-11-19 |
+| AWS budget | $100 a month on resources tagged `project = ehr-rwe-eln`, credits excluded; email at 50% and 80% actual and 100% forecast. Decided 2026-11-19, glia-nav's thresholds 2026-11-20 |
+| Public demo | No sign-in, as glia-nav. `DAILY_TOKEN_LIMIT` 150,000 a day and 10 calls an hour per address on `/api/agent`; curator decisions off. Decided 2026-11-20 |
 | API key and spend limit (until step 5) | Personal key scoped to the `ehr-rwe-eln` workspace in the Claude Console, which carries the monthly spend limit. The key lives only in `.env` as `ANTHROPIC_API_KEY`. No macOS Keychain, no shell export: an exported variable would override `.env` |
 | Python | 3.14, pinned in `.python-version` |
 | Database | On AWS: OMOP only in the lake (Iceberg in S3 Tables, read through Redshift Serverless; "lake only", decided 2026-11-19); app state, module schemas, and pgvector in Aurora Serverless v2 PostgreSQL 18.6. Locally until steps 2 to 4: PostgreSQL 18 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg18-trixie`, defined in `docker-compose.yml` |

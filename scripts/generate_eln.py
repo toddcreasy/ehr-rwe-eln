@@ -17,8 +17,8 @@ import json
 import random
 from pathlib import Path
 
-from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.eln.synthetic import generate_entries, subject_registry
+from ehr_rwe_eln.omop import connect_omop
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 OUT = DATA / "eln"

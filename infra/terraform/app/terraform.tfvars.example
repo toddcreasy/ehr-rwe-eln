@@ -1,0 +1,4 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+state_bucket = "ehr-rwe-eln-tfstate-123456789012"
+image_tag    = "abc1234"
+alert_email  = "you@example.com"

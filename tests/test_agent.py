@@ -28,6 +28,7 @@ def test_invoke_returns_typed_reply_and_tools_called(monkeypatch):
     assert result["usage"]["input_tokens"] == 15
     assert result["usage"]["cache_read"] == 3
     assert result["usage"]["model_calls"] == 2
+    assert result["usage"]["total_tokens"] == 15 + 3
 
 
 def test_database_health_tool(database, monkeypatch):

@@ -132,15 +132,14 @@ resource "aws_glue_catalog_database" "omop_cdm_link" {
     region        = local.region
   }
 
+  # AWS fills these in on a link to an S3 Tables catalog; removing them could break the link.
+  lifecycle {
+    ignore_changes = [parameters, federated_database]
+  }
+
   depends_on = [aws_glue_catalog.s3tables]
 }
 
-resource "aws_lakeformation_permissions" "omop_cdm_link" {
-  for_each    = toset(var.lake_admin_arns)
-  principal   = each.value
-  permissions = ["DESCRIBE"]
-
-  database {
-    name = aws_glue_catalog_database.omop_cdm_link.name
-  }
-}
+# No grant on the link for the lake admins: Lake Formation gives whoever creates a database every
+# permission on it, and an explicit DESCRIBE grant here drifted against that on every plan. Other
+# roles that read through the link (the app's) get their own grant in their stack.

@@ -17,8 +17,8 @@ from pathlib import Path
 
 import numpy as np
 
-from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.genomics.study import build_study, write_study
+from ehr_rwe_eln.omop import connect_omop
 from ehr_rwe_eln.synth.source import build_source
 from ehr_rwe_eln.synth.spec import SPECS, load_spec
 

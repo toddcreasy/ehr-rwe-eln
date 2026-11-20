@@ -7,6 +7,15 @@ from fastapi.staticfiles import StaticFiles
 
 from ehr_rwe_eln.agents.app import AgentRequest, invoke
 from ehr_rwe_eln.api import curation, dq, eln, synth, tte
+from ehr_rwe_eln.api.limits import (
+    ADDRESS_LIMIT_MESSAGE,
+    DAILY_LIMIT_MESSAGE,
+    client_address,
+    next_reset,
+    record_call,
+    tokens_today,
+    within_address_limit,
+)
 from ehr_rwe_eln.api.log_config import configure_logging
 from ehr_rwe_eln.config import Settings
 
@@ -63,9 +72,38 @@ def health_db() -> dict[str, str]:
     return {"status": "ok", "database": "reachable"}
 
 
+def connect() -> psycopg.Connection:
+    return settings.connect(connect_timeout=5)
+
+
+@api.get("/usage")
+def usage() -> dict:
+    """Today's /agent allowance: the limit, tokens used and left, and when it resets."""
+    with connect() as con:
+        used = tokens_today(con)
+    return {
+        "limit": settings.daily_token_limit,
+        "used": used,
+        "remaining": max(settings.daily_token_limit - used, 0),
+        "resets_at": next_reset().isoformat(),
+    }
+
+
 @api.post("/agent")
-def agent(request: AgentRequest) -> dict:
-    return invoke(request)
+def agent(request: AgentRequest, http_request: Request) -> dict:
+    """Public: no sign-in. Both limits are checked before the model is called."""
+    if not within_address_limit(client_address(http_request)):
+        log.info("agent address limit", extra={"fields": {}})
+        raise HTTPException(status_code=429, detail=ADDRESS_LIMIT_MESSAGE)
+    with connect() as con:
+        used = tokens_today(con)
+    if used >= settings.daily_token_limit:
+        log.info("agent daily limit", extra={"fields": {"tokens_today": used}})
+        raise HTTPException(status_code=429, detail=DAILY_LIMIT_MESSAGE)
+    result = invoke(request)
+    with connect() as con:
+        record_call(con, result["usage"]["total_tokens"])
+    return result
 
 
 api.include_router(dq.router)

@@ -29,8 +29,8 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from ehr_rwe_eln.api.log_config import configure_logging
-from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.config import DatabaseSettings
+from ehr_rwe_eln.omop import connect_omop
 from ehr_rwe_eln.synth.distribution import privacy_flags
 from ehr_rwe_eln.synth.privacy import privacy_report
 from ehr_rwe_eln.synth.release import load_release, save_report

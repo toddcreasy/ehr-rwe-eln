@@ -445,6 +445,7 @@ default-groups = ["dev", "genomics", "lake", "synth"]
 dependencies = [
     { name = "alembic" },
     { name = "anthropic" },
+    { name = "boto3" },
     { name = "diffprivlib" },
     { name = "fastapi", extra = ["standard"] },
     { name = "fhir-resources" },
@@ -476,7 +477,6 @@ genomics = [
     { name = "tskit" },
 ]
 lake = [
-    { name = "boto3" },
     { name = "pyarrow" },
     { name = "pyiceberg", extra = ["pyarrow"] },
 ]
@@ -490,6 +490,7 @@ synth = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.20.0" },
     { name = "anthropic", specifier = ">=0.125.0" },
+    { name = "boto3", specifier = ">=1.44.7" },
     { name = "diffprivlib", specifier = ">=0.6.6" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.142.2" },
     { name = "fhir-resources", specifier = ">=8.3.0" },
@@ -521,7 +522,6 @@ genomics = [
     { name = "tskit", specifier = ">=1.0.3" },
 ]
 lake = [
-    { name = "boto3", specifier = ">=1.44.7" },
     { name = "pyarrow", specifier = ">=26.0.1" },
     { name = "pyiceberg", extras = ["pyarrow"], specifier = ">=0.12.0" },
 ]

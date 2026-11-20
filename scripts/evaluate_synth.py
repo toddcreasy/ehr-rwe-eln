@@ -16,8 +16,8 @@ analysis table also get a trial report: the trial rerun on the release, and on 2
 of its method and epsilon (a few minutes for the VAE).
 """
 
-from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.config import DatabaseSettings
+from ehr_rwe_eln.omop import connect_omop
 from ehr_rwe_eln.synth import bayes_net, vae
 from ehr_rwe_eln.synth.distribution import privacy_flags
 from ehr_rwe_eln.synth.fidelity import fidelity_report, subgroup_report, utility_auc
