@@ -33,10 +33,8 @@ data/
 *.swp
 .DS_Store
 
-# Personal planning notes
-TODO.md
-
-TODO_IMPROVEMENTS.md
+# Personal planning notes (TODO.md, TODO_IMPROVEMENTS.md, INDUSTRY_COMPARISON.md)
+notes/
 
 # Terraform: providers, local state, plans. The lockfile (.terraform.lock.hcl) is committed.
 .terraform/

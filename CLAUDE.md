@@ -26,14 +26,14 @@ Build order after the platform: 1, then 7, then 4, then 2. Each module depends o
 
 ### In progress since 2026-11-19: move to AWS
 
-Decided 2026-11-19, reversing the local-first move below: the app runs on AWS (the `default` profile's account, `us-east-1`), with OMOP in a lakehouse. The plan, open items, and reasons are in `TODO_IMPROVEMENTS.md` (gitignored). Six steps, one PR each; until a step lands, the local Docker Compose stack keeps running that part:
+Decided 2026-11-19, reversing the local-first move below: the app runs on AWS (the `default` profile's account, `us-east-1`), with OMOP in a lakehouse. The plan, open items, and reasons are in `notes/TODO_IMPROVEMENTS.md` (`notes/` is gitignored: personal planning, `TODO.md`, the industry comparison). Six steps, one PR each; until a step lands, the local Docker Compose stack keeps running that part:
 
 - [x] 1. `CLAUDE.md` and the Terraform foundation (`infra/terraform/`): VPC, S3 Tables lake, Lake Formation and Glue catalog, Redshift Serverless, Aurora Serverless v2, budget
 - [ ] 2. The ETL writes OMOP to Iceberg in S3 Tables; row counts reconcile with the Postgres build (1,325,353 rows, both cohorts)
 - [ ] 3. Each module's OMOP SQL moves to Redshift and is re-verified against the current numbers
 - [ ] 4. App on ECS behind a load balancer, with Cognito auth
 - [ ] 5. Bedrock (Claude Opus 4.6) replaces the Anthropic API; every eval re-runs
-- [ ] 6. R and HADES, LangGraph for literature curation, then the genomics, curation, and synthetic data items in `TODO_IMPROVEMENTS.md`
+- [ ] 6. R and HADES, LangGraph for literature curation, then the genomics, curation, and synthetic data items in `notes/TODO_IMPROVEMENTS.md`
 
 ### Done 2026-10-12: run locally, no AWS (superseded 2026-11-19)
 
@@ -182,6 +182,7 @@ How each piece was built, verified, and what it costs: see `docs/SETUP.md`.
 ├── scripts/               # one-shot operational scripts, never imported
 ├── data/                  # local synthetic data and vocabularies, gitignored
 ├── docs/                  # long-form docs the README links to
+├── notes/                 # personal planning (TODO.md, TODO_IMPROVEMENTS.md, INDUSTRY_COMPARISON.md), gitignored
 └── .github/workflows/     # CI; GitHub reads this exact path only
 ```
 
