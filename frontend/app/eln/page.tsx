@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Spinner from "../spinner";
 
 type Summary = {
   subjects: number;
@@ -44,7 +45,7 @@ const row = "border-t border-zinc-200 dark:border-zinc-800";
 
 function StatTile({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <div className="rounded-lg border border-accent p-4">
       <div className={`text-sm ${muted}`}>{label}</div>
       <div className="mt-1 text-2xl font-semibold text-zinc-900 tabular-nums dark:text-zinc-100">{value}</div>
       {note && <div className="mt-1 text-xs text-zinc-500">{note}</div>}
@@ -55,7 +56,7 @@ function StatTile({ label, value, note }: { label: string; value: string; note?:
 function EntryDetail({ entry }: { entry: Entry }) {
   const linked = new Map(entry.subjects.map((s) => [s.subject_id, s.linked]));
   return (
-    <article className="flex flex-col gap-4 rounded-lg border border-zinc-200 p-6 dark:border-zinc-800">
+    <article className="flex flex-col gap-4 rounded-lg border border-accent p-6">
       <header>
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
           {entry.entry_id}: {entry.title}
@@ -177,6 +178,7 @@ export default function LabNotebook() {
       </p>
 
       {error && <p className="text-sm text-zinc-900 dark:text-zinc-100">{error}</p>}
+      {!error && (summary === null || entries === null || loading) && <Spinner />}
 
       {summary && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -200,7 +202,7 @@ export default function LabNotebook() {
 
       {entries && entries.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-[18rem_1fr]">
-          <div className="max-h-[70vh] overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <div className="max-h-[70vh] overflow-y-auto rounded-lg border border-accent">
             <ul>
               {entries.map((e) => (
                 <li key={e.entry_id}>
