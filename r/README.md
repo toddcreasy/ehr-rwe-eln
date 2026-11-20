@@ -31,6 +31,12 @@ Against the lake, `scripts/hades.py`:
 
 Scripts source `connection.R` for `lake_connection_details()` and `cdm_schema()`. The container sees this folder as `/work/r` and `data/hades/` as `/work/data/hades`.
 
+## Scripts
+
+| Script | Job |
+|---|---|
+| `run_dqd.R` | OHDSI DataQualityDashboard on the lake; JSON to `data/hades/dqd/`, loaded with `scripts/load_dqd.py`. About 32 minutes, 4.5 RPU-hours (`docs/modules/data_quality.md`) |
+
 ## Smoke tests
 
 | Script | What it proves | Result 2026-11-20 |
