@@ -11,7 +11,7 @@ COPY frontend ./
 RUN npm run build
 
 # Build stage: install locked dependencies and the project into /app/.venv with uv.
-FROM ghcr.io/astral-sh/uv:0.11.20-python3.14-trixie-slim AS build
+FROM ghcr.io/astral-sh/uv:0.13.7-python3.14-trixie-slim AS build
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=0
 WORKDIR /app
 # Dependencies first, in their own layer, so code changes don't reinstall them.
