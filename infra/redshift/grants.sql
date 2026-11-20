@@ -1,0 +1,10 @@
+-- Grants inside Redshift that Terraform cannot manage. Run as the namespace admin (rwe_admin),
+-- whose password Redshift keeps in Secrets Manager:
+--   aws redshift-data execute-statement --workgroup-name ehr-rwe-eln --database ehr_rwe_eln \
+--     --secret-arn "$(terraform -chdir=infra/terraform/foundation output -raw redshift_admin_secret_arn)" \
+--     --sql "<statement>"
+-- Redshift creates an IAMR:<role name> user the first time an IAM role connects; run these after.
+
+-- Lets an IAM-federated user see the auto-mounted Glue catalogs, which reach the lake through the
+-- omop_cdm resource link. Lake Formation still decides which tables they can read.
+GRANT USAGE ON DATABASE awsdatacatalog TO "IAMR:AWSReservedSSO_AdministratorAccess_3cdbb86f6d3e44fd";

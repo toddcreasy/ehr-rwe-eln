@@ -25,6 +25,16 @@ terraform apply foundation.tfplan                  # only after the plan is revi
 
 The bucket can't hold its own state before it exists. `bootstrap/` was applied once with local state, then `terraform init -migrate-state -backend-config="bucket=..."` moved its state into the bucket and the local file was deleted. Never re-run bootstrap without the backend config: it would try to create the bucket again.
 
+## Reading the lake from Redshift
+
+Three things let an IAM identity query the OMOP tables in Redshift, all set up once:
+
+1. Lake Formation grants (`lake.tf`): `DESCRIBE` on the `cdm` database and `SELECT`, `DESCRIBE` on its tables, for each role in `lake_admin_arns`. Being a Lake Formation admin allows granting, not reading.
+2. A Glue resource link, `omop_cdm` (`lake.tf`): Redshift's auto-mounted `awsdatacatalog` only walks the default Glue catalog, so it reaches `s3tablescatalog/ehr-rwe-eln-omop` through this pointer. Queries name `awsdatacatalog.omop_cdm.<table>`.
+3. A Redshift grant, outside Terraform: `GRANT USAGE ON DATABASE awsdatacatalog` to the identity's `IAMR:` user, run as `rwe_admin`. The statement and how to run it are in `infra/redshift/grants.sql`.
+
+S3 Tables only drops a table with purge (which deletes its data files); PyIceberg's `drop_table` fails, `purge_table` works.
+
 ## Reaching the private databases
 
 Aurora and Redshift have no public endpoint. From a laptop, use the Data APIs, which take SQL over HTTPS with your AWS login:

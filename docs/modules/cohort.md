@@ -12,6 +12,7 @@ Turns synthetic electronic health records (EHR) into an [OMOP CDM v5.4](https://
 4. **Build eras** (`eras.py`). Condition and drug eras: spans of continuous illness or exposure, as [OHDSI](https://www.ohdsi.org) tools expect.
 5. **Add keys and indices** (`cdm.py`), after the load, which is faster than loading into an indexed table.
 6. **Build cohorts** (`spec.py`) from YAML definitions into the OMOP `cohort` table.
+7. **Publish to the lake** (`lake.py`). Copies every OMOP table from the staging Postgres into Apache Iceberg tables in the S3 table bucket `ehr-rwe-eln-omop`, namespace `cdm`, then checks the copy table by table through Redshift. On AWS, OMOP is served only from the lake; the Postgres the ETL runs in is staging.
 
 ## Cohort definitions
 
@@ -37,7 +38,17 @@ Concept IDs include their descendants, so one SNOMED code covers every more spec
 uv run python scripts/generate_synthea.py
 uv run python scripts/build_omop.py
 uv run python scripts/build_cohorts.py
+uv run python scripts/publish_omop.py      # needs LAKE_TABLE_BUCKET_ARN in .env and AWS credentials
+uv run python scripts/reconcile_lake.py    # exits 1 if any table differs from Postgres
 ```
+
+`publish_omop.py --tables person cohort` republishes only those tables. Each table is purged, recreated, and filled in one Iceberg transaction, so it is complete or empty, never partial.
+
+### How the copy is checked
+
+For every table, `reconcile_lake.py` runs one summary query on Postgres and the same query on the lake through the Redshift Data API: the row count, and for each column the non-null count plus its sum (integers), total length (text), or earliest and latest value (dates). Then it compares the cohort sizes. OMOP's `numeric` columns have no fixed precision in Postgres and Iceberg decimals need one, so they are stored as 64-bit floats and their sums compared within one part in a billion.
+
+Redshift reads the lake as `awsdatacatalog.omop_cdm.<table>`, through a Glue resource link that points at the table bucket's catalog (see `infra/terraform/README.md`).
 
 ## Results
 

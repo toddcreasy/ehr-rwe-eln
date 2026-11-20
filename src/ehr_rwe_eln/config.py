@@ -25,6 +25,21 @@ class DatabaseSettings(BaseSettings):
         )
 
 
+class LakeSettings(BaseSettings):
+    """The S3 Tables lake that serves OMOP and the Redshift workgroup that queries it. Locally
+    these come from .env; AWS credentials come from the AWS CLI profile, never from here."""
+
+    model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True, extra="ignore")
+
+    lake_table_bucket_arn: str
+    lake_namespace: str = "cdm"
+    aws_region: str = "us-east-1"
+    redshift_workgroup: str = "ehr-rwe-eln"
+    redshift_database: str = "ehr_rwe_eln"
+    # The Glue resource link Redshift reads the lake through: awsdatacatalog.omop_cdm.<table>.
+    redshift_lake_schema: str = "awsdatacatalog.omop_cdm"
+
+
 class Settings(DatabaseSettings):
     """Locally these come from .env. Docker Compose adds the app service's environment."""
 

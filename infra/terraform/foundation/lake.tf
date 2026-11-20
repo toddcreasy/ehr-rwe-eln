@@ -87,3 +87,60 @@ resource "aws_glue_catalog" "s3tables" {
 
   depends_on = [aws_lakeformation_resource.s3tables]
 }
+
+# Lake Formation admins can grant, not read. These let each admin see the cdm database and query
+# its tables (through Redshift or Athena). The app's role gets its own grant in step 4.
+locals {
+  omop_catalog_id = "${local.account_id}:s3tablescatalog/${aws_s3tables_table_bucket.omop.name}"
+}
+
+resource "aws_lakeformation_permissions" "cdm_database" {
+  for_each    = toset(var.lake_admin_arns)
+  principal   = each.value
+  permissions = ["DESCRIBE"]
+
+  database {
+    catalog_id = local.omop_catalog_id
+    name       = aws_s3tables_namespace.cdm.namespace
+  }
+
+  depends_on = [aws_glue_catalog.s3tables]
+}
+
+resource "aws_lakeformation_permissions" "cdm_tables" {
+  for_each    = toset(var.lake_admin_arns)
+  principal   = each.value
+  permissions = ["SELECT", "DESCRIBE"]
+
+  table {
+    catalog_id    = local.omop_catalog_id
+    database_name = aws_s3tables_namespace.cdm.namespace
+    wildcard      = true
+  }
+
+  depends_on = [aws_glue_catalog.s3tables]
+}
+
+# Redshift's auto-mounted awsdatacatalog only walks the default Glue catalog, so it reaches the
+# lake through this resource link: awsdatacatalog.omop_cdm.<table> in Redshift.
+resource "aws_glue_catalog_database" "omop_cdm_link" {
+  name = "omop_cdm"
+
+  target_database {
+    catalog_id    = local.omop_catalog_id
+    database_name = aws_s3tables_namespace.cdm.namespace
+    region        = local.region
+  }
+
+  depends_on = [aws_glue_catalog.s3tables]
+}
+
+resource "aws_lakeformation_permissions" "omop_cdm_link" {
+  for_each    = toset(var.lake_admin_arns)
+  principal   = each.value
+  permissions = ["DESCRIBE"]
+
+  database {
+    name = aws_glue_catalog_database.omop_cdm_link.name
+  }
+}

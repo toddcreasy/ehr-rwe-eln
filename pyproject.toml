@@ -46,6 +46,12 @@ genomics = [
     "polars>=2.0.0",
     "tskit>=1.0.3",
 ]
+# Publishing OMOP to the S3 Tables lake and querying it through Redshift; not needed by the app.
+lake = [
+    "boto3>=1.44.7",
+    "pyarrow>=26.0.1",
+    "pyiceberg[pyarrow]>=0.12.0",
+]
 # Neural network synthesizers; not needed by the app.
 synth = [
     "opacus>=1.6.0",
@@ -92,8 +98,8 @@ entrypoint = "ehr_rwe_eln.api.main:app"
 [tool.uv]
 # diffprivlib 0.6.6 imports private scikit-learn names that 1.9 removed. Lift when it catches up.
 constraint-dependencies = ["scikit-learn<1.9"]
-# genomics and synth install locally and in CI; the app image skips every group.
-default-groups = ["dev", "genomics", "synth"]
+# genomics, lake, and synth install locally and in CI; the app image skips every group.
+default-groups = ["dev", "genomics", "lake", "synth"]
 
 # PyTorch's CPU-only builds on Linux: the PyPI wheel pulls in gigabytes of CUDA libraries.
 [tool.uv.sources]
