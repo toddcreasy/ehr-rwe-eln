@@ -24,7 +24,7 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 
 function StatTile({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <div className="rounded-lg border border-background p-4">
+    <div className="rounded-lg border border-grid p-4">
       <div className="text-sm text-zinc-600 dark:text-zinc-400">{label}</div>
       <div className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{value}</div>
       {note && <div className="mt-1 text-xs text-zinc-500">{note}</div>}
@@ -39,7 +39,7 @@ function CategoryBreakdown({ counts }: { counts: Counts }) {
   const [showTable, setShowTable] = useState(false);
 
   return (
-    <figure className="rounded-lg border border-background p-4">
+    <figure className="rounded-lg border border-grid p-4">
       <div className="flex items-start justify-between gap-4">
         <figcaption>
           <div className="font-medium text-zinc-900 dark:text-zinc-100">Checks by Kahn category</div>

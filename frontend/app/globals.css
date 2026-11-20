@@ -15,6 +15,7 @@
   --accent: #1c2e4a; /* ink */
   --accent-soft: #d4e0e8; /* haze */
   --route: #c8102e;
+  --grid: #9db4c2; /* pilotbio.io's card borders */
   --attention: #a15c00;
   --attention-soft: #fdf1df;
   --good: #1f7a4d;
@@ -30,6 +31,7 @@
   --accent: #9db4c2; /* grid */
   --accent-soft: #1c2e4a;
   --route: #e5536a;
+  --grid: #2a3b55;
   --attention: #f0b45e;
   --attention-soft: #2e2414;
   --good: #6fcf9a;
@@ -44,6 +46,7 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-route: var(--route);
+  --color-grid: var(--grid);
   --color-attention: var(--attention);
   --color-attention-soft: var(--attention-soft);
   --color-good: var(--good);
