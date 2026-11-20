@@ -4,7 +4,7 @@ import psycopg
 from fastapi import APIRouter, HTTPException
 from psycopg.rows import dict_row
 
-from ehr_rwe_eln.config import DatabaseSettings
+from ehr_rwe_eln.config import DB_CONNECT_TIMEOUT_S, DatabaseSettings
 from ehr_rwe_eln.synth.card import render_card
 
 router = APIRouter(prefix="/synth")
@@ -38,7 +38,7 @@ FROM synth.release WHERE release_id = %s
 
 
 def connect() -> AbstractContextManager[psycopg.Connection]:
-    return DatabaseSettings().connect(connect_timeout=5, row_factory=dict_row)
+    return DatabaseSettings().connect(connect_timeout=DB_CONNECT_TIMEOUT_S, row_factory=dict_row)
 
 
 @router.get("/releases")

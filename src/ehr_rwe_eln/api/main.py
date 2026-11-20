@@ -17,7 +17,7 @@ from ehr_rwe_eln.api.limits import (
     within_address_limit,
 )
 from ehr_rwe_eln.api.log_config import configure_logging
-from ehr_rwe_eln.config import Settings
+from ehr_rwe_eln.config import DB_CONNECT_TIMEOUT_S, Settings
 
 settings = Settings()
 configure_logging(settings.log_level)
@@ -60,7 +60,7 @@ def health_db() -> dict[str, str]:
             dbname=settings.db_name,
             user=settings.db_user,
             password=settings.db_password.get_secret_value(),
-            connect_timeout=5,
+            connect_timeout=DB_CONNECT_TIMEOUT_S,
         ) as conn:
             conn.execute("SELECT 1").fetchone()
     except psycopg.OperationalError as exc:
@@ -73,7 +73,7 @@ def health_db() -> dict[str, str]:
 
 
 def connect() -> psycopg.Connection:
-    return settings.connect(connect_timeout=5)
+    return settings.connect(connect_timeout=DB_CONNECT_TIMEOUT_S)
 
 
 @api.get("/usage")

@@ -6,7 +6,7 @@ from anthropic.types.beta.parsed_beta_message import ParsedBetaMessage
 from pydantic import BaseModel, Field
 
 from ehr_rwe_eln.agents.config import THINKING, claude_client
-from ehr_rwe_eln.config import DatabaseSettings
+from ehr_rwe_eln.config import DB_CONNECT_TIMEOUT_S, DatabaseSettings
 
 SYSTEM_PROMPT = (
     "You are the platform check agent for ehr-rwe-eln, a research project on synthetic data. "
@@ -38,7 +38,7 @@ def current_time() -> str:
 def check_database_health() -> str:
     """Check whether the project's Postgres database is reachable."""
     try:
-        with DatabaseSettings().connect(connect_timeout=5) as con:
+        with DatabaseSettings().connect(connect_timeout=DB_CONNECT_TIMEOUT_S) as con:
             con.execute("SELECT 1")
     except psycopg.OperationalError:
         return "unreachable"
