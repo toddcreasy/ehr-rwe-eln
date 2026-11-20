@@ -86,7 +86,7 @@ OHDSI's reference tools (ETL-Synthea, [DataQualityDashboard](https://github.com/
 
 **Reproducible builds.** Synthea runs with a fixed seed and reference date, and every synthetic release and genotype study is seeded. Rebuilding from a fresh clone reproduces the OMOP row counts, the data quality pass rate, and the trial table exactly.
 
-**Checked against the reference.** The ETL against ETL-Synthea ([comparison](etl_synthea_comparison.md)), data quality against DataQualityDashboard ([comparison](dqd_comparison.md)), the GWAS against Hail, and every LLM extraction against a labeled set.
+**Checked against the reference.** The ETL against ETL-Synthea ([comparison](etl_synthea_comparison.md)), data quality is DataQualityDashboard itself, which matched the earlier Python port check for check ([comparison](dqd_comparison.md)), the GWAS against Hail, and every LLM extraction against a labeled set.
 
 **Local first.** The platform began on AWS (Aurora, Bedrock, AgentCore, Cognito) and moved to Docker Compose on 2026-10-12, so anyone can run it without an AWS account. [SETUP.md](SETUP.md) records the AWS build.
 

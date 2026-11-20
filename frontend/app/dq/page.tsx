@@ -302,7 +302,7 @@ export default function DataQuality() {
       {!error && (runs === null || loading) && <Spinner />}
       {runs && runs.length === 0 && (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          No data quality runs yet. Run <code>uv run python scripts/run_dq.py</code>, then reload.
+          No data quality runs yet. Run <code>uv run python scripts/hades.py run_dqd.R</code>, load it with <code>scripts/load_dqd.py</code>, then reload.
         </p>
       )}
 

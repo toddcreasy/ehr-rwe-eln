@@ -1,5 +1,7 @@
 # DataQualityDashboard comparison
 
+Historical. This compared the Python port of DQD's checks with DQD itself. The port was removed on 2026-11-20, once DQD ran on the lake and matched it check for check; data quality now runs DQD directly ([data_quality.md](modules/data_quality.md)). The scripts named below are in git history before that date.
+
 The data quality checks (`src/ehr_rwe_eln/dq/`) checked against [OHDSI](https://www.ohdsi.org) [DataQualityDashboard](https://github.com/OHDSI/DataQualityDashboard)
 (DQD), the reference implementation, on the same databases. Run on 2026-10-13, last on
 PostgreSQL 18.6 after the ETL fixes in #35 and #36.
