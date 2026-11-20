@@ -11,7 +11,7 @@ Every privacy report is also checked for drift toward leakage, and any release p
 halfway mark is listed for review (scripts/withdraw_release.py withdraws one). Specs with
 subgroup columns also get fidelity within each group (race, sex, age bins), stored
 in the fidelity report. Releases with a holdout also get a privacy report: three attacks, read
-against the same attacks on a plain copy of the training data. Releases of a module 4 trial's
+against the same attacks on a plain copy of the training data. Releases of a module 3 trial's
 analysis table also get a trial report: the trial rerun on the release, and on 20 more draws
 of its method and epsilon (a few minutes for the VAE).
 """

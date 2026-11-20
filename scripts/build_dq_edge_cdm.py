@@ -1,4 +1,4 @@
-"""Build a small CDM with planted data quality problems, for comparing module 7 with DQD on the
+"""Build a small CDM with planted data quality problems, for comparing module 4 with DQD on the
 scoring paths the real data never reaches: errors, a missing table, failing keys, and failing
 concept checks.
 

@@ -1,7 +1,7 @@
-"""Downstream parity: run a module 4 trial's own analysis on a synthetic analysis table and set
+"""Downstream parity: run a module 3 trial's own analysis on a synthetic analysis table and set
 the result beside the same analysis on the real table.
 
-The analysis is module 4's, unchanged: propensity score weights, then a weighted Cox model for
+The analysis is module 3's, unchanged: propensity score weights, then a weighted Cox model for
 the hazard ratio of the treatment arm, with a robust 95% interval. Bootstrap intervals are
 skipped (as for negative controls): the robust interval is enough to compare.
 

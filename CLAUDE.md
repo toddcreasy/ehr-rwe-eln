@@ -16,13 +16,13 @@ Real world evidence from synthetic EHR data, linked to lab notebook records. Sev
 |---|---|---|
 | 1. EHR to RWE cohort pipeline | `ehr_rwe_eln.cohort` | Synthea patients to OMOP CDM v5.4; cohort definitions as YAML; analysis-ready cohort tables |
 | 2. ELN to EHR bridge | `ehr_rwe_eln.eln` | LLM extraction of samples, assays, biomarkers, and results from ELN entries into typed models, then OMOP `specimen` and `measurement` rows plus FHIR `Specimen` and `Observation` resources |
-| 4. Target trial emulation toolkit | `ehr_rwe_eln.tte` | Protocol spec in YAML (eligibility, strategies, time zero, outcomes) to cohort SQL, propensity score analysis, survival estimates, and a bias diagnostics report |
-| 7. RWE data quality dashboard | `ehr_rwe_eln.dq` | Conformance, completeness, and plausibility checks (Kahn framework) over the OMOP tables, scored and shown in the frontend |
-| Synthetic genomics | `ehr_rwe_eln.genomics` | A dbGaP-style genotyping study simulated with msprime for OMOP persons (VCF, PLINK, phenotype and sample tables), a planted genetic effect, and a GWAS checked against it; a clinical panel of real ClinVar variants at their GRCh38 positions, planted in the same synthetic people |
-| Variant curation | `ehr_rwe_eln.curation` | ACMG/AMP criteria that data alone decides, with each gene's ClinGen expert panel thresholds, from gnomAD v4 frequencies and Ensembl VEP consequences; Bayesian points to a class; scored against ClinVar expert-panel classifications it never reads. Claude proposes literature evidence (PS3, BS3, PS4, PP1) from LitVar2 and PubTator3 text, each claim's PMID and quote verified in code; proposals never change a class. A curator accepts proposals and records the class, with who and when, on `/curation/`. Each study subject's conditions as HPO terms, scored against the panel genes and checked against the planted carriers |
-| Synthetic data | `ehr_rwe_eln.synth` | Differentially private synthetic releases of the OMOP data (statistical and generative synthesizers), with fidelity, utility, and privacy risk reports and a provenance record per release |
+| 3. Target trial emulation toolkit | `ehr_rwe_eln.tte` | Protocol spec in YAML (eligibility, strategies, time zero, outcomes) to cohort SQL, propensity score analysis, survival estimates, and a bias diagnostics report |
+| 4. RWE data quality dashboard | `ehr_rwe_eln.dq` | Conformance, completeness, and plausibility checks (Kahn framework) over the OMOP tables, scored and shown in the frontend |
+| 5. Synthetic genomics | `ehr_rwe_eln.genomics` | A dbGaP-style genotyping study simulated with msprime for OMOP persons (VCF, PLINK, phenotype and sample tables), a planted genetic effect, and a GWAS checked against it; a clinical panel of real ClinVar variants at their GRCh38 positions, planted in the same synthetic people |
+| 6. Variant curation | `ehr_rwe_eln.curation` | ACMG/AMP criteria that data alone decides, with each gene's ClinGen expert panel thresholds, from gnomAD v4 frequencies and Ensembl VEP consequences; Bayesian points to a class; scored against ClinVar expert-panel classifications it never reads. Claude proposes literature evidence (PS3, BS3, PS4, PP1) from LitVar2 and PubTator3 text, each claim's PMID and quote verified in code; proposals never change a class. A curator accepts proposals and records the class, with who and when, on `/curation/`. Each study subject's conditions as HPO terms, scored against the panel genes and checked against the planted carriers |
+| 7. Synthetic data | `ehr_rwe_eln.synth` | Differentially private synthetic releases of the OMOP data (statistical and generative synthesizers), with fidelity, utility, and privacy risk reports and a provenance record per release |
 
-Build order after the platform: 1, then 7, then 4, then 2. Each module depends on the OMOP tables from module 1.
+Build order after the platform: 1, then 4, then 3, then 2. Each module depends on the OMOP tables from module 1.
 
 ### In progress since 2026-11-19: move to AWS
 
@@ -37,7 +37,7 @@ Decided 2026-11-19, reversing the local-first move below: the app runs on AWS (t
 
 ### Done 2026-10-12: run locally, no AWS (superseded 2026-11-19)
 
-Goal: anyone can clone the repo, install it, and run every module on their own machine without an AWS account. It came before module 7 and changed the platform the remaining modules build on.
+Goal: anyone can clone the repo, install it, and run every module on their own machine without an AWS account. It came before module 4 and changed the platform the remaining modules build on.
 
 Decided 2026-10-12: PostgreSQL with pgvector replaces both DuckDB and Aurora (17 at first, to match Aurora; 18 since 2026-10-13). The app will have concurrent writers and large vector search (RAG), which DuckDB's single-writer file does not fit. It runs locally from `docker-compose.yml`, and tests run against that database.
 
@@ -170,10 +170,11 @@ How each piece was built, verified, and what it costs: see `docs/SETUP.md`.
 ├── src/ehr_rwe_eln/       # application code, the only thing that ships
 │   ├── cohort/            # module 1: Synthea to OMOP, cohort building
 │   ├── eln/               # module 2: ELN extraction to OMOP and FHIR
-│   ├── tte/               # module 4: target trial emulation
-│   ├── dq/                # module 7: data quality checks
-│   ├── genomics/          # synthetic genotypes and GWAS
-│   └── synth/             # privacy-preserving synthetic data releases
+│   ├── tte/               # module 3: target trial emulation
+│   ├── dq/                # module 4: data quality checks
+│   ├── genomics/          # module 5: synthetic genotypes and GWAS
+│   ├── curation/          # module 6: variant curation and phenotypes
+│   └── synth/             # module 7: privacy-preserving synthetic data releases
 ├── tests/                 # fast tests; local services only (the Compose Postgres), nothing off the machine
 ├── migrations/            # Alembic versioned schema changes
 ├── infra/terraform/       # bootstrap/ (state bucket), foundation/ (network, lake, Redshift, Aurora, budget), app/ (ECR, ECS, monitor, alarm)

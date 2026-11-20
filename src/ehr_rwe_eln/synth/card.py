@@ -211,7 +211,7 @@ def _trial(report: dict) -> list[str]:
     out = [
         "## Trial parity",
         "",
-        "The module 4 trial's own propensity-weighted Cox analysis, run on the real analysis"
+        "The module 3 trial's own propensity-weighted Cox analysis, run on the real analysis"
         " table and on this release, and on further draws of the same method and epsilon (one"
         " draw varies like a fresh small sample).",
         "",

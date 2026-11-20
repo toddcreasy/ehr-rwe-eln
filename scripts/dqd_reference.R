@@ -1,4 +1,4 @@
-# Run OHDSI DataQualityDashboard, the correctness reference for module 7, on the local CDM.
+# Run OHDSI DataQualityDashboard, the correctness reference for module 4, on the local CDM.
 #
 # Tested with DataQualityDashboard v2.9.0, installed with
 #   remotes::install_github("OHDSI/DataQualityDashboard@v2.9.0")

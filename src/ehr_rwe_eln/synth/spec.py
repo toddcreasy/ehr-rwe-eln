@@ -47,7 +47,7 @@ class Column(Strict):
     condition: ConceptSet | None = None  # 1 if ever recorded, else 0
     drug: ConceptSet | None = None  # 1 if ever exposed, else 0
     measurement: ConceptSet | None = None  # the latest value; missing when never measured
-    # A column of a module 4 protocol's analysis table, taken as is (specs with a protocol).
+    # A column of a module 3 protocol's analysis table, taken as is (specs with a protocol).
     analysis: str | None = None
     # Whether an analysis column can be missing (a measurement covariate with no value in its
     # lookback window). OMOP measurements always allow it.
@@ -145,7 +145,7 @@ class Spec(Strict):
     # synthesizer never saw (utility tests, and non-members for membership inference).
     # 0 keeps no holdout: for a spec judged against the data it learned from (trial parity).
     holdout_fraction: float = Field(default=0.3, ge=0, lt=1)
-    # A module 4 protocol (its file name without .yaml). When set, the source is that
+    # A module 3 protocol (its file name without .yaml). When set, the source is that
     # protocol's analysis table, and every column is an analysis column.
     protocol: str | None = None
     # A 0/1 column to predict in the utility test (train on synthetic, test on real).
