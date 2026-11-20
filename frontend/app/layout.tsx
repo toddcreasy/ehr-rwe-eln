@@ -21,7 +21,7 @@ const serif = Source_Serif_4({
 });
 
 export const metadata: Metadata = {
-  title: "Counterpart",
+  title: "RWE Workbench",
   description: "Real world evidence from one synthetic patient population",
 };
 

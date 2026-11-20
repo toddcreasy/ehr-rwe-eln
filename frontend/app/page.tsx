@@ -31,7 +31,7 @@ export default function Home() {
           One synthetic population, five ways to turn it into evidence.
         </h1>
         <p className="mt-4 text-lg leading-relaxed text-muted">
-          Counterpart generates {live.tte ? n(live.tte.persons) : "thousands of"} patients with Synthea, loads them into
+          RWE Workbench generates {live.tte ? n(live.tte.persons) : "thousands of"} patients with Synthea, loads them into
           the OMOP Common Data Model (the OHDSI standard for observational health data), and runs every analysis on that one copy:
           checking the data, emulating trials, reading lab notebooks, curating genetic variants, and releasing private
           synthetic versions. None of it is real patient data, so every record is open to inspect.
