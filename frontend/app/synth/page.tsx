@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import Spinner from "../spinner";
 
 type Release = {
   release_id: number;
@@ -242,6 +243,7 @@ export default function SyntheticData() {
       {monitor !== undefined && <MonitorStatus monitor={monitor} />}
 
       {error && <p className="text-sm text-zinc-900 dark:text-zinc-100">{error}</p>}
+      {!error && (releases === null || loading) && <Spinner />}
       {releases && releases.length === 0 && (
         <p className={`text-sm ${muted}`}>
           No releases yet. Run <code>uv run python scripts/synthesize.py</code> and{" "}
@@ -257,7 +259,7 @@ export default function SyntheticData() {
       ))}
 
       {card && (
-        <article className={`rounded-lg border border-zinc-200 p-6 transition-opacity dark:border-zinc-800 ${loading ? "opacity-50" : ""}`}>
+        <article className={`rounded-lg border border-accent/40 p-6 transition-opacity ${loading ? "opacity-50" : ""}`}>
           <Markdown source={card} />
         </article>
       )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Spinner from "../spinner";
 
 type VariantSet = { variant_set: string; run_id: number; created_at: string; variants: number; decided: number };
 
@@ -68,7 +69,7 @@ const FILTERS = {
 type Filter = keyof typeof FILTERS;
 
 const muted = "text-zinc-600 dark:text-zinc-400";
-const box = "rounded-lg border border-zinc-200 p-4 dark:border-zinc-800";
+const box = "rounded-lg border border-accent/40 p-4";
 const h3 = "font-medium text-zinc-900 dark:text-zinc-100";
 const input = "rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-950";
 
@@ -466,6 +467,7 @@ export default function Curation() {
       </p>
 
       {error && <p className="text-sm text-zinc-900 dark:text-zinc-100">{error}</p>}
+      {!error && (sets === null || loading) && <Spinner />}
 
       {sets && sets.length === 0 && (
         <p className={`text-sm ${muted}`}>
@@ -499,7 +501,7 @@ export default function Curation() {
 
       {rows && runId !== null && (
         <div className="grid gap-6 lg:grid-cols-[20rem_1fr]">
-          <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-accent/40">
             <p className={`border-b border-zinc-200 px-3 py-2 text-xs dark:border-zinc-800 ${muted}`}>
               {shown.length.toLocaleString("en-US")} shown
             </p>

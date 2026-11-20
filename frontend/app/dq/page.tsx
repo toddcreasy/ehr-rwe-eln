@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { type CheckResult, STATUSES, STATUS_META, type Status, StatusBadge, statusOf } from "./status";
+import Spinner from "../spinner";
 
 type Overview = {
   countTotal: number;
@@ -23,7 +24,7 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 
 function StatTile({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <div className="rounded-lg border border-accent/40 p-4">
       <div className="text-sm text-zinc-600 dark:text-zinc-400">{label}</div>
       <div className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{value}</div>
       {note && <div className="mt-1 text-xs text-zinc-500">{note}</div>}
@@ -38,13 +39,13 @@ function CategoryBreakdown({ counts }: { counts: Counts }) {
   const [showTable, setShowTable] = useState(false);
 
   return (
-    <figure className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <figure className="rounded-lg border border-accent/40 p-4">
       <div className="flex items-start justify-between gap-4">
         <figcaption>
           <div className="font-medium text-zinc-900 dark:text-zinc-100">Checks by Kahn category</div>
           <div className="text-sm text-zinc-600 dark:text-zinc-400">Share of checks in each category, by status</div>
         </figcaption>
-        <button onClick={() => setShowTable(!showTable)} className="text-sm text-zinc-600 underline dark:text-zinc-400">
+        <button onClick={() => setShowTable(!showTable)} className="text-sm text-accent underline underline-offset-2 hover:opacity-80">
           {showTable ? "Show chart" : "Show table"}
         </button>
       </div>
@@ -298,6 +299,7 @@ export default function DataQuality() {
       </div>
 
       {error && <p className="text-sm text-zinc-900 dark:text-zinc-100">{error}</p>}
+      {!error && (runs === null || loading) && <Spinner />}
       {runs && runs.length === 0 && (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           No data quality runs yet. Run <code>uv run python scripts/run_dq.py</code>, then reload.

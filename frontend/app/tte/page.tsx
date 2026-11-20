@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Spinner from "../spinner";
 
 type Run = {
   run_id: number;
@@ -75,7 +76,7 @@ const row = "border-t border-zinc-200 dark:border-zinc-800";
 
 function StatTile({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <div className="rounded-lg border border-accent/40 p-4">
       <div className={`text-sm ${muted}`}>{label}</div>
       <div className="mt-1 text-2xl font-semibold text-zinc-900 tabular-nums dark:text-zinc-100">{value}</div>
       {note && <div className="mt-1 text-xs text-zinc-500">{note}</div>}
@@ -99,7 +100,7 @@ function ProtocolReport({ report }: { report: Report }) {
   const { protocol, diagnostics: d, survival: s } = report;
   const crude = new Map(s?.crude_risks.map((r) => [r.day, r]));
   return (
-    <article className="flex flex-col gap-6 rounded-lg border border-zinc-200 p-6 dark:border-zinc-800">
+    <article className="flex flex-col gap-6 rounded-lg border border-accent/40 p-6">
       <header>
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
           {protocol.id}. {protocol.treatment} vs {protocol.comparator}, outcome {protocol.outcome.replaceAll("_", " ")}
@@ -341,6 +342,7 @@ export default function TargetTrials() {
       </p>
 
       {error && <p className="text-sm text-zinc-900 dark:text-zinc-100">{error}</p>}
+      {!error && (runs === null || loading) && <Spinner />}
       {runs && runs.length === 0 && (
         <p className={`text-sm ${muted}`}>
           No runs yet. Run <code>uv run python scripts/run_tte.py</code>, then reload.
