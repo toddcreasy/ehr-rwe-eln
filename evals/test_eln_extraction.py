@@ -1,4 +1,4 @@
-"""Eval for module 2's ELN extraction. Calls the real Anthropic API: slow, costs a few cents.
+"""Eval for module 2's ELN extraction. Calls Claude on Bedrock: slow, costs a few cents.
 
     uv run pytest evals/test_eln_extraction.py -s
 

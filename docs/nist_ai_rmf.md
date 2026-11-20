@@ -7,7 +7,7 @@ The framework has four functions. **Govern** sets the policies and culture for m
 Scope: the two parts of this repository that are AI systems.
 
 - **Synthetic data releases** (`src/ehr_rwe_eln/synth/`): a differentially private Bayesian network and a variational autoencoder that produce synthetic copies of the [OMOP](https://ohdsi.github.io/CommonDataModel/cdm54.html) data for testing other systems. Method and results: [synthetic_data_methodology.md](synthetic_data_methodology.md).
-- **ELN extraction** (`src/ehr_rwe_eln/eln/`): Claude (`MODEL`, Opus 5.5) extracting samples and results from lab notebook text into typed records.
+- **ELN extraction** (`src/ehr_rwe_eln/eln/`): Claude (`MODEL`, Opus 4.6 on Amazon Bedrock) extracting samples and results from lab notebook text into typed records.
 
 This is a single-maintainer project on synthetic data. Some categories are about organizations (roles, workforce, outside stakeholders); for those, the mapping says what exists and what an organization would add.
 

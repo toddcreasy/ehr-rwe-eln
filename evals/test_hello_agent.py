@@ -1,4 +1,4 @@
-"""Golden set for the platform check agent. Calls the real Anthropic API: slow, costs a few cents.
+"""Golden set for the platform check agent. Calls Claude on Bedrock: slow, costs a few cents.
 
     uv run pytest evals        # plain `uv run pytest` never collects this directory
 

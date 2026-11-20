@@ -8,7 +8,7 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field, field_validator
 
 from ehr_rwe_eln.api.demo import not_in_public_demo
-from ehr_rwe_eln.config import DatabaseSettings
+from ehr_rwe_eln.config import DB_CONNECT_TIMEOUT_S, DatabaseSettings
 from ehr_rwe_eln.curation.rules import POINTS, classify, label
 
 router = APIRouter(prefix="/curation")
@@ -57,7 +57,7 @@ ORDER BY a.gene, a.variant_id
 
 
 def connect() -> AbstractContextManager[psycopg.Connection]:
-    return DatabaseSettings().connect(connect_timeout=5, row_factory=dict_row)
+    return DatabaseSettings().connect(connect_timeout=DB_CONNECT_TIMEOUT_S, row_factory=dict_row)
 
 
 class Draft(BaseModel):

@@ -4,7 +4,7 @@ import psycopg
 from fastapi import APIRouter, HTTPException
 from psycopg.rows import dict_row
 
-from ehr_rwe_eln.config import DatabaseSettings
+from ehr_rwe_eln.config import DB_CONNECT_TIMEOUT_S, DatabaseSettings
 
 router = APIRouter(prefix="/tte")
 
@@ -12,7 +12,7 @@ RUNS_SQL = "SELECT run_id, started_at, finished_at, cdm_source_name, persons FRO
 
 
 def connect() -> AbstractContextManager[psycopg.Connection]:
-    return DatabaseSettings().connect(connect_timeout=5, row_factory=dict_row)
+    return DatabaseSettings().connect(connect_timeout=DB_CONNECT_TIMEOUT_S, row_factory=dict_row)
 
 
 @router.get("/runs")

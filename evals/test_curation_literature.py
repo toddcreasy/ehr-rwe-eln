@@ -1,4 +1,4 @@
-"""Eval for the curation module's literature step. Calls the real Anthropic API: about $0.15.
+"""Eval for the curation module's literature step. Calls Claude on Bedrock: about $0.15.
 
     uv run pytest evals/test_curation_literature.py -s
 

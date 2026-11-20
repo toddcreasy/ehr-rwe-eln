@@ -15,4 +15,4 @@ def test_blank_values_copied_from_env_example_fall_back_to_defaults(tmp_path, mo
     settings = Settings()
     assert settings.log_level == "INFO"
     assert settings.frontend_dir == "frontend/out"
-    assert AgentSettings().model == "claude-opus-5-5"
+    assert AgentSettings().model == "us.anthropic.claude-opus-4-6-v1"

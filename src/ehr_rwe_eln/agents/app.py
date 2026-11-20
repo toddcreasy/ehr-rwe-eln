@@ -17,8 +17,7 @@ class AgentRequest(BaseModel):
 
 def invoke(request: AgentRequest) -> dict:
     model_id = settings.model
-    api_key = settings.anthropic_api_key
-    responses = run_agent(model_id, request.prompt, api_key.get_secret_value() if api_key else None)
+    responses = run_agent(model_id, request.prompt)
     tools_called = [
         block.name
         for response in responses

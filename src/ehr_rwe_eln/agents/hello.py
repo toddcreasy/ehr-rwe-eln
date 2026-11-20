@@ -1,12 +1,12 @@
 from datetime import UTC, datetime
 
-import anthropic
 import psycopg
 from anthropic import beta_tool
 from anthropic.types.beta.parsed_beta_message import ParsedBetaMessage
 from pydantic import BaseModel, Field
 
-from ehr_rwe_eln.config import DatabaseSettings
+from ehr_rwe_eln.agents.config import THINKING, claude_client
+from ehr_rwe_eln.config import DB_CONNECT_TIMEOUT_S, DatabaseSettings
 
 SYSTEM_PROMPT = (
     "You are the platform check agent for ehr-rwe-eln, a research project on synthetic data. "
@@ -38,23 +38,20 @@ def current_time() -> str:
 def check_database_health() -> str:
     """Check whether the project's Postgres database is reachable."""
     try:
-        with DatabaseSettings().connect(connect_timeout=5) as con:
+        with DatabaseSettings().connect(connect_timeout=DB_CONNECT_TIMEOUT_S) as con:
             con.execute("SELECT 1")
     except psycopg.OperationalError:
         return "unreachable"
     return "reachable"
 
 
-def run_agent(
-    model_id: str, prompt: str, api_key: str | None = None
-) -> list[ParsedBetaMessage[HelloReply]]:
+def run_agent(model_id: str, prompt: str) -> list[ParsedBetaMessage[HelloReply]]:
     """Run the tool loop to a final typed reply. Returns every model response, in order."""
-    # api_key=None makes the SDK read ANTHROPIC_API_KEY from the environment.
-    client = anthropic.Anthropic(api_key=api_key)
-    runner = client.beta.messages.tool_runner(
+    runner = claude_client().beta.messages.tool_runner(
         model=model_id,
-        # Opus 5.5 always thinks, and thinking counts against max_tokens.
+        # Thinking counts against max_tokens.
         max_tokens=16000,
+        thinking=THINKING,
         system=SYSTEM_PROMPT,
         tools=[current_time, check_database_health],
         messages=[{"role": "user", "content": prompt}],

@@ -1,7 +1,7 @@
 # Who may do what. Containers get AWS permissions from roles, never from keys.
 # - execution role: ECS itself, to pull the image, write logs, and read the database password.
 # - infrastructure role: ECS Express Mode, to build the load balancer, certificate, and scaling.
-# - app task role: the web app's own AWS calls (none yet; Bedrock arrives in step 5).
+# - app task role: the web app's own AWS calls: Claude on Bedrock for /api/agent.
 # - monitor task role: the daily privacy check, which reads OMOP from the lake through Redshift.
 # - bastion task role: the on-demand tunnel to Aurora (ECS Exec over Systems Manager).
 
@@ -60,6 +60,23 @@ resource "aws_iam_role_policy_attachment" "infrastructure" {
 resource "aws_iam_role" "app" {
   name               = "${local.name}-app"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_trust.json
+}
+
+# MODEL is a cross-region inference profile: a call goes to the profile, which routes it to the
+# model in one of its regions, so both the profile and each region's model must be allowed.
+data "aws_iam_policy_document" "app_bedrock" {
+  statement {
+    actions = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+    resources = concat(
+      ["arn:aws:bedrock:${local.region}:${local.account_id}:inference-profile/${var.model}"],
+      [for r in var.model_regions : "arn:aws:bedrock:${r}::foundation-model/${trimprefix(var.model, "us.")}"],
+    )
+  }
+}
+
+resource "aws_iam_role_policy" "app_bedrock" {
+  role   = aws_iam_role.app.id
+  policy = data.aws_iam_policy_document.app_bedrock.json
 }
 
 resource "aws_iam_role" "monitor" {

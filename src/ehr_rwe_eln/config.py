@@ -4,6 +4,10 @@ import psycopg
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Aurora Serverless pauses after 5 idle minutes and takes about 15 seconds to wake, so the first
+# request after a quiet spell waits on it. 5 seconds failed every such request with a timeout.
+DB_CONNECT_TIMEOUT_S = 30
+
 
 class DatabaseSettings(BaseSettings):
     """Locally these come from .env, matching docker-compose.yml."""

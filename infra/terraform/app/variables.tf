@@ -18,3 +18,15 @@ variable "daily_token_limit" {
   type        = number
   default     = 150000
 }
+
+variable "model" {
+  description = "MODEL: the Bedrock cross-region inference profile every Claude call uses."
+  type        = string
+  default     = "us.anthropic.claude-opus-4-6-v1"
+}
+
+variable "model_regions" {
+  description = "Regions the inference profile routes to (aws bedrock get-inference-profile)."
+  type        = list(string)
+  default     = ["us-east-1", "us-east-2", "us-west-2"]
+}

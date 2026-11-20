@@ -18,10 +18,9 @@ from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
-import anthropic
 from psycopg.types.json import Jsonb
 
-from ehr_rwe_eln.agents.config import AgentSettings
+from ehr_rwe_eln.agents.config import AgentSettings, claude_client
 from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.curation.erepo import parse_code
 from ehr_rwe_eln.curation.literature import (
@@ -36,8 +35,9 @@ from ehr_rwe_eln.curation.literature import (
 from ehr_rwe_eln.synth.release import code_version
 
 REFERENCE = Path(__file__).resolve().parent.parent / "data" / "reference"
-# Claude Opus 5.5 list prices, dollars per million tokens: input, output, cache read, cache write.
-PRICE = {"input": 4.0, "output": 20.0, "cache_read": 0.4, "cache_write": 5.0}
+# Claude Opus 4.6 first-party list prices, dollars per million tokens: input, output, cache read
+# (0.1x input), cache write (1.25x). Bedrock bills at its own rates; this is an estimate.
+PRICE = {"input": 5.0, "output": 25.0, "cache_read": 0.5, "cache_write": 6.25}
 
 
 def cost(usage: Counter) -> float:
@@ -51,8 +51,7 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = AgentSettings()
-    key = settings.anthropic_api_key
-    client = anthropic.Anthropic(api_key=key.get_secret_value() if key else None)
+    client = claude_client()
     with DatabaseSettings().connect() as con:
         chosen, skipped = literature_cases(con, args.variants, REFERENCE)
     print(f"{len(chosen)} variants with passages; skipped {dict(skipped)}")

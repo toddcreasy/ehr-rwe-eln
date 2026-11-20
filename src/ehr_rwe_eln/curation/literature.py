@@ -36,7 +36,7 @@ from typing import Literal
 import anthropic
 from pydantic import BaseModel, Field
 
-from ehr_rwe_eln.agents.config import AgentSettings
+from ehr_rwe_eln.agents.config import THINKING, AgentSettings, claude_client
 from ehr_rwe_eln.curation.erepo import parse_code
 
 LITVAR = "https://www.ncbi.nlm.nih.gov/research/litvar2-api"
@@ -240,18 +240,11 @@ def prompt(gene: str, hgvsc: str | None, hgvsp: str | None, found: list[dict]) -
     return f"Variant: {gene} {variant}\n\n" + "\n\n".join(blocks)
 
 
-def _client(client: anthropic.Anthropic | None) -> anthropic.Anthropic:
-    if client is not None:
-        return client
-    key = AgentSettings().anthropic_api_key
-    # None makes the SDK read ANTHROPIC_API_KEY from the environment.
-    return anthropic.Anthropic(api_key=key.get_secret_value() if key else None)
-
-
 def request_params(text: str, model: str) -> dict:
     return {
         "model": model,
         "max_tokens": 8192,
+        "thinking": THINKING,
         # Cached once the prompt passes the model's minimum cacheable length.
         "system": [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
         "messages": [{"role": "user", "content": text}],
@@ -263,10 +256,10 @@ class ProposalFailed(Exception):
 
 
 def propose(
-    text: str, client: anthropic.Anthropic | None = None, model: str | None = None
+    text: str, client: anthropic.AnthropicBedrock | None = None, model: str | None = None
 ) -> tuple[Proposals, dict]:
     """Claude's proposals for one variant's prompt, and the token usage."""
-    response = _client(client).messages.parse(
+    response = (client or claude_client()).messages.parse(
         **request_params(text, model or AgentSettings().model), output_format=Proposals
     )
     if response.stop_reason != "end_turn" or response.parsed_output is None:

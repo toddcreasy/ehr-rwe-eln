@@ -52,7 +52,7 @@ There is no sign-in. Every port binds to 127.0.0.1, so nothing is reachable from
 
 ## Where Claude is used
 
-Three places, all on Claude Opus 5.5 through the [Anthropic API](https://docs.claude.com), set by one `MODEL` setting:
+Three places, all on Claude Opus 4.6 through [Amazon Bedrock](https://docs.claude.com/en/docs/build-with-claude/claude-on-amazon-bedrock) (the Anthropic SDK's `AnthropicBedrock` client, IAM credentials, no API key), set by one `MODEL` setting:
 
 - **ELN extraction** (`src/ehr_rwe_eln/eln/`). Structured outputs constrain each reply to the extraction schema, and [Pydantic](https://docs.pydantic.dev) validates it before anything is stored. Offline runs go through the [Message Batches API](https://docs.claude.com/en/docs/build-with-claude/batch-processing) at half price.
 - **Literature evidence for variant curation** (`src/ehr_rwe_eln/curation/literature.py`). Claude proposes ACMG criteria from passages that name the variant, each with a PMID and a quote that code checks against what was sent. Proposals change nothing until a curator accepts them on `/curation/`.
@@ -67,7 +67,7 @@ All three are scored by evals in `evals/` against the real model. They are slow 
 | Database | PostgreSQL 18 + [pgvector](https://github.com/pgvector/pgvector), in [Docker Compose](https://docs.docker.com/compose/) | Concurrent writers and vector search, which DuckDB's single-writer file did not fit. Runs anywhere Docker does |
 | Migrations | Alembic | Versioned schema changes for the module schemas |
 | Python | 3.14, uv, ruff, pytest | One fast tool per job, versions pinned in `uv.lock` |
-| Model | Claude Opus 5.5 on the Anthropic API | Each user brings their own key; one model for every call |
+| Model | Claude Opus 4.6 on Amazon Bedrock | IAM auth and the AWS bill, no API key; one model for every call. Opus 5.5 is not enabled for this account |
 | Agent framework | Anthropic Python SDK tool runner | Runs the tool loop and returns typed output with no extra framework |
 | Causal inference and survival | [scikit-learn](https://scikit-learn.org), [statsmodels](https://www.statsmodels.org), [lifelines](https://lifelines.readthedocs.io) | Propensity scores, Cox models, Kaplan-Meier |
 | Differential privacy | [diffprivlib](https://github.com/IBM/differential-privacy-library), [Opacus](https://opacus.ai) | Noisy histograms with a budget accountant; DP-SGD for the autoencoder |

@@ -10,7 +10,7 @@ The acronyms, standards, methods, and services these docs use. Each entry says w
 4. [Study design and statistics](#study-design-and-statistics)
 5. [Privacy and regulation](#privacy-and-regulation)
 6. [Genomics](#genomics)
-7. [Models and the Anthropic API](#models-and-the-anthropic-api)
+7. [Models and Amazon Bedrock](#models-and-amazon-bedrock)
 8. [Software and services](#software-and-services)
 
 ## Health data and standards
@@ -361,19 +361,23 @@ A widely used toolset for genetic association analysis, and its compact binary g
 
 An open-source library from the Broad Institute for genomic analysis at scale, built on Apache Spark. Its MatrixTable stores variants by samples with fields on each. Used here as an independent check on the GWAS. [hail.is](https://hail.is)
 
-## Models and the Anthropic API
+## Models and Amazon Bedrock
 
-### Claude Opus 5.5
+### Claude Opus 4.6
 
-Anthropic's model this project uses for every call, through the `MODEL` setting. [Claude Opus](https://www.anthropic.com/claude/opus)
+Anthropic's model this project uses for every call, through the `MODEL` setting (`us.anthropic.claude-opus-4-6-v1`): the newest Claude this AWS account can call on Bedrock. Until 2026-11-20 every call used Claude Opus 5.5 on the Anthropic API. [Claude Opus](https://www.anthropic.com/claude/opus)
 
-### Anthropic API
+### Amazon Bedrock
 
-The web API for calling Claude. Each user brings their own key in `.env`. [Claude docs](https://docs.claude.com)
+AWS's service for calling foundation models, Claude among them, with IAM permissions instead of an API key and the cost on the AWS bill. The code uses the Anthropic SDK's `AnthropicBedrock` client. [Claude on Amazon Bedrock](https://docs.claude.com/en/docs/build-with-claude/claude-on-amazon-bedrock)
 
-### Message Batches API
+### Inference profile
 
-Sends many requests at once to be processed within a day, at half the price of single calls. ELN extraction uses it. [Batch processing](https://docs.claude.com/en/docs/build-with-claude/batch-processing)
+A Bedrock model ID with a region prefix, like `us.anthropic.claude-opus-4-6-v1`, that routes each call to the model in one of several regions for capacity. IAM has to allow the profile and the model in each of its regions.
+
+### Adaptive thinking
+
+Lets Claude decide per request whether and how long to reason before answering. Opus 4.6 thinks only when the request asks for it, so every call here sets `thinking={"type": "adaptive"}`.
 
 ### Structured outputs
 
