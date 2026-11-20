@@ -49,4 +49,8 @@ class Settings(DatabaseSettings):
     """Locally these come from .env. Docker Compose adds the app service's environment."""
 
     log_level: str = "INFO"
+    # The public AWS deployment: no login, so recording curator decisions is off.
+    public_demo: bool = False
+    # Most tokens /agent may bill in one day, US Eastern (see api/limits.py).
+    daily_token_limit: int = 150_000
     frontend_dir: str = "frontend/out"

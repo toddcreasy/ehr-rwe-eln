@@ -1,5 +1,7 @@
 # Counts only resources tagged project=ehr-rwe-eln (an active cost allocation tag). Tag data in
-# Cost Explorer lags about a day, so treat this as a warning, not a brake.
+# Cost Explorer lags about a day, so treat this as a warning, not a brake. Credits are left out
+# so they cannot hide real spend (glia-nav found its credits masking the budget). Alerts at 50%
+# and 80% of actual spend and 100% of forecast, as in glia-nav.
 
 resource "aws_budgets_budget" "monthly" {
   name         = "${local.name}-monthly"
@@ -11,6 +13,18 @@ resource "aws_budgets_budget" "monthly" {
   cost_filter {
     name   = "TagKeyValue"
     values = ["user:project$${local.name}"]
+  }
+
+  cost_types {
+    include_credit = false
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 50
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.budget_email]
   }
 
   notification {

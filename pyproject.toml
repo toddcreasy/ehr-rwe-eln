@@ -11,6 +11,7 @@ requires-python = ">=3.14"
 dependencies = [
     "alembic>=1.20.0",
     "anthropic>=0.125.0",
+    "boto3>=1.44.7",
     "diffprivlib>=0.6.6",
     "fastapi[standard]>=0.142.2",
     "fhir-resources>=8.3.0",
@@ -46,9 +47,8 @@ genomics = [
     "polars>=2.0.0",
     "tskit>=1.0.3",
 ]
-# Publishing OMOP to the S3 Tables lake and querying it through Redshift; not needed by the app.
+# Publishing OMOP to the S3 Tables lake; not needed by the app.
 lake = [
-    "boto3>=1.44.7",
     "pyarrow>=26.0.1",
     "pyiceberg[pyarrow]>=0.12.0",
 ]

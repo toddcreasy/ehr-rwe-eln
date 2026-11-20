@@ -13,8 +13,8 @@ import sys
 
 import pandas as pd
 
-from ehr_rwe_eln.cohort.lake import RedshiftSession
 from ehr_rwe_eln.config import DatabaseSettings, LakeSettings
+from ehr_rwe_eln.omop import RedshiftSession
 from ehr_rwe_eln.synth.source import build_source
 from ehr_rwe_eln.synth.spec import SPECS, load_spec
 from ehr_rwe_eln.tte.cohort import build_analysis_table

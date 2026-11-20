@@ -10,8 +10,9 @@ API, on the lake. Then compares cohort sizes. Exits 1 on any difference.
 import argparse
 import sys
 
-from ehr_rwe_eln.cohort.lake import columns, compare, fingerprint_sql, redshift_query, tables
+from ehr_rwe_eln.cohort.lake import columns, compare, fingerprint_sql, tables
 from ehr_rwe_eln.config import DatabaseSettings, LakeSettings
+from ehr_rwe_eln.omop import redshift_query
 
 COHORTS_SQL = "SELECT cohort_definition_id, count(*) FROM {} GROUP BY 1 ORDER BY 1"
 

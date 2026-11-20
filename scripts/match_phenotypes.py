@@ -26,7 +26,6 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 
-from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.curation.phenotype import (
     information_content,
@@ -38,6 +37,7 @@ from ehr_rwe_eln.curation.phenotype import (
     similarity,
 )
 from ehr_rwe_eln.genomics.panel import load_panel_spec, read_panel_carriers
+from ehr_rwe_eln.omop import connect_omop
 from ehr_rwe_eln.tte.cohort import ids
 
 RELEASE = "2026-09-01"

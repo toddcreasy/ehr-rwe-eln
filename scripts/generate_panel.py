@@ -21,7 +21,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.genomics.clinvar import URL, read_clinvar
 from ehr_rwe_eln.genomics.gnomad import frequencies
 from ehr_rwe_eln.genomics.panel import (
@@ -32,6 +31,7 @@ from ehr_rwe_eln.genomics.panel import (
     panel_truth,
     write_panel,
 )
+from ehr_rwe_eln.omop import connect_omop
 from ehr_rwe_eln.tte.cohort import ids
 
 DATA = Path(__file__).resolve().parent.parent / "data"

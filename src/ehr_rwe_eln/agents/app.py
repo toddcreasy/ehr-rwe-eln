@@ -35,5 +35,13 @@ def invoke(request: AgentRequest) -> dict:
         "model_calls": len(responses),
         "tools_called": tools_called,
     }
+    # Everything the call billed, cache reads and writes included: the daily limit and the
+    # CloudWatch token alarm both count this.
+    fields["total_tokens"] = (
+        fields["input_tokens"]
+        + fields["output_tokens"]
+        + fields["cache_read"]
+        + fields["cache_write"]
+    )
     log.info("agent run", extra={"fields": fields})
     return {"output": responses[-1].parsed_output.model_dump(), "usage": fields}
