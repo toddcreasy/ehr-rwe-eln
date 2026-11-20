@@ -32,18 +32,28 @@ api = APIRouter(prefix="/api")
 async def log_requests(request: Request, call_next):
     started = time.perf_counter()
     response = await call_next(request)
-    log.info(
-        "request",
-        extra={
-            "fields": {
-                "method": request.method,
-                "path": request.url.path,
-                "status": response.status_code,
-                "duration_ms": round((time.perf_counter() - started) * 1000, 1),
-            }
-        },
-    )
+    fields = {
+        "method": request.method,
+        "path": request.url.path,
+        "status": response.status_code,
+        "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+    }
+    if is_page_view(request):
+        # Who visits the demo: scripts/demo_visitors.py looks up each address's registered
+        # organization. Logs expire after 30 days.
+        fields["client"] = client_address(request)
+        fields["user_agent"] = request.headers.get("user-agent", "")[:300]
+    log.info("request", extra={"fields": fields})
     return response
+
+
+def is_page_view(request: Request) -> bool:
+    path = request.url.path
+    return (
+        request.method == "GET"
+        and not path.startswith(("/api/", "/_next/"))
+        and "." not in path.rsplit("/", 1)[-1]
+    )
 
 
 @api.get("/health")
