@@ -8,7 +8,7 @@ from ehr_rwe_eln.synth.source import build_source
 from ehr_rwe_eln.synth.spec import SPECS, Spec, load_spec
 from tests.test_synth import AGE, spec
 from tests.test_tte import PROTOCOL as TTE_PROTOCOL
-from tests.test_tte import con  # noqa: F401  (module 4's planted cohort)
+from tests.test_tte import con  # noqa: F401  (module 3's planted cohort)
 
 PROTOCOL = load_trial("lisinopril_vs_amlodipine_ckd")
 
@@ -81,7 +81,7 @@ def test_protocol_and_analysis_columns_go_together():
 
 
 def test_analysis_source_takes_the_protocol_table(con, monkeypatch):  # noqa: F811
-    """con and its protocol come from module 4's tests: 11 planted people, 4 eligible."""
+    """con and its protocol come from module 3's tests: 11 planted people, 4 eligible."""
     monkeypatch.setattr("ehr_rwe_eln.synth.source.load_protocol", lambda path: TTE_PROTOCOL)
     columns = [
         {"name": "age", "analysis": "age", "numeric": {"low": 0, "high": 110, "bins": 11}},

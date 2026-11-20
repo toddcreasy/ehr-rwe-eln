@@ -1,4 +1,4 @@
-"""Compare module 7's data quality checks with OHDSI DataQualityDashboard on the same CDM.
+"""Compare module 4's data quality checks with OHDSI DataQualityDashboard on the same CDM.
 
 Usage: uv run python scripts/compare_dqd.py [--database DB] [--schema SCHEMA] [--reference FILE]
 

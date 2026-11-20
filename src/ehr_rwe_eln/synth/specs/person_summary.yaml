@@ -44,7 +44,7 @@ columns:
   - {name: race, demographic: race, categories: [white, black, asian, hawaiian, native, other]}
   - {name: ethnicity, demographic: ethnicity, categories: [hispanic, nonhispanic], parents: [race]}
 
-  # Conditions, with the concept ids the module 4 protocols use.
+  # Conditions, with the concept ids the module 3 protocols use.
   - {name: hypertension, condition: {concept_ids: [320128]}, parents: [age]}
   - {name: obesity, condition: {concept_ids: [4060985]}, parents: [age]} # body mass index 30+
   - name: diabetes # type 2 diabetes, or a condition recorded as due to it

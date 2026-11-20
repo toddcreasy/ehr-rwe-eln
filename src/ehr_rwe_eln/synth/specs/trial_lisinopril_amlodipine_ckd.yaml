@@ -1,6 +1,6 @@
 name: trial_lisinopril_amlodipine_ckd
 description: >-
-  The analysis table of module 4's lisinopril versus amlodipine trial (CKD stage 3 or worse):
+  The analysis table of module 3's lisinopril versus amlodipine trial (CKD stage 3 or worse):
   one row per eligible person, with arm, baseline covariates, follow-up days, and outcome.
   Releases are judged by rerunning the trial's propensity-weighted Cox analysis on them and
   comparing the hazard ratio with the real one. Synthetic Synthea data only; no clinical claims.
