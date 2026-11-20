@@ -69,7 +69,7 @@ const FILTERS = {
 type Filter = keyof typeof FILTERS;
 
 const muted = "text-zinc-600 dark:text-zinc-400";
-const box = "rounded-lg border-[1.5px] border-accent p-4";
+const box = "rounded-lg border border-accent p-4";
 const h3 = "font-medium text-zinc-900 dark:text-zinc-100";
 const input = "rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-950";
 
@@ -501,7 +501,7 @@ export default function Curation() {
 
       {rows && runId !== null && (
         <div className="grid gap-6 lg:grid-cols-[20rem_1fr]">
-          <div className="max-h-[75vh] overflow-y-auto rounded-lg border-[1.5px] border-accent">
+          <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-accent">
             <p className={`border-b border-zinc-200 px-3 py-2 text-xs dark:border-zinc-800 ${muted}`}>
               {shown.length.toLocaleString("en-US")} shown
             </p>
