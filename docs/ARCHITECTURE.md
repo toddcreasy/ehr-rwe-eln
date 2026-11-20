@@ -38,7 +38,7 @@ The ELN bridge goes the other way. It reads free-text lab notebook entries, has 
 
 ## The app
 
-One container runs [FastAPI](https://fastapi.tiangolo.com). It serves the API under `/api` and the frontend at `/`. The frontend is a [Next.js](https://nextjs.org) static export: `npm run build` turns it into HTML and JavaScript files, so no Node server runs in production. Pages: A second container from the same image, `monitor`, has no ports: it reruns the privacy checks on the synthetic releases on a schedule and records each run in the database.
+One container runs [FastAPI](https://fastapi.tiangolo.com). It serves the API under `/api` and the frontend at `/`. The frontend is a [Next.js](https://nextjs.org) static export: `npm run build` turns it into HTML and JavaScript files, so no Node server runs in production. The app is called RWE Workbench: the home page shows the five sections as tabs, each with a live figure from its own API, and every page shares a header and a strip linking the sections. A second container from the same image, `monitor`, has no ports: it reruns the privacy checks on the synthetic releases on a schedule and records each run in the database.
 
 | Page | Shows | API |
 |---|---|---|
