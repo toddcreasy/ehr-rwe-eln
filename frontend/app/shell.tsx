@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useState } from "react";
 import { type Live, MODULES } from "./modules";
+import PilotBioMark from "./pilotbio-mark";
 
 const LiveContext = createContext<Live>({});
 export const useLive = () => useContext(LiveContext);
@@ -129,6 +130,16 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
           <div className="flex items-center gap-1">
+            <a
+              href="https://pilotbio.io"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="PilotBio"
+              className="mr-2 flex items-center gap-1.5 text-sm font-medium text-foreground hover:opacity-80"
+            >
+              <PilotBioMark />
+              <span className="hidden sm:inline">Todd Creasy</span>
+            </a>
             <GitHub />
             <ThemeToggle />
           </div>
