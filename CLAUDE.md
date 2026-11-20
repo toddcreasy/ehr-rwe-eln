@@ -33,7 +33,14 @@ Decided 2026-11-19, reversing the local-first move below: the app runs on AWS (t
 - [x] 3. OMOP readers on Redshift: trial emulation, synthetic data sources, and the genomics, curation, and ELN scripts read the lake through `connect_omop()` (Redshift Data API, `OMOP_SOURCE=staging` for the staging Postgres), in SQL that runs unchanged on both. `scripts/compare_omop_sources.py`: identical tables for 4 protocols, 14 negative controls, 2 synthetic specs. Decided 2026-11-19: OMOP writers (ETL, cohorts, ELN bridge) stay on staging and republish; data quality stays on staging until DQD in R (step 6)
 - [x] 4. App on ECS Express Mode (`infra/terraform/app/`), a public demo with no sign-in (decided 2026-11-20, as glia-nav): `/api/agent` bounded by a daily token limit and a per-address limit, curator decisions off (`PUBLIC_DEMO`). Module data in Aurora (migrations and a data-only copy through the bastion tunnel, row counts identical). The privacy monitor runs daily as a scheduled ECS task on the lake
 - [x] 5. Bedrock (Claude Opus 4.6, `us.anthropic.claude-opus-4-6-v1`) replaces the Anthropic API through `AnthropicBedrock` and `claude_client()` (`agents/config.py`); every call sets adaptive thinking. ELN extraction runs as direct calls (Bedrock has no Message Batches API; decided 2026-11-20). Every eval re-ran on Opus 4.6 and matched Opus 5.5: ELN extraction 1.000 on the default, hard, and adversarial sets; literature precision 83%
-- [ ] 6. R and HADES, LangGraph for literature curation, then the genomics, curation, and synthetic data items in `notes/TODO_IMPROVEMENTS.md`
+- [ ] 6. R and HADES, LangGraph for literature curation, then the genomics, curation, and synthetic data items in `notes/TODO_IMPROVEMENTS.md`. One PR each:
+  - [x] 6a. R and HADES foundation: `docker/hades.Dockerfile` (R 4.6.1, Java 21, HADES from OHDSI's r-universe and a dated CRAN snapshot; versions in `r/installed-versions.txt`), `r/`, and `scripts/hades.py` (bastion tunnel to Redshift, temporary IAM login). Smoke tests pass on Eunomia and on the lake (23,421 persons)
+  - [ ] 6b. DataQualityDashboard (R) on the lake replaces the Python checks
+  - [ ] 6c. CohortMethod and TrialEmulation
+  - [ ] 6d. LangGraph for literature curation
+  - [ ] 6e. stdpopsim, PLINK 2, REGENIE, panel variants into OMOP
+  - [ ] 6f. Exomiser and BIAS-2015
+  - [ ] 6g. MST and AIM
 
 ### Done 2026-10-12: run locally, no AWS (superseded 2026-11-19)
 
@@ -74,7 +81,7 @@ Domain stack (additions to the platform stack below):
 | Causal inference and survival | scikit-learn, statsmodels, lifelines | Language-level libraries. |
 | ELN source | Synthetic entries; eLabFTW API optional | Open-source ELN with a REST API. |
 
-OHDSI reference implementations (ETL-Synthea, DataQualityDashboard, CohortMethod) are R. This repo reimplements the needed subset in Python and uses the R tools as the correctness reference, not as dependencies.
+OHDSI reference implementations (ETL-Synthea, DataQualityDashboard, CohortMethod) are R. Since step 6 the repo runs HADES itself where the R tool is the standard (`r/`, in the `hades` container, against the lake through `scripts/hades.py`); the Python ETL stays, since it is verified against ETL-Synthea and fixes two of its bugs.
 
 ## Explain before you act
 
@@ -155,6 +162,7 @@ AWS, from 2026-11-19: OMOP in a lakehouse (S3 Tables, Lake Formation, Redshift S
 | Frontend framework | Next.js + React + Tailwind, static export | Builds to plain files, so no Node server at runtime. |
 | Code host + CI runner | GitHub + GitHub Actions | `lint-test` runs ruff and pytest against a Postgres service container. `secrets` runs gitleaks (pinned, checksum verified) over every commit and file for keys, tokens, passwords, usernames, and email addresses, with the rules in `.gitleaks.toml`. Both are required to merge; the same scan runs in pre-commit. |
 | Containers | Docker + Docker Compose | Open standard; the whole stack starts with one command. |
+| OHDSI HADES | R 4.6.1 + Java 21 in `docker/hades.Dockerfile`, run with `scripts/hades.py` | The R tools are OHDSI's standard; a container keeps R, Java, and the JDBC driver identical everywhere. HADES comes from OHDSI's r-universe, which serves only the latest builds, so no renv lockfile: CRAN is pinned by a dated snapshot, installed versions are recorded in `r/installed-versions.txt`, and the image is the artifact. Redshift over JDBC through the bastion tunnel with a temporary IAM password; no stored Redshift password. |
 
 Excluded on purpose (wrong scale for a personal project): Kubernetes, A2A, LiteLLM, dedicated vector databases, WAF-heavy perimeter builds, NAT gateways and interface endpoints (cost).
 
@@ -178,6 +186,8 @@ How each piece was built, verified, and what it costs: see `docs/SETUP.md`.
 ├── tests/                 # fast tests; local services only (the Compose Postgres), nothing off the machine
 ├── migrations/            # Alembic versioned schema changes
 ├── infra/terraform/       # bootstrap/ (state bucket), foundation/ (network, lake, Redshift, Aurora, budget), app/ (ECR, ECS, monitor, alarm)
+├── r/                     # OHDSI HADES scripts (R), run in the hades container; installed-versions.txt
+├── docker/                # hades.Dockerfile, hail.Dockerfile
 ├── frontend/              # Next.js app, static export served by FastAPI
 ├── evals/                 # golden set; hits a real model, so slow and costs money
 ├── scripts/               # one-shot operational scripts, never imported

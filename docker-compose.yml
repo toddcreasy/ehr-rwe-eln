@@ -73,6 +73,24 @@ services:
       - ./data/genomics:/work/data/genomics
       - ./scripts/hail_gwas.py:/work/scripts/hail_gwas.py:ro
 
+  # OHDSI HADES (R): runs on request, e.g. docker compose run --rm hades Rscript smoke_eunomia.R.
+  # scripts/hades.py opens the tunnel to Redshift and passes the REDSHIFT_* variables.
+  hades:
+    profiles: ["hades"]
+    build:
+      context: .
+      dockerfile: docker/hades.Dockerfile
+    environment:
+      REDSHIFT_SERVER: ${REDSHIFT_SERVER:-}
+      REDSHIFT_PORT: ${REDSHIFT_PORT:-}
+      REDSHIFT_USER: ${REDSHIFT_USER:-}
+      REDSHIFT_PASSWORD: ${REDSHIFT_PASSWORD:-}
+      CDM_SCHEMA: ${CDM_SCHEMA:-awsdatacatalog.omop_cdm}
+    volumes:
+      - ./r:/work/r
+      - ./data/hades:/work/data/hades
+    entrypoint: ["Rscript"]
+
 volumes:
   db:
     name: ehr-rwe-eln-pg18
