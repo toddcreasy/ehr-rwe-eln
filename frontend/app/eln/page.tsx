@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type Summary = {
@@ -165,7 +164,6 @@ export default function LabNotebook() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-12">
       <div>
-        <Link href="/" className={`text-sm underline ${muted}`}>ehr-rwe-eln</Link>
         <h1 className="text-2xl font-semibold">Lab notebook extraction</h1>
         <p className={`text-sm ${muted}`}>
           Synthetic ELN entries, and the samples and results Claude extracted from each, checked against a typed model

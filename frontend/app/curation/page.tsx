@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 type VariantSet = { variant_set: string; run_id: number; created_at: string; variants: number; decided: number };
@@ -453,7 +452,6 @@ export default function Curation() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-12">
       <div>
-        <Link href="/" className={`text-sm underline ${muted}`}>ehr-rwe-eln</Link>
         <h1 className="text-2xl font-semibold">Variant curation</h1>
         <p className={`text-sm ${muted}`}>
           ACMG/AMP criteria the rules decided from gnomAD and Ensembl VEP with each gene&apos;s ClinGen expert panel

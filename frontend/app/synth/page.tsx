@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Fragment, useEffect, useState } from "react";
 
 type Release = {
@@ -221,7 +220,6 @@ export default function SyntheticData() {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-12">
       <div>
-        <Link href="/" className={`text-sm underline ${muted}`}>ehr-rwe-eln</Link>
         <h1 className="text-2xl font-semibold">Synthetic data releases</h1>
         <p className={`text-sm ${muted}`}>
           Differentially private copies of the OMOP data, each with its fidelity, utility, privacy risk, and data card.
