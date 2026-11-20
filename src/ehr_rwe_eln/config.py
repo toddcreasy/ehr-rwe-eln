@@ -1,3 +1,5 @@
+from typing import Literal
+
 import psycopg
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -31,7 +33,10 @@ class LakeSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True, extra="ignore")
 
-    lake_table_bucket_arn: str
+    lake_table_bucket_arn: str = ""
+    # Where OMOP readers (trial emulation, synthetic data, genomics scripts) read from: the lake
+    # through Redshift, or the staging Postgres the ETL builds in.
+    omop_source: Literal["lake", "staging"] = "lake"
     lake_namespace: str = "cdm"
     aws_region: str = "us-east-1"
     redshift_workgroup: str = "ehr-rwe-eln"

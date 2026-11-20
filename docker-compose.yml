@@ -53,6 +53,9 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 5432
+      # The container has no AWS credentials, so it reads OMOP from the staging Postgres until
+      # it moves to ECS (AWS step 4).
+      OMOP_SOURCE: staging
     depends_on:
       db:
         condition: service_healthy

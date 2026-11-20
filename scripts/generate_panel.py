@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ehr_rwe_eln.config import DatabaseSettings
+from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.genomics.clinvar import URL, read_clinvar
 from ehr_rwe_eln.genomics.gnomad import frequencies
 from ehr_rwe_eln.genomics.panel import (
@@ -32,6 +32,7 @@ from ehr_rwe_eln.genomics.panel import (
     panel_truth,
     write_panel,
 )
+from ehr_rwe_eln.tte.cohort import ids
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 STUDY = DATA / "genomics"
@@ -40,9 +41,9 @@ REFERENCE = DATA / "reference"
 
 FLAGS_SQL = """
 SELECT DISTINCT co.person_id
-FROM cdm.condition_occurrence co
-JOIN cdm.concept_ancestor ca ON ca.descendant_concept_id = co.condition_concept_id
-WHERE ca.ancestor_concept_id = %s AND co.person_id = ANY(%s)
+FROM {cdm}.condition_occurrence co
+JOIN {cdm}.concept_ancestor ca ON ca.descendant_concept_id = co.condition_concept_id
+WHERE ca.ancestor_concept_id = {concept} AND co.person_id IN ({people})
 """
 
 
@@ -78,11 +79,13 @@ def main() -> None:
     registry = pd.read_csv(REGISTRY, sep="\t").set_index("subject_id")["person_id"]
     person_ids = registry.loc[mapping["subject_id"]].to_numpy()
     flags = pd.DataFrame(index=mapping["subject_id"])
-    with DatabaseSettings().connect() as con:
+    omop, cdm = connect_omop()
+    with omop:
         for condition in spec.conditions:
-            found = {
-                r[0] for r in con.execute(FLAGS_SQL, [condition.concept_id, person_ids.tolist()])
-            }
+            query = FLAGS_SQL.format(
+                cdm=cdm, concept=int(condition.concept_id), people=ids(person_ids.tolist())
+            )
+            found = {r[0] for r in omop.execute(query).fetchall()}
             flags[condition.name] = [int(p in found) for p in person_ids]
 
     dosage = genotype_panel(flags, variants, spec, rng)

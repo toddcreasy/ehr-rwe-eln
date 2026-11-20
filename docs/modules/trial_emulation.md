@@ -42,13 +42,13 @@ The full file adds the covariates to adjust for (conditions and the latest measu
 uv run python scripts/run_tte.py
 ```
 
-It needs the full 23,421-person build; 1,172 people give too few outcome events for an estimate. It takes about a minute, prints each protocol's bias report, and stores the run in the `tte` schema. The page at http://127.0.0.1:8000/tte/ shows it.
+It needs the full 23,421-person build; 1,172 people give too few outcome events for an estimate. It takes about a minute, prints each protocol's bias report, and stores the run in the `tte` schema. The page at http://127.0.0.1:8000/tte/ shows it. OMOP is read from the lake through Redshift; `OMOP_SOURCE=staging` reads the staging Postgres instead (see [Who reads the lake](cohort.md#who-reads-the-lake)).
 
 ## Results
 
 | Protocol | Persons (treatment / comparator) | Events | Hazard ratio, weighted (95% CI) |
 |---|---|---|---|
-| Lisinopril vs amlodipine, CKD | 1,214 / 676 | 18 / 8 | 0.97 (0.42 to 2.26) |
+| Lisinopril vs amlodipine, CKD | 1,214 / 676 | 18 / 8 | 0.97 (0.42 to 2.25) |
 | Lisinopril vs amlodipine, MI | 1,223 / 676 | 10 / 9 | 0.58 (0.23 to 1.44) |
 | Metformin vs insulin, CKD | 219 / 612 | 1 / 102 | Not estimable |
 | Metformin vs insulin, MI | 215 / 579 | 11 / 16 | Not estimable |

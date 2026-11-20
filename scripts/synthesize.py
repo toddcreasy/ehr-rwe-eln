@@ -5,11 +5,15 @@ Usage: uv run python scripts/synthesize.py [--spec path/to/spec.yaml]
 The default spec is src/ehr_rwe_eln/synth/specs/person_summary.yaml. Each release is trained on
 the spec's training split; the holdout is kept for scripts/evaluate_synth.py. Each run adds new
 releases; nothing is replaced. Synthetic source data only: the specs here are seeded for that.
+
+Reads OMOP from the lake through Redshift (OMOP_SOURCE=staging reads the staging Postgres) and
+stores releases in Postgres.
 """
 
 import argparse
 from pathlib import Path
 
+from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.synth import bayes_net, vae
 from ehr_rwe_eln.synth.release import save_release
@@ -23,8 +27,10 @@ def main() -> None:
     args = parser.parse_args()
     spec = load_spec(args.spec)
 
+    omop, cdm = connect_omop()
+    with omop:
+        train, holdout = split(build_source(omop, spec, cdm), spec)
     with DatabaseSettings().connect() as con:
-        train, holdout = split(build_source(con, spec), spec)
         print(
             f"{spec.name}: {len(train):,} training and {len(holdout):,} holdout rows,"
             f" {len(spec.columns)} columns"

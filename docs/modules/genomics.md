@@ -24,6 +24,8 @@ docker compose run --rm --build hail                                 # optional,
 uv run python scripts/generate_panel.py      # the clinical panel, after generate_genomics.py
 ```
 
+`generate_genomics.py` and `generate_panel.py` read their people and conditions from OMOP: oMOP is read from the lake through Redshift; `OMOP_SOURCE=staging` reads the staging Postgres instead (see [Who reads the lake](cohort.md#who-reads-the-lake)).
+
 The defaults simulate 5,000 adults on three 3 Mb chromosomes with an odds ratio of 1.4 planted on hypertension. Everything is written to `data/genomics/`. The panel's genes, carrier rates, and variant counts are in `src/ehr_rwe_eln/genomics/panel.yaml`. Its first run downloads the ClinVar release the spec names (200 MB, checked against NCBI's md5) to `data/reference/clinvar/`, and asks gnomAD's public API about a few dozen variants, about two minutes at gnomAD's limit of 10 requests a minute. Answers are cached in `data/reference/gnomad/`, so later runs take about 10 seconds and make no requests. After the Hail run, `run_gwas.py` also reports how closely Hail's score statistics agree with its own.
 
 ## Results

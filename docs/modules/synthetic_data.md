@@ -40,6 +40,8 @@ The reports read real data, so they are for internal review, not for release.
 
 ## Run it
 
+OMOP is read from the lake through Redshift; `OMOP_SOURCE=staging` reads the staging Postgres instead (see [Who reads the lake](cohort.md#who-reads-the-lake)). Releases, reports, and cards stay in Postgres.
+
 ```bash
 export SPEC=src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
 uv run python scripts/synthesize.py

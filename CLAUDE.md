@@ -30,7 +30,7 @@ Decided 2026-11-19, reversing the local-first move below: the app runs on AWS (t
 
 - [x] 1. `CLAUDE.md` and the Terraform foundation (`infra/terraform/`): VPC, S3 Tables lake, Lake Formation and Glue catalog, Redshift Serverless, Aurora Serverless v2, budget
 - [x] 2. OMOP in the lake: the ETL still builds in a staging Postgres (decided 2026-11-19, stage then publish); `scripts/publish_omop.py` copies all 39 tables (60,890,645 rows) to Iceberg in S3 Tables, and `scripts/reconcile_lake.py` checks every column of every table through Redshift (1,038 checks, cohorts 550 and 885)
-- [ ] 3. Each module's OMOP SQL moves to Redshift and is re-verified against the current numbers
+- [x] 3. OMOP readers on Redshift: trial emulation, synthetic data sources, and the genomics, curation, and ELN scripts read the lake through `connect_omop()` (Redshift Data API, `OMOP_SOURCE=staging` for the staging Postgres), in SQL that runs unchanged on both. `scripts/compare_omop_sources.py`: identical tables for 4 protocols, 14 negative controls, 2 synthetic specs. Decided 2026-11-19: OMOP writers (ETL, cohorts, ELN bridge) stay on staging and republish; data quality stays on staging until DQD in R (step 6)
 - [ ] 4. App on ECS behind a load balancer, with Cognito auth
 - [ ] 5. Bedrock (Claude Opus 4.6) replaces the Anthropic API; every eval re-runs
 - [ ] 6. R and HADES, LangGraph for literature curation, then the genomics, curation, and synthetic data items in `notes/TODO_IMPROVEMENTS.md`

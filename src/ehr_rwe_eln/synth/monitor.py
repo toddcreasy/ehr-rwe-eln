@@ -29,6 +29,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from ehr_rwe_eln.api.log_config import configure_logging
+from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.synth.distribution import privacy_flags
 from ehr_rwe_eln.synth.privacy import privacy_report
@@ -66,8 +67,10 @@ def _last_fingerprints(con: psycopg.Connection) -> dict | None:
     return found[0] if found else None
 
 
-def run_once(con: psycopg.Connection) -> dict:
-    """One check. Returns the run as recorded in synth.monitor_run; the caller commits."""
+def run_once(con: psycopg.Connection, omop=None, cdm: str = "cdm") -> dict:
+    """One check. Returns the run as recorded in synth.monitor_run; the caller commits. Sources
+    are read from omop (a lake.RedshiftSession or psycopg connection; default con, the staging
+    Postgres) with OMOP tables under the cdm prefix."""
     started = datetime.now(UTC)
     releases = con.execute(
         "SELECT release_id, method, epsilon, spec FROM synth.release"
@@ -79,7 +82,7 @@ def run_once(con: psycopg.Connection) -> dict:
         spec = Spec.model_validate(spec_json)
         key = spec.model_dump_json(include={"name", "columns", "holdout_fraction", "protocol"})
         if key not in sources:
-            train, holdout = split(build_source(con, spec), spec)
+            train, holdout = split(build_source(omop or con, spec, cdm), spec)
             sources[key] = (train, holdout)
             fingerprints[spec.name] = {
                 "source": table_fingerprint(pd.concat([train, holdout])),
@@ -146,8 +149,9 @@ def main() -> None:
     configure_logging(settings.log_level)
     while True:
         try:
-            with settings.connect() as con:
-                run = run_once(con)
+            omop, cdm = connect_omop()
+            with settings.connect() as con, omop:
+                run = run_once(con, omop, cdm)
                 con.commit()
             _report(run)
         except Exception:

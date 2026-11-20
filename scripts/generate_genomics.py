@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ehr_rwe_eln.config import DatabaseSettings
+from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.genomics.study import build_study, write_study
 from ehr_rwe_eln.synth.source import build_source
 from ehr_rwe_eln.synth.spec import SPECS, load_spec
@@ -38,8 +38,9 @@ def main() -> None:
     args = parser.parse_args()
 
     # The person summary already has age, sex, and the condition flags, one row per person.
-    with DatabaseSettings().connect() as con:
-        source = build_source(con, load_spec(SPECS / "person_summary.yaml"))
+    omop, cdm = connect_omop()
+    with omop:
+        source = build_source(omop, load_spec(SPECS / "person_summary.yaml"), cdm)
     adults = source[source["age"] >= 18]
     rng = np.random.default_rng(args.seed)
     people = adults.loc[np.sort(rng.choice(adults.index, args.people, replace=False))]

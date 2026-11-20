@@ -188,7 +188,7 @@ Kept: the shares are right at both epsilons and overall fidelity improves at eps
 
 ### Trial table (1,890 people, 26 events)
 
-The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.26) for lisinopril against amlodipine, and a crude (unweighted) hazard ratio of 1.22.
+The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.25) for lisinopril against amlodipine, and a crude (unweighted) hazard ratio of 1.22.
 
 | Release | Events | Release HR (95% CI) | Estimable | Covers real HR | Spurious effect | Median HR, 20 draws |
 |---|---|---|---|---|---|---|
