@@ -24,11 +24,23 @@ A check fails when its share of violating rows passes its threshold. It is not a
 
 ## Run it
 
+Since 2026-11-20 the checks are OHDSI's own [DataQualityDashboard](https://ohdsi.github.io/DataQualityDashboard/) 2.9.1, in R, run against the OMOP lake on Redshift:
+
 ```bash
-uv run python scripts/run_dq.py
+uv run python scripts/hades.py run_dqd.R                                  # about 32 minutes
+uv run python scripts/load_dqd.py data/hades/dqd/<file>.json --target aurora   # the public app
+uv run python scripts/load_dqd.py data/hades/dqd/<file>.json --target local    # the Compose app
 ```
 
-About 2 minutes on the 23,421-person build. Each run is stored in the `dq` schema with every check's counts and SQL, and the dashboard at http://127.0.0.1:8000/dq/ shows the latest. The API serves runs as JSON at `/api/dq/runs`.
+`r/run_dqd.R` writes DQD's JSON to `data/hades/dqd/`; nothing is written to Redshift. `scripts/load_dqd.py` (`src/ehr_rwe_eln/dq/dqd.py`) stores it in the `dq` schema, filling in each check's severity from DQD's check descriptions and the strict pass rate the page shows. Into Aurora it goes through the RDS Data API, waiting while a paused cluster wakes. The dashboard shows the newest run; the API serves runs as JSON at `/api/dq/runs`.
+
+A full run is 2,384 checks in 32 minutes on 8 threads and about 4.5 Redshift RPU-hours. DQD opens a connection per check, and the tunnel's temporary password and the bastion last an hour, which is why it runs on 8 threads. DQD 2.9.1 ends with an error when it runs on several threads without writing to a table; the results are already written by then, and `run_dqd.R` tolerates exactly that error when the file exists.
+
+The Python port of the checks (`scripts/run_dq.py`, on the staging Postgres) still runs and is what the DQD comparison below used.
+
+### DQD on the lake against the Python port
+
+On 2026-11-20 both ran the same 2,384 checks and failed the same 14, check for check, with the same DQD pass rate (99.41%). DQD marked 60 fewer checks not applicable (1,076 against 1,136): all on `SPECIMEN` and `FACT_RELATIONSHIP`, which were empty when the Python run was made and now hold the ELN bridge's 752 specimens and 2,314 links. All 60 pass, so the strict pass rate is 98.93% (Python run, 98.88%).
 
 ## Results
 

@@ -35,7 +35,7 @@ Decided 2026-11-19, reversing the local-first move below: the app runs on AWS (t
 - [x] 5. Bedrock (Claude Opus 4.6, `us.anthropic.claude-opus-4-6-v1`) replaces the Anthropic API through `AnthropicBedrock` and `claude_client()` (`agents/config.py`); every call sets adaptive thinking. ELN extraction runs as direct calls (Bedrock has no Message Batches API; decided 2026-11-20). Every eval re-ran on Opus 4.6 and matched Opus 5.5: ELN extraction 1.000 on the default, hard, and adversarial sets; literature precision 83%
 - [ ] 6. R and HADES, LangGraph for literature curation, then the genomics, curation, and synthetic data items in `notes/TODO_IMPROVEMENTS.md`. One PR each:
   - [x] 6a. R and HADES foundation: `docker/hades.Dockerfile` (R 4.6.1, Java 21, HADES from OHDSI's r-universe and a dated CRAN snapshot; versions in `r/installed-versions.txt`), `r/`, and `scripts/hades.py` (bastion tunnel to Redshift, temporary IAM login). Smoke tests pass on Eunomia and on the lake (23,421 persons)
-  - [ ] 6b. DataQualityDashboard (R) on the lake replaces the Python checks
+  - [x] 6b. DataQualityDashboard 2.9.1 (R) on the lake: `r/run_dqd.R`, loaded into the `dq` schema by `scripts/load_dqd.py` (Aurora through the RDS Data API). Same 2,384 checks and the same 14 failures as the Python port; 32 minutes, about 4.5 RPU-hours. Retiring the Python checks waits for the maintainer's OK
   - [ ] 6c. CohortMethod and TrialEmulation
   - [ ] 6d. LangGraph for literature curation
   - [ ] 6e. stdpopsim, PLINK 2, REGENIE, panel variants into OMOP
