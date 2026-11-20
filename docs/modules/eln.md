@@ -68,6 +68,8 @@ uv run python scripts/export_eln_fhir.py
 uv run pytest evals                       # hard and adversarial sets, billed
 ```
 
+`generate_eln.py` picks its subjects from OMOP: oMOP is read from the lake through Redshift; `OMOP_SOURCE=staging` reads the staging Postgres instead (see [Who reads the lake](cohort.md#who-reads-the-lake)). `write_eln_omop.py` writes to the staging Postgres; republish `specimen`, `measurement`, and `fact_relationship` afterwards.
+
 Subject codes (`HTN-0001` and on) are assigned in a random order, so a code says nothing about the person behind it. The page at http://127.0.0.1:8000/eln/ shows each entry beside what was extracted from it.
 
 ## Results

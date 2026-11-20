@@ -26,6 +26,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 
+from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.curation.phenotype import (
     information_content,
@@ -37,6 +38,7 @@ from ehr_rwe_eln.curation.phenotype import (
     similarity,
 )
 from ehr_rwe_eln.genomics.panel import load_panel_spec, read_panel_carriers
+from ehr_rwe_eln.tte.cohort import ids
 
 RELEASE = "2026-09-01"
 FILES = ["hp.obo", "genes_to_phenotype.txt"]
@@ -47,22 +49,23 @@ STUDY = DATA / "genomics"
 REGISTRY = DATA / "registry" / "genomics_subjects.tsv"
 
 CONDITIONS_SQL = """
-SELECT DISTINCT person_id, condition_concept_id FROM cdm.condition_occurrence
-WHERE person_id = ANY(%s) AND condition_concept_id <> 0
+SELECT DISTINCT person_id, condition_concept_id FROM {cdm}.condition_occurrence
+WHERE person_id IN ({people}) AND condition_concept_id <> 0
 """
 # Each concept and its ancestors, nearest first, with names, so a concept with no HPO match
-# can take its nearest mapped ancestor's term.
+# can take its nearest mapped ancestor's term. Ties in distance go to the lower concept_id, so
+# the order is the same on every engine.
 ANCESTORS_SQL = """
 SELECT ca.descendant_concept_id, ca.ancestor_concept_id, c.concept_name
-FROM cdm.concept_ancestor ca JOIN cdm.concept c ON c.concept_id = ca.ancestor_concept_id
-WHERE ca.descendant_concept_id = ANY(%s)
-ORDER BY ca.descendant_concept_id, ca.min_levels_of_separation
+FROM {cdm}.concept_ancestor ca JOIN {cdm}.concept c ON c.concept_id = ca.ancestor_concept_id
+WHERE ca.descendant_concept_id IN ({concepts})
+ORDER BY ca.descendant_concept_id, ca.min_levels_of_separation, ca.ancestor_concept_id
 """
 FLAGS_SQL = """
 SELECT DISTINCT co.person_id
-FROM cdm.condition_occurrence co
-JOIN cdm.concept_ancestor ca ON ca.descendant_concept_id = co.condition_concept_id
-WHERE ca.ancestor_concept_id = %s AND co.person_id = ANY(%s)
+FROM {cdm}.condition_occurrence co
+JOIN {cdm}.concept_ancestor ca ON ca.descendant_concept_id = co.condition_concept_id
+WHERE ca.ancestor_concept_id = {concept} AND co.person_id IN ({people})
 """
 
 
@@ -101,16 +104,23 @@ def main() -> None:
     person_of = {s: int(registry.loc[s]) for s in subjects}
     people = list(person_of.values())
 
-    with DatabaseSettings().connect() as con:
-        rows = con.execute(CONDITIONS_SQL, [people]).fetchall()
+    omop, cdm = connect_omop()
+    with omop:
+        rows = omop.execute(CONDITIONS_SQL.format(cdm=cdm, people=ids(people))).fetchall()
         concept_ids = sorted({c for _, c in rows})
         names, ancestors = {}, defaultdict(list)
-        for d, a, name in con.execute(ANCESTORS_SQL, [concept_ids]):
+        query = ANCESTORS_SQL.format(cdm=cdm, concepts=ids(concept_ids))
+        for d, a, name in omop.execute(query).fetchall():
             names[a] = name
             if a != d:
                 ancestors[d].append(a)
         flags = {
-            c.name: {r[0] for r in con.execute(FLAGS_SQL, [c.concept_id, people])}
+            c.name: {
+                r[0]
+                for r in omop.execute(
+                    FLAGS_SQL.format(cdm=cdm, concept=int(c.concept_id), people=ids(people))
+                ).fetchall()
+            }
             for c in spec.conditions
         }
 

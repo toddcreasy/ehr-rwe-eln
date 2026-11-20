@@ -17,7 +17,7 @@ import json
 import random
 from pathlib import Path
 
-from ehr_rwe_eln.config import DatabaseSettings
+from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.eln.synthetic import generate_entries, subject_registry
 
 DATA = Path(__file__).resolve().parent.parent / "data"
@@ -29,14 +29,15 @@ REGISTRY = DATA / "registry" / "eln_subjects.csv"
 SUBJECTS_SQL = """
 SELECT op.person_id,
        greatest(op.observation_period_start_date,
-                make_date(p.year_of_birth + 18, 1, 1), DATE '2015-01-01') AS start,
+                CAST(CAST(p.year_of_birth + 18 AS VARCHAR) || '-01-01' AS DATE),
+                DATE '2015-01-01') AS start,
        least(op.observation_period_end_date, DATE '2024-12-31') AS stop
-FROM cdm.observation_period op
-JOIN cdm.person p USING (person_id)
+FROM {cdm}.observation_period op
+JOIN {cdm}.person p ON p.person_id = op.person_id
 WHERE op.person_id IN (
-    SELECT person_id FROM cdm.condition_occurrence
+    SELECT person_id FROM {cdm}.condition_occurrence
     WHERE condition_concept_id IN (
-        SELECT descendant_concept_id FROM cdm.concept_ancestor WHERE ancestor_concept_id = 320128
+        SELECT descendant_concept_id FROM {cdm}.concept_ancestor WHERE ancestor_concept_id = 320128
     )
 )
 ORDER BY op.person_id
@@ -50,8 +51,9 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
-    with DatabaseSettings().connect() as con:
-        windows = [r for r in con.execute(SUBJECTS_SQL).fetchall() if r[1] <= r[2]]
+    omop, cdm = connect_omop()
+    with omop:
+        windows = [r for r in omop.execute(SUBJECTS_SQL.format(cdm=cdm)).fetchall() if r[1] <= r[2]]
     if not windows:
         raise SystemExit("no eligible subjects; build the CDM first (scripts/build_omop.py)")
     rng = random.Random(args.seed)  # noqa: S311  (seeded subject choice, not cryptography)

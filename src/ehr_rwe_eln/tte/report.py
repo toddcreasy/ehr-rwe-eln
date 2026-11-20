@@ -61,8 +61,9 @@ class Report:
     negative_controls: list[NegativeControl] = field(default_factory=list)
 
 
-def build_report(con: psycopg.Connection, protocol: Protocol) -> Report:
-    attrition, table = build_analysis_table(con, protocol)
+def build_report(con, protocol: Protocol, cdm: str = "cdm") -> Report:
+    """con is a psycopg connection or a lake.RedshiftSession; cdm is the OMOP tables' prefix."""
+    attrition, table = build_analysis_table(con, protocol, cdm)
     strategies = protocol.strategies
     arms = [
         Arm(
@@ -74,7 +75,7 @@ def build_report(con: psycopg.Connection, protocol: Protocol) -> Report:
         for arm, strategy in ((1, strategies.treatment), (0, strategies.comparator))
     ]
     report = Report(protocol, attrition, arms)
-    table = add_covariates(con, protocol, table)
+    table = add_covariates(con, protocol, table, cdm)
     try:
         report.propensity = fit_propensity(table, protocol)
     except NotEstimable as exc:
@@ -82,13 +83,13 @@ def build_report(con: psycopg.Connection, protocol: Protocol) -> Report:
         return report
     report.survival = analyze(table, protocol)
     report.negative_controls = [
-        negative_control(con, protocol, outcome) for outcome in protocol.negative_controls
+        negative_control(con, protocol, outcome, cdm) for outcome in protocol.negative_controls
     ]
     return report
 
 
 def negative_control(
-    con: psycopg.Connection, protocol: Protocol, outcome: Outcome
+    con, protocol: Protocol, outcome: Outcome, cdm: str = "cdm"
 ) -> NegativeControl:
     """The protocol rerun with this outcome: its own eligibility (no prior outcome), propensity
     weights, and weighted Cox model. No bootstrap; the robust interval is enough to flag it."""
@@ -98,8 +99,8 @@ def negative_control(
             "analysis": protocol.analysis.model_copy(update={"bootstrap_replicates": 0}),
         }
     )
-    _, table = build_analysis_table(con, control)
-    table = add_covariates(con, control, table)
+    _, table = build_analysis_table(con, control, cdm)
+    table = add_covariates(con, control, table, cdm)
     result = NegativeControl(outcome.name, len(table), int(table.event.sum()))
     try:
         survival = analyze(table, control)
@@ -156,13 +157,25 @@ def report_json(report: Report) -> dict:
     return out
 
 
-def save_run(con: psycopg.Connection, reports: list[Report], started_at: datetime) -> int:
-    source = con.execute("SELECT cdm_source_name FROM cdm.cdm_source").fetchone()
-    persons = con.execute("SELECT count(*) FROM cdm.person").fetchone()[0]
+def omop_summary(con, cdm: str = "cdm") -> tuple[str | None, int]:
+    """The OMOP source's name and person count, recorded with each run."""
+    source = con.execute(f"SELECT cdm_source_name FROM {cdm}.cdm_source").fetchone()
+    persons = con.execute(f"SELECT count(*) FROM {cdm}.person").fetchone()[0]
+    return (source[0] if source else None), persons
+
+
+def save_run(
+    con: psycopg.Connection,
+    reports: list[Report],
+    started_at: datetime,
+    source: str | None,
+    persons: int,
+) -> int:
+    """Store the run in the tte schema (Postgres). source and persons come from omop_summary."""
     run_id = con.execute(
         "INSERT INTO tte.run (started_at, finished_at, cdm_source_name, persons)"
         " VALUES (%s, %s, %s, %s) RETURNING run_id",
-        [started_at, datetime.now(UTC), source[0] if source else None, persons],
+        [started_at, datetime.now(UTC), source, persons],
     ).fetchone()[0]
     with con.cursor() as cur:
         cur.executemany(

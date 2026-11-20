@@ -14,7 +14,7 @@ TRAIN, HOLDOUT = toy(1500, 1), toy(700, 2)
 def source(monkeypatch):
     """The monitor reads sources from OMOP; here every spec's source is the toy tables."""
     tables = {"train": TRAIN, "holdout": HOLDOUT}
-    monkeypatch.setattr(monitor, "build_source", lambda con, spec: None)
+    monkeypatch.setattr(monitor, "build_source", lambda con, spec, cdm: None)
     monkeypatch.setattr(monitor, "split", lambda table, spec: (tables["train"], tables["holdout"]))
     return tables
 

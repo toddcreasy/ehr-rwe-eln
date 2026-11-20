@@ -4,25 +4,30 @@ and negative controls. Stores the run in the tte schema for the /tte page.
 
 Usage: uv run python scripts/run_tte.py
 
-Needs migrations applied (uv run alembic upgrade head), against the same DB_NAME.
+Reads OMOP from the lake through Redshift (OMOP_SOURCE=staging reads the staging Postgres
+instead) and stores the run in Postgres, which needs migrations applied (uv run alembic upgrade
+head).
 
 Demonstration on synthetic data only; no clinical claims.
 """
 
 from datetime import UTC, datetime
 
+from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.tte.protocol import PROTOCOLS, load_protocol
-from ehr_rwe_eln.tte.report import build_report, save_run
+from ehr_rwe_eln.tte.report import build_report, omop_summary, save_run
 
 
 def main() -> None:
     started_at = datetime.now(UTC)
     reports = []
-    with DatabaseSettings().connect() as con:
+    omop, cdm = connect_omop()
+    with omop:
+        source, persons = omop_summary(omop, cdm)
         for path in sorted(PROTOCOLS.glob("*.yaml")):
             protocol = load_protocol(path)
-            report = build_report(con, protocol)
+            report = build_report(omop, protocol, cdm)
             reports.append(report)
             print(f"{protocol.id}: {protocol.name}")
             for label, persons in report.attrition:
@@ -92,9 +97,8 @@ def main() -> None:
                         f" ({nc.robust_ci[0]:.2f} to {nc.robust_ci[1]:.2f}){flag}"
                     )
             print()
-        # Drops the temporary tables the analysis built before storing the run.
-        con.rollback()
-        run_id = save_run(con, reports, started_at)
+    with DatabaseSettings().connect() as con:
+        run_id = save_run(con, reports, started_at, source, persons)
         con.commit()
     print(f"stored as tte run {run_id}")
 

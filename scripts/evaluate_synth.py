@@ -16,6 +16,7 @@ analysis table also get a trial report: the trial rerun on the release, and on 2
 of its method and epsilon (a few minutes for the VAE).
 """
 
+from ehr_rwe_eln.cohort.lake import connect_omop
 from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.synth import bayes_net, vae
 from ehr_rwe_eln.synth.distribution import privacy_flags
@@ -83,7 +84,8 @@ def privacy_row(label: str, report: dict) -> str:
 
 
 def main() -> None:
-    with DatabaseSettings().connect() as con:
+    omop, cdm = connect_omop()
+    with DatabaseSettings().connect() as con, omop:
         releases = con.execute(
             "SELECT release_id, method, epsilon, spec, withdrawn_at FROM synth.release"
             " ORDER BY release_id"
@@ -98,7 +100,7 @@ def main() -> None:
             spec = Spec.model_validate(spec_json)
             key = spec.model_dump_json(include={"name", "columns", "holdout_fraction", "protocol"})
             if key not in sources:
-                train, holdout = split(build_source(con, spec), spec)
+                train, holdout = split(build_source(omop, spec, cdm), spec)
                 target = spec.utility_target
                 trtr = utility_auc(train, holdout, spec.columns, target) if target else None
                 floor = None

@@ -50,6 +50,14 @@ For every table, `reconcile_lake.py` runs one summary query on Postgres and the 
 
 Redshift reads the lake as `awsdatacatalog.omop_cdm.<table>`, through a Glue resource link that points at the table bucket's catalog (see `infra/terraform/README.md`).
 
+### Who reads the lake
+
+Code that reads OMOP for analysis reads the lake through Redshift: trial emulation (`run_tte.py`), the synthetic data sources (`synthesize.py`, `evaluate_synth.py`, the privacy monitor), and the genomics and ELN scripts (`generate_genomics.py`, `generate_panel.py`, `match_phenotypes.py`, `generate_eln.py`). They connect through `connect_omop()` in `lake.py`, which uses the Redshift Data API: SQL over HTTPS with your AWS login, one session per run so temp tables last across statements. `OMOP_SOURCE=staging` points them at the staging Postgres instead; the Compose monitor uses that until it moves to AWS.
+
+Their SQL runs unchanged on both engines (no Postgres arrays, `DISTINCT ON`, `FILTER`, `make_date`, or correlated `EXISTS`; values written in as integers), so the tests keep checking it on Postgres. `scripts/compare_omop_sources.py` runs every trial protocol, negative control, and synthetic data spec on both and requires identical tables, column types included; it takes about 17 minutes and a few RPU-hours.
+
+Code that writes OMOP stays on staging: the ETL, cohort building (`cdm.cohort`), and the ELN bridge (`specimen`, `measurement`, `fact_relationship`). After any of them, republish the tables it changed (`publish_omop.py --tables cohort`) and reconcile. Data quality runs on staging until OHDSI's DataQualityDashboard replaces it on Redshift.
+
 ## Results
 
 On the 23,421-person build:

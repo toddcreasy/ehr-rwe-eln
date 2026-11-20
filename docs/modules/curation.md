@@ -59,7 +59,7 @@ uv run python scripts/curate_literature.py --dry-run   # retrieval and input tok
 uv run python scripts/curate_literature.py             # Claude proposes literature evidence, about $0.25 for 10
 uv run pytest evals/test_curation_literature.py -s     # the literature eval, about $0.15
 uv run fastapi dev                                     # then http://127.0.0.1:8000/curation/
-uv run python scripts/match_phenotypes.py              # HPO phenotype scores and their eval, 15 s
+uv run python scripts/match_phenotypes.py              # HPO phenotype scores and their eval, 15 s; reads OMOP from the lake
 ```
 
 `uv run python scripts/import_enigma_pvs1.py` and `scripts/import_enigma_functional.py` refresh ENIGMA's tables when the panel releases a new version. The `erepo` run downloads ClinGen's Evidence Repository export (33 MB, CC0) to `data/reference/clingen/` the first time. Both curation runs read positions and alleles only. gnomAD, VEP, and exon answers are cached under `data/reference/` per release, so reruns make no requests. A first run asks gnomAD about several hundred variants at its limit of 10 requests a minute, about 10 minutes; when gnomAD answers that it is overloaded, the client waits and retries, and never records a busy answer as "absent".

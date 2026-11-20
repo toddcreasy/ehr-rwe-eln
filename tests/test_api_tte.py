@@ -9,7 +9,14 @@ from psycopg.rows import dict_row
 
 from ehr_rwe_eln.cohort.cdm import create_cdm
 from ehr_rwe_eln.tte.propensity import fit_propensity
-from ehr_rwe_eln.tte.report import Arm, NegativeControl, Report, report_json, save_run
+from ehr_rwe_eln.tte.report import (
+    Arm,
+    NegativeControl,
+    Report,
+    omop_summary,
+    report_json,
+    save_run,
+)
 from ehr_rwe_eln.tte.survival import analyze
 
 from .test_tte_survival import confounded, protocol
@@ -54,8 +61,9 @@ def test_runs_list_newest_first_and_detail_has_reports(pg, client):
     create_cdm(pg)
     stopped = Report(protocol(0).model_copy(update={"id": 2}), [], [], not_estimable="no overlap")
     now = datetime.datetime.now(datetime.UTC)
-    first = save_run(pg, [stopped, full_report()], now)
-    second = save_run(pg, [stopped], now)
+    source, persons = omop_summary(pg)
+    first = save_run(pg, [stopped, full_report()], now, source, persons)
+    second = save_run(pg, [stopped], now, source, persons)
 
     listed = client.get("/api/tte/runs").json()
     assert [r["run_id"] for r in listed][:2] == [second, first]
