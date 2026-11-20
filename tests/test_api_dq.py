@@ -6,10 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from psycopg.rows import dict_row
 
-from ehr_rwe_eln.cohort.cdm import create_cdm
-from ehr_rwe_eln.dq.checks import load_checks
-from ehr_rwe_eln.dq.run import save_run
-from ehr_rwe_eln.dq.scoring import Result, evaluate
+from ehr_rwe_eln.dq.dqd import RESULT_COLUMNS, DqdRun, save_dqd
 
 
 @pytest.fixture
@@ -19,7 +16,7 @@ def client(pg, dq_schema, monkeypatch):
     main = importlib.reload(importlib.import_module("ehr_rwe_eln.api.main"))
 
     def connect():
-        # The routes read rows by column name; save_run in the test reads them by position.
+        # The routes read rows by column name; save_dqd in the test reads them by position.
         pg.row_factory = dict_row
         return contextlib.nullcontext(pg)
 
@@ -27,13 +24,31 @@ def client(pg, dq_schema, monkeypatch):
     return TestClient(main.app)
 
 
+def check(check_id: str, failed: bool) -> dict:
+    return {c: None for c in RESULT_COLUMNS} | {
+        "check_id": check_id,
+        "check_name": "isRequired",
+        "check_level": "FIELD",
+        "check_description": "required",
+        "cdm_table_name": "PERSON",
+        "category": "Conformance",
+        "context": "Validation",
+        "severity": "fatal",
+        "failed": failed,
+        "passed": not failed,
+        "is_error": False,
+        "not_applicable": False,
+        "execution_seconds": 0.1,
+        "query_text": "q",
+    }
+
+
 def test_runs_list_newest_first_and_detail_has_results(pg, client):
-    create_cdm(pg)
-    checks = load_checks()[:2]
-    results = [Result(checks[0], 0, 5, None, 0.1, "q"), Result(checks[1], 2, 5, None, 0.1, "q")]
-    evaluate(results)
     now = datetime.datetime.now(datetime.UTC)
-    first, second = save_run(pg, results, now), save_run(pg, results, now)
+    run = DqdRun(
+        now, now, "test", None, None, {"countTotal": 2}, [check("b", True), check("a", False)]
+    )
+    first, second = save_dqd(pg, run), save_dqd(pg, run)
 
     listed = client.get("/api/dq/runs").json()
     assert [r["run_id"] for r in listed][:2] == [second, first]
@@ -41,7 +56,7 @@ def test_runs_list_newest_first_and_detail_has_results(pg, client):
 
     detail = client.get(f"/api/dq/runs/{first}").json()
     assert detail["run"]["run_id"] == first
-    assert [r["check_id"] for r in detail["results"]] == sorted(c.check_id for c in checks)
+    assert [r["check_id"] for r in detail["results"]] == ["a", "b"]
     assert "query_text" not in detail["results"][0]
 
 

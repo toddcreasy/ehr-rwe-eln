@@ -45,7 +45,7 @@ Click the diagram for [the interactive version](https://toddcreasy.github.io/ehr
 | [Module pages](#modules) | One per module: what it does, how to run it, results |
 | [GLOSSARY.md](docs/GLOSSARY.md) | Every acronym, standard, method, and service, defined, with links to their official pages |
 | [ETL-Synthea comparison](docs/etl_synthea_comparison.md) | The cohort pipeline against OHDSI's reference ETL |
-| [DQD comparison](docs/dqd_comparison.md) | The data quality checks against OHDSI's DataQualityDashboard |
+| [DQD comparison](docs/dqd_comparison.md) | The former Python data quality checks against OHDSI's DataQualityDashboard (historical) |
 | [Synthetic data methodology](docs/synthetic_data_methodology.md) | Threat model, mechanisms, evaluation, and results, for reviewers |
 | [NIST AI RMF mapping](docs/nist_ai_rmf.md) | The synthetic data work against NIST's AI Risk Management Framework |
 | [NIH and HHS requirements](docs/nih_hhs_requirements.md) | What a real controlled-access source would require |

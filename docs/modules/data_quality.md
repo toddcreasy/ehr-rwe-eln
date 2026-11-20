@@ -36,7 +36,7 @@ uv run python scripts/load_dqd.py data/hades/dqd/<file>.json --target local    #
 
 A full run is 2,384 checks in 32 minutes on 8 threads and about 4.5 Redshift RPU-hours. DQD opens a connection per check, and the tunnel's temporary password and the bastion last an hour, which is why it runs on 8 threads. DQD 2.9.1 ends with an error when it runs on several threads without writing to a table; the results are already written by then, and `run_dqd.R` tolerates exactly that error when the file exists.
 
-The Python port of the checks (`scripts/run_dq.py`, on the staging Postgres) still runs and is what the DQD comparison below used.
+Until 2026-11-20 the checks were a Python port of DQD, run on the staging Postgres. It was removed once DQD ran on the lake and matched it:
 
 ### DQD on the lake against the Python port
 
@@ -48,10 +48,10 @@ On the 23,421-person build, 99.41% of checks pass (DQD's `percentPassed`, which 
 
 The [DQD comparison](../dqd_comparison.md) ran on an earlier 1,172-person build, where 99.62% passed; the five extra failures here appear only in the larger population.
 
-## Checked against DataQualityDashboard
+## Checked against DataQualityDashboard (the Python port, historical)
 
-DQD itself, in R, ran on the same databases. [dqd_comparison.md](../dqd_comparison.md) has the details:
+Before DQD ran here, the Python port was checked against DQD on the same databases. [dqd_comparison.md](../dqd_comparison.md) has the details:
 
 - Every one of the 2,384 checks matches DQD on every field compared, on the real build and on a planted database built to reach the paths real data never does (a missing table, a duplicate key, a female-only condition on a male, a lab in an implausible unit).
 - DQD's Overview summary matches line for line.
-- The comparison found one limitation in DQD: a missing column stops its whole run. This version keeps going and scores that field's checks as not applicable.
+- The comparison found one limitation in DQD: a missing column stops its whole run. The port kept going and scored that field's checks as not applicable; DQD on the lake has every column, so it doesn't arise.

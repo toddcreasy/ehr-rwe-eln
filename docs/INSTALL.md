@@ -89,8 +89,9 @@ uv run python scripts/build_cohorts.py
 Each module has its own page with what it does and how to read its output. The commands, in build order:
 
 ```bash
-# Data quality (about 2 minutes)
-uv run python scripts/run_dq.py
+# Data quality: OHDSI DataQualityDashboard on the lake (about 32 minutes), then load the results
+uv run python scripts/hades.py run_dqd.R
+uv run python scripts/load_dqd.py data/hades/dqd/<file>.json --target local
 
 # Target trial emulation (about 1 minute)
 uv run python scripts/run_tte.py

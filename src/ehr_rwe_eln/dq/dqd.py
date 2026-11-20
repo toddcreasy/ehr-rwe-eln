@@ -1,10 +1,10 @@
 """Load the JSON that OHDSI's DataQualityDashboard (r/run_dqd.R) writes into the dq schema, the
 tables the /dq/ page reads.
 
-DQD's CheckResults carry the same fields as dq.result (the Python checks this replaces were
-modeled on it). Two things are filled in here: severity, which the results JSON leaves out, comes
-from DQD's own check descriptions (csv/, copied from DQD); and the overview gains the three fields
-the page shows beyond DQD's Overview (not applicable count, error count, strict pass rate).
+DQD's CheckResults carry the same fields as dq.result (the schema was modeled on DQD's output).
+Two things are filled in here: severity, which the results JSON leaves out, comes from DQD's own
+check descriptions (csv/, copied from DQD); and the overview gains the three fields the page shows
+beyond DQD's Overview (not applicable count, error count, strict pass rate).
 """
 
 import csv
@@ -18,7 +18,7 @@ from pathlib import Path
 import psycopg
 from psycopg.types.json import Jsonb
 
-from ehr_rwe_eln.dq.checks import CSV
+CSV = Path(__file__).parent / "csv"
 
 RESULT_COLUMNS = (
     "check_id",
