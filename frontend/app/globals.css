@@ -4,27 +4,32 @@
    toggle can override the system setting. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* PilotBio's palette (pilotbio.io): ink navy carries the structure, route red is for small
+   highlights only, so it never competes with the red of a failed check. */
 :root {
-  --background: #f6f4f3;
-  --foreground: #1a1d29;
+  --background: #e8eef2; /* sky */
+  --foreground: #1c2e4a; /* ink */
   --card: #ffffff;
-  --line: #e8e2e1;
-  --muted: #5b6275;
-  --accent: #8a1c2c;
-  --accent-soft: #f7e9eb;
+  --line: #d4e0e8; /* haze */
+  --muted: #4a5b73; /* ink-soft */
+  --accent: #1c2e4a; /* ink */
+  --accent-soft: #d4e0e8; /* haze */
+  --route: #c8102e;
   --attention: #a15c00;
   --attention-soft: #fdf1df;
   --good: #1f7a4d;
 }
 
+/* pilotbio.io has no dark theme; this is the same navy family, darkened. */
 .dark {
-  --background: #0d1017;
-  --foreground: #e6e8ef;
-  --card: #151a24;
-  --line: #262d3b;
-  --muted: #9aa1b5;
-  --accent: #e8909c;
-  --accent-soft: #3a1c22;
+  --background: #0e1726;
+  --foreground: #e8eef2;
+  --card: #16233a;
+  --line: #2a3b55;
+  --muted: #9db4c2;
+  --accent: #9db4c2; /* grid */
+  --accent-soft: #1c2e4a;
+  --route: #e5536a;
   --attention: #f0b45e;
   --attention-soft: #2e2414;
   --good: #6fcf9a;
@@ -38,6 +43,7 @@
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --color-route: var(--route);
   --color-attention: var(--attention);
   --color-attention-soft: var(--attention-soft);
   --color-good: var(--good);
