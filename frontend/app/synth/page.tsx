@@ -259,7 +259,7 @@ export default function SyntheticData() {
       ))}
 
       {card && (
-        <article className={`rounded-lg border border-accent/40 p-6 transition-opacity ${loading ? "opacity-50" : ""}`}>
+        <article className={`rounded-lg border border-accent p-6 transition-opacity ${loading ? "opacity-50" : ""}`}>
           <Markdown source={card} />
         </article>
       )}
