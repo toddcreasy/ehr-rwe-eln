@@ -268,12 +268,12 @@ s += [
         DW,
         NH,
         "outside",
-        "Anthropic API",
-        "Claude Opus 5.5, your key",
-        "The only outside service. ELN extraction runs through the Message Batches API at half "
-        "price; variant curation sends it passages that name a variant. ANTHROPIC_API_KEY lives "
-        "only in .env.",
-        "https://docs.claude.com",
+        "Amazon Bedrock",
+        "Claude Opus 4.6, IAM auth",
+        "Claude on Bedrock through the Anthropic SDK's AnthropicBedrock client, with AWS "
+        "credentials (SSO locally, the task role on ECS); no API key. ELN extraction calls it a "
+        "few entries at a time; variant curation sends it passages that name a variant.",
+        "https://docs.claude.com/en/docs/build-with-claude/claude-on-amazon-bedrock",
     ),
     node(
         C[1],

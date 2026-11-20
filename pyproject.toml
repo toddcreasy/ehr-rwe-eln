@@ -10,7 +10,9 @@ license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.14"
 dependencies = [
     "alembic>=1.20.0",
-    "anthropic>=0.125.0",
+    # Below 2: the 2.x releases send API version 2026-10-21, which Bedrock accepts only for Claude
+    # 4.7 and later, and MODEL is Opus 4.6.
+    "anthropic>=1.13,<2",
     "boto3>=1.44.7",
     "diffprivlib>=0.6.6",
     "fastapi[standard]>=0.142.2",

@@ -51,6 +51,8 @@ resource "aws_ecs_express_gateway_service" "app" {
         PUBLIC_DEMO       = "true"
         LOG_LEVEL         = "INFO"
         DAILY_TOKEN_LIMIT = tostring(var.daily_token_limit)
+        MODEL             = var.model
+        AWS_REGION        = local.region
       })
       content {
         name  = environment.key
@@ -68,5 +70,6 @@ resource "aws_ecs_express_gateway_service" "app" {
     aws_iam_role_policy_attachment.infrastructure,
     aws_iam_role_policy_attachment.execution,
     aws_iam_role_policy.execution_db_secret,
+    aws_iam_role_policy.app_bedrock,
   ]
 }

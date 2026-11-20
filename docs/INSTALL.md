@@ -25,7 +25,7 @@ Terms are defined in the [glossary](GLOSSARY.md). A full build from a fresh clon
 | [Docker Desktop](https://www.docker.com/products/docker-desktop/) | Runs Postgres and the app | `docker compose version` |
 | Java 17 or newer | Synthea, the synthetic patient generator, is a Java program | `java -version` |
 | Node.js 24 | Builds the frontend; only needed outside Docker | `node --version` |
-| An Anthropic API key | ELN extraction, the agent, and the evals | [console.anthropic.com](https://console.anthropic.com) |
+| AWS credentials with Bedrock access (`aws sso login`) | ELN extraction, the agent, the evals, and the lake | Your AWS account |
 
 On a Mac, `brew install openjdk@21` gives you Java. Homebrew installs it keg-only, so either put `/opt/homebrew/opt/openjdk@21/bin` on your `PATH` or prefix the Synthea commands with it.
 
@@ -39,18 +39,17 @@ uv sync
 uv run pre-commit install
 ```
 
-Open `.env` and set two values: `DB_PASSWORD` (any long random string; `openssl rand -hex 24` makes one) and `ANTHROPIC_API_KEY`. Leave the rest blank to take the defaults.
+Open `.env` and set `DB_PASSWORD` (any long random string; `openssl rand -hex 24` makes one) and `LAKE_TABLE_BUCKET_ARN`. Leave the rest blank to take the defaults. Claude runs on Amazon Bedrock with your AWS credentials; there is no API key.
 
 | Variable | Default | Notes |
 |---|---|---|
 | `DB_HOST`, `DB_PORT`, `DB_USER` | `localhost`, `5432`, `postgres` | Match `docker-compose.yml` |
 | `DB_NAME` | `ehr_rwe_eln` | The database the scripts and the app use |
 | `DB_PASSWORD` | none | Required |
-| `ANTHROPIC_API_KEY` | none | Required for extraction, the agent, and evals |
-| `MODEL` | `claude-opus-5-5` | Every model call uses it |
+| `MODEL` | `us.anthropic.claude-opus-4-6-v1` | Every model call uses it, on Amazon Bedrock |
 | `LOG_LEVEL`, `FRONTEND_DIR`, `APP_PORT` | `INFO`, `frontend/out`, `8000` | |
 
-`.env` is gitignored and is the only place secrets live. A variable exported in your shell overrides the one in `.env`, so don't export `ANTHROPIC_API_KEY` or the `DB_*` variables.
+`.env` is gitignored and is the only place secrets live. A variable exported in your shell overrides the one in `.env`, so don't export the `DB_*` or `MODEL` variables.
 
 ## Start the database
 

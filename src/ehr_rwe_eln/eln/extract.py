@@ -1,13 +1,13 @@
 """Extract samples and results from one ELN entry with Claude, as a validated Extraction.
 
-It runs on MODEL. The reply is constrained to the
+It runs on MODEL, on Bedrock. The reply is constrained to the
 Extraction schema (structured outputs) and parsed into the Pydantic model, so a malformed reply
 raises instead of reaching the database.
 """
 
 import anthropic
 
-from ehr_rwe_eln.agents.config import AgentSettings
+from ehr_rwe_eln.agents.config import THINKING, AgentSettings, claude_client
 from ehr_rwe_eln.eln.models import Extraction
 
 SYSTEM_PROMPT = """\
@@ -42,16 +42,12 @@ class ExtractionFailed(Exception):
 
 
 def extract(
-    body: str, client: anthropic.Anthropic | None = None, model: str | None = None
+    body: str, client: anthropic.AnthropicBedrock | None = None, model: str | None = None
 ) -> Extraction:
-    settings = AgentSettings()
-    if client is None:
-        key = settings.anthropic_api_key
-        # None makes the SDK read ANTHROPIC_API_KEY from the environment.
-        client = anthropic.Anthropic(api_key=key.get_secret_value() if key else None)
-    response = client.messages.parse(
-        model=model or settings.model,
+    response = (client or claude_client()).messages.parse(
+        model=model or AgentSettings().model,
         max_tokens=8192,
+        thinking=THINKING,
         # Cached once the prompt passes the model's minimum cacheable length.
         system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": body}],
