@@ -24,7 +24,18 @@ Real world evidence from synthetic EHR data, linked to lab notebook records. Sev
 
 Build order after the platform: 1, then 7, then 4, then 2. Each module depends on the OMOP tables from module 1.
 
-### Done 2026-10-12: run locally, no AWS
+### In progress since 2026-11-19: move to AWS
+
+Decided 2026-11-19, reversing the local-first move below: the app runs on AWS (the `default` profile's account, `us-east-1`), with OMOP in a lakehouse. The plan, open items, and reasons are in `TODO_IMPROVEMENTS.md` (gitignored). Six steps, one PR each; until a step lands, the local Docker Compose stack keeps running that part:
+
+- [x] 1. `CLAUDE.md` and the Terraform foundation (`infra/terraform/`): VPC, S3 Tables lake, Lake Formation and Glue catalog, Redshift Serverless, Aurora Serverless v2, budget
+- [ ] 2. The ETL writes OMOP to Iceberg in S3 Tables; row counts reconcile with the Postgres build (1,325,353 rows, both cohorts)
+- [ ] 3. Each module's OMOP SQL moves to Redshift and is re-verified against the current numbers
+- [ ] 4. App on ECS behind a load balancer, with Cognito auth
+- [ ] 5. Bedrock (Claude Opus 4.6) replaces the Anthropic API; every eval re-runs
+- [ ] 6. R and HADES, LangGraph for literature curation, then the genomics, curation, and synthetic data items in `TODO_IMPROVEMENTS.md`
+
+### Done 2026-10-12: run locally, no AWS (superseded 2026-11-19)
 
 Goal: anyone can clone the repo, install it, and run every module on their own machine without an AWS account. It came before module 7 and changed the platform the remaining modules build on.
 
@@ -58,7 +69,7 @@ Domain stack (additions to the platform stack below):
 | Slot | Tool | Why |
 |---|---|---|
 | Synthetic EHR source | Synthea (CSV output) | Open standard synthetic patient generator. |
-| Common data model | OMOP CDM v5.4 on PostgreSQL 18 + pgvector | The model is an OHDSI standard; Postgres hosts it in Docker Compose. |
+| Common data model | OMOP CDM v5.4 as Apache Iceberg tables in S3 Tables, queried through Redshift Serverless | The model is an OHDSI standard; OHDSI's DatabaseConnector supports Redshift. Postgres in Docker Compose until steps 2 and 3 land. |
 | Interoperability format | FHIR R4 via `fhir.resources` | Language-level library; no FHIR server needed at this scale. |
 | Causal inference and survival | scikit-learn, statsmodels, lifelines | Language-level libraries. |
 | ELN source | Synthetic entries; eLabFTW API optional | Open-source ELN with a REST API. |
@@ -77,6 +88,7 @@ Before doing anything, explain what you are about to do and why.
 5. After a training or evaluation run, explain what the numbers mean and whether they are good.
 6. This section overrides "skip preamble" and "no trailing summaries" below for ML concepts and decisions. Routine steps (installs, lint fixes, commits) stay terse.
 7. Define acronyms always
+8. The same applies to AWS and Terraform work (asked 2026-11-19): before each step, say what it creates and why it comes next, and define each AWS service the first time it comes up.
 
 ## Operating rules
 
@@ -110,7 +122,8 @@ decisions.
 ### Python
 - Use `uv` for everything: `uv sync`, `uv run <cmd>`, `uv add <pkg>`. Never activate a venv manually; `uv run` handles it. Never use pip with `--break-system-packages`.
 - Always `pyproject.toml`. Always a `.env.example` with every variable the app reads.
-- Settings load through `pydantic-settings`. Secrets are `SecretStr`. Every setting and secret comes from `.env` (gitignored), never from the shell, a keychain, or a cloud secret store.
+- Settings load through `pydantic-settings`. Secrets are `SecretStr`. Locally every setting and secret comes from `.env` (gitignored), never from the shell or a keychain. On AWS, ECS passes values from Secrets Manager into the container as environment variables; the code reads them the same way.
+- Terraform values that differ per person (emails, ARNs) go in `terraform.tfvars` (gitignored); `terraform.tfvars.example` lists them. The state bucket name holds the account ID, so it is passed with `terraform init -backend-config="bucket=..."`, never written in the repo.
 
 ### Coding principles
 - Don't add features, refactors, or improvements beyond what was asked.
@@ -122,16 +135,19 @@ decisions.
 
 ## Stack decisions
 
-Local-first: everything runs on one machine in Docker Compose, with no cloud account and nothing tied to the host OS. The only external service is the Anthropic API, on each user's own key.
+AWS, from 2026-11-19: OMOP in a lakehouse (S3 Tables, Lake Formation, Redshift Serverless), app data in Aurora, the app on ECS, models on Bedrock, all defined in Terraform. Rows marked "until step N" describe what still runs locally until that step lands.
 
 | Slot | Tool | Why |
 |---|---|---|
-| Models | Claude on the Anthropic API | Each user brings `ANTHROPIC_API_KEY`. Replaced Bedrock 2026-10-12. |
-| Agent framework | Anthropic Python SDK, `client.beta.messages.tool_runner` | Runs the tool loop and returns typed output with no extra framework. Replaced Strands Agents, which pulled in boto3. |
-| Relational + vector DB | PostgreSQL 18 + pgvector, in Docker Compose | Runs anywhere Docker does. Concurrent writes and pgvector for RAG. Replaced DuckDB and Aurora Serverless v2. |
-| Secrets and settings | `.env` read by `pydantic-settings` | One gitignored file; `.env.example` lists every variable. |
-| Auth | None; every port binds to 127.0.0.1 | Single-user local app. Replaced Cognito. |
-| App hosting | One `app` container in Docker Compose | FastAPI serves the API under `/api` and the static frontend at `/`. |
+| Models | Claude on Amazon Bedrock | Model access, permissions, and the bill stay in the AWS account; IAM auth, no API key. Anthropic API with `ANTHROPIC_API_KEY` until step 5. |
+| Agent framework | Anthropic Python SDK, `client.beta.messages.tool_runner` | Runs the tool loop and returns typed output with no extra framework. `AnthropicBedrock` client from step 5. LangGraph for literature curation only (step 6). |
+| Lake | S3 Tables (Apache Iceberg), AWS Glue Data Catalog, Lake Formation | Open table format any engine reads; Lake Formation controls who reads what. |
+| Warehouse SQL | Redshift Serverless | The AWS engine OHDSI's DatabaseConnector supports; billed per second of query time, capped at 60 RPU-hours a month. |
+| App database + vector | Aurora Serverless v2 PostgreSQL 18.6 + pgvector | Row-by-row app writes and vector search, which Redshift is not built for. Pauses to 0 when idle. Never holds OMOP. Compose Postgres until steps 2 to 4. |
+| Secrets and settings | `pydantic-settings`; `.env` locally, Secrets Manager on AWS | One code path; database passwords are managed by RDS and Redshift in Secrets Manager. |
+| Auth | Cognito | The app is public once hosted. None (127.0.0.1 only) until step 4. |
+| App hosting | ECS behind a load balancer, in public subnets | No NAT gateway or interface endpoints, which would cost more than the whole budget. FastAPI serves the API under `/api` and the static frontend at `/`. Compose `app` container until step 4. |
+| Infrastructure as code | Terraform, state in `ehr-rwe-eln-tfstate-<account>` | Same tool as methyl-flow's newest infra; `bootstrap/` made the state bucket, `foundation/` holds the shared resources. |
 | Backend framework | FastAPI + Pydantic | Typed request and response models, OpenAPI for free. |
 | Python toolchain | uv, ruff, pytest | Fast, one tool per job, lockfile pinned. |
 | DB migrations | Alembic | Versioned schema changes; `uv run alembic upgrade head` against the Compose Postgres. |
@@ -140,7 +156,7 @@ Local-first: everything runs on one machine in Docker Compose, with no cloud acc
 | Code host + CI runner | GitHub + GitHub Actions | `lint-test` runs ruff and pytest against a Postgres service container. `secrets` runs gitleaks (pinned, checksum verified) over every commit and file for keys, tokens, passwords, usernames, and email addresses, with the rules in `.gitleaks.toml`. Both are required to merge; the same scan runs in pre-commit. |
 | Containers | Docker + Docker Compose | Open standard; the whole stack starts with one command. |
 
-Excluded on purpose (wrong scale for a personal project): Kubernetes, Terraform, Snowflake, Databricks, A2A, LiteLLM, dedicated vector databases, WAF-heavy perimeter builds.
+Excluded on purpose (wrong scale for a personal project): Kubernetes, A2A, LiteLLM, dedicated vector databases, WAF-heavy perimeter builds, NAT gateways and interface endpoints (cost).
 
 How each piece was built, verified, and what it costs: see `docs/SETUP.md`.
 
@@ -160,6 +176,7 @@ How each piece was built, verified, and what it costs: see `docs/SETUP.md`.
 │   └── synth/             # privacy-preserving synthetic data releases
 ├── tests/                 # fast tests; local services only (the Compose Postgres), nothing off the machine
 ├── migrations/            # Alembic versioned schema changes
+├── infra/terraform/       # bootstrap/ (state bucket), foundation/ (network, lake, Redshift, Aurora, budget)
 ├── frontend/              # Next.js app, static export served by FastAPI
 ├── evals/                 # golden set; hits a real model, so slow and costs money
 ├── scripts/               # one-shot operational scripts, never imported
@@ -173,8 +190,9 @@ What each directory is for, which of these are real conventions and which are ch
 
 ## Conventions
 
-- Everything runs in `docker-compose.yml`. Bind every published port to 127.0.0.1; there is no auth.
-- One model: every call uses `MODEL` (Claude Opus 5.5). Prompt caching on for any repeated prefix. Batch API for offline jobs.
+- AWS resources are Terraform only, never created by hand in the console. Show `terraform plan` and get approval before every `apply`. Every resource carries the `project = ehr-rwe-eln` tag (provider default tags), which the budget filters on.
+- Local dev still runs in `docker-compose.yml` until its parts move. Bind every published port to 127.0.0.1; there is no auth locally.
+- One model: every call uses `MODEL`. Prompt caching on for any repeated prefix. Batch API (Bedrock batch inference from step 5) for offline jobs.
 
 ## Settled decisions
 
@@ -182,9 +200,11 @@ Do not re-ask. Rationale and history in `docs/SETUP.md`.
 
 | Decision | Value |
 |---|---|
-| API key and spend limit | Personal key scoped to the `ehr-rwe-eln` workspace in the Claude Console, which carries the monthly spend limit. The key lives only in `.env` as `ANTHROPIC_API_KEY`. No macOS Keychain, no shell export: an exported variable would override `.env` |
+| AWS account and region | The `default` AWS CLI profile (SSO, AdministratorAccess), `us-east-1`. Decided 2026-11-19 |
+| AWS budget | $100 a month on resources tagged `project = ehr-rwe-eln`; email at 80% actual and 100% forecast. Decided 2026-11-19 |
+| API key and spend limit (until step 5) | Personal key scoped to the `ehr-rwe-eln` workspace in the Claude Console, which carries the monthly spend limit. The key lives only in `.env` as `ANTHROPIC_API_KEY`. No macOS Keychain, no shell export: an exported variable would override `.env` |
 | Python | 3.14, pinned in `.python-version` |
-| Database | PostgreSQL 18 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg18-trixie`, defined in `docker-compose.yml`. Moved from 17 on 2026-10-13: 17 only matched the retired Aurora cluster |
+| Database | On AWS: OMOP only in the lake (Iceberg in S3 Tables, read through Redshift Serverless; "lake only", decided 2026-11-19); app state, module schemas, and pgvector in Aurora Serverless v2 PostgreSQL 18.6. Locally until steps 2 to 4: PostgreSQL 18 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg18-trixie`, defined in `docker-compose.yml` |
 | App name | RWE Workbench, for the web app only; the repo and the Python package stay `ehr-rwe-eln`. Chosen 2026-11-19 over Counterpart, which collides with Counterpart Health (Clover Health's clinical AI company) |
-| `MODEL` | `claude-opus-5-5` on the Anthropic API, for every call. Replaced Haiku 5.5 / Sonnet 5.5 tiering on 2026-11-18 |
+| `MODEL` | From step 5: `us.anthropic.claude-opus-4-6-v1` on Bedrock, the newest Claude this account can call (tested 2026-11-19: Opus 5.5, 4.8, 4.7 return AccessDenied). Revisit when Opus 5.5 access opens. Until step 5: `claude-opus-5-5` on the Anthropic API, for every call |
 | Data database | One: `ehr_rwe_eln`, 23,421 Synthea patients, every module. A second population would be a second CDM schema, never a second database. `ehr_rwe_eln_test` is for pytest only. Merged from two databases on 2026-11-18 |

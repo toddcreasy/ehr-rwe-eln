@@ -36,3 +36,15 @@ data/
 # Personal planning notes
 TODO.md
 
+TODO_IMPROVEMENTS.md
+
+# Terraform: providers, local state, plans. The lockfile (.terraform.lock.hcl) is committed.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+
+# Per-person Terraform values (emails, ARNs); the .example file is committed.
+*.tfvars
+!*.tfvars.example
