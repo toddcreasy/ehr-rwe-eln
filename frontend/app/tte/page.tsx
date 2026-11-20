@@ -76,7 +76,7 @@ const row = "border-t border-zinc-200 dark:border-zinc-800";
 
 function StatTile({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <div className="rounded-lg border border-accent p-4">
+    <div className="rounded-lg border border-background p-4">
       <div className={`text-sm ${muted}`}>{label}</div>
       <div className="mt-1 text-2xl font-semibold text-zinc-900 tabular-nums dark:text-zinc-100">{value}</div>
       {note && <div className="mt-1 text-xs text-zinc-500">{note}</div>}
@@ -100,7 +100,7 @@ function ProtocolReport({ report }: { report: Report }) {
   const { protocol, diagnostics: d, survival: s } = report;
   const crude = new Map(s?.crude_risks.map((r) => [r.day, r]));
   return (
-    <article className="flex flex-col gap-6 rounded-lg border border-accent p-6">
+    <article className="flex flex-col gap-6 rounded-lg border border-background p-6">
       <header>
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
           {protocol.id}. {protocol.treatment} vs {protocol.comparator}, outcome {protocol.outcome.replaceAll("_", " ")}
