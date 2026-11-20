@@ -4,6 +4,8 @@ Real world evidence (RWE) from synthetic electronic health records (EHR), linked
 
 ELN platforms capture bench data well, and few reach past the lab. Revvity's Signals Translational joins biomarker results to clinical trial data, and LabKey links assay results to study participants, but none of them writes notebook results into OMOP or EHR data. The ELN bridge works in that gap: it reads free-text notebook entries with Claude and writes the results next to the clinical record. [Background on ELN platforms and the gap](docs/modules/eln.md#background-what-eln-platforms-do).
 
+The web app is called **RWE Workbench**. Its home page at http://127.0.0.1:8000 describes the project and shows the five sections (data quality, trial emulation, lab notebook, variant curation, synthetic data) as tabs, each with a live figure from that section's data.
+
 Acronyms and services are defined in the [glossary](docs/GLOSSARY.md).
 
 Everything runs on one machine in [Docker Compose](https://docs.docker.com/compose/). No cloud account; the only outside service is the [Anthropic API](https://docs.claude.com), on your own key.

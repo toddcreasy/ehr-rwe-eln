@@ -185,5 +185,6 @@ Do not re-ask. Rationale and history in `docs/SETUP.md`.
 | API key and spend limit | Personal key scoped to the `ehr-rwe-eln` workspace in the Claude Console, which carries the monthly spend limit. The key lives only in `.env` as `ANTHROPIC_API_KEY`. No macOS Keychain, no shell export: an exported variable would override `.env` |
 | Python | 3.14, pinned in `.python-version` |
 | Database | PostgreSQL 18 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg18-trixie`, defined in `docker-compose.yml`. Moved from 17 on 2026-10-13: 17 only matched the retired Aurora cluster |
+| App name | RWE Workbench, for the web app only; the repo and the Python package stay `ehr-rwe-eln`. Chosen 2026-11-19 over Counterpart, which collides with Counterpart Health (Clover Health's clinical AI company) |
 | `MODEL` | `claude-opus-5-5` on the Anthropic API, for every call. Replaced Haiku 5.5 / Sonnet 5.5 tiering on 2026-11-18 |
 | Data database | One: `ehr_rwe_eln`, 23,421 Synthea patients, every module. A second population would be a second CDM schema, never a second database. `ehr_rwe_eln_test` is for pytest only. Merged from two databases on 2026-11-18 |
