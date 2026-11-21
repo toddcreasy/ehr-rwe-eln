@@ -199,7 +199,7 @@ def test_shipped_protocols_load():
     assert all(isinstance(p.outcome.conditions, ConceptSet) for p in protocols)
 
 
-def test_covariates_use_only_what_is_known_at_time_zero(con):
+def test_covariates_use_only_what_is_known_before_time_zero(con):
     lab, history = 920040, 920050
     protocol = PROTOCOL.model_copy(
         update={
@@ -221,8 +221,10 @@ def test_covariates_use_only_what_is_known_at_time_zero(con):
     facts = [
         ("condition", 1, history, D(2019, 1, 1), None),  # before time zero: counts
         ("condition", 2, history, D(2020, 2, 1), None),  # after: does not
+        ("condition", 2, history, D(2020, 1, 1), None),  # on time zero itself: does not
         ("measurement", 1, lab, D(2019, 3, 1), 6.0),
         ("measurement", 1, lab, D(2019, 12, 1), 7.5),  # latest in the window wins
+        ("measurement", 1, lab, D(2020, 1, 1), 8.8),  # on time zero itself: ignored
         ("measurement", 1, lab, D(2020, 1, 2), 9.9),  # after time zero: ignored
         ("measurement", 2, lab, D(2018, 6, 1), 8.0),  # older than 365 days: missing
     ]
@@ -247,3 +249,27 @@ def test_covariates_use_only_what_is_known_at_time_zero(con):
     assert table.loc[1, "lab"] == 7.5
     assert pd.isna(table.loc[2, "lab"])
     assert table.loc[1, "male"] == 1
+
+
+def test_ohdsi_cohorts_match_the_analysis_table(con):
+    from ehr_rwe_eln.tte.ohdsi import write_cohorts
+
+    con.execute("CREATE SCHEMA IF NOT EXISTS results")
+    ids = write_cohorts(con, PROTOCOL)
+    rows = con.execute(
+        "SELECT cohort_definition_id, subject_id, cohort_start_date, cohort_end_date"
+        " FROM results.cohort ORDER BY cohort_definition_id, subject_id"
+    ).fetchall()
+    assert rows == [
+        # Arms enter at time zero and leave at the end of follow-up, not at the outcome.
+        (101, 1, D(2020, 1, 1), D(2024, 12, 30)),
+        (101, 10, D(2020, 1, 1), D(2024, 12, 30)),
+        (102, 2, D(2020, 1, 1), D(2022, 1, 1)),
+        (102, 11, D(2020, 1, 1), D(2021, 6, 30)),
+        # The outcome cohort holds only people in an arm: person 9's outcome is not in it.
+        (103, 1, D(2021, 1, 1), D(2021, 1, 1)),
+    ]
+    assert [ids[k]["persons"] for k in ("treatment", "comparator", "outcome")] == [2, 2, 1]
+    # Writing again replaces the protocol's rows instead of adding to them.
+    write_cohorts(con, PROTOCOL)
+    assert con.execute("SELECT count(*) FROM results.cohort").fetchone()[0] == 5

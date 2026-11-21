@@ -45,9 +45,21 @@ covariates:
 analysis:
   truncate_percentile: 1
 negative_controls:
-  # Neither drug plausibly causes these. Avoided: gum and dental conditions (amlodipine causes gum
-  # overgrowth), cough (ACE inhibitors), and injuries (any blood pressure drug can cause falls).
+  # Neither drug plausibly causes these, chosen 2026-11-20 from the conditions with new cases in
+  # both arms (scripts/negative_control_candidates.py). Avoided: gum and dental conditions
+  # (amlodipine causes gum overgrowth, which traps plaque), cough and taste changes (ACE
+  # inhibitors), falls and the injuries they cause (any blood pressure drug can cause dizziness),
+  # pregnancy (ACE inhibitors are avoided in it), the indication and its complications, and
+  # conditions with a published link to either drug (anemia, pneumonia, dementia, COVID-19).
   - {name: viral_sinusitis, conditions: {concept_ids: [40481087]}}
+  - {name: acute_bacterial_sinusitis, conditions: {concept_ids: [4294548]}}
+  - {name: chronic_sinusitis, conditions: {concept_ids: [257012]}}
   - {name: viral_pharyngitis, conditions: {concept_ids: [4112343]}}
+  - {name: strep_throat, conditions: {concept_ids: [28060]}}
+  - {name: acute_bronchitis, conditions: {concept_ids: [260139]}}
+  - {name: otitis_media, conditions: {concept_ids: [372328]}}
   - {name: cystitis, conditions: {concept_ids: [4144035]}} # acute infective cystitis
   - {name: colon_polyp, conditions: {concept_ids: [4285898]}}
+  - {name: partial_thickness_burn, conditions: {concept_ids: [4296205]}}
+  - {name: epidermal_burn, conditions: {concept_ids: [4296204]}}
+  - {name: whiplash, conditions: {concept_ids: [4218389]}} # mostly road traffic, not falls
