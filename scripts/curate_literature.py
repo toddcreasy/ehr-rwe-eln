@@ -1,5 +1,6 @@
 """Propose literature evidence for Evidence Repository variants with Claude, verify every quote,
-and score the proposals against the criteria the expert panels applied.
+and score the proposals against the criteria the expert panels applied. Each variant runs
+through the literature graph (curation/literature_graph.py), which stops paused for the curator.
 
 Usage:
     uv run python scripts/curate_literature.py --dry-run [--variants 10]
@@ -28,10 +29,9 @@ from ehr_rwe_eln.curation.literature import (
     SYSTEM_PROMPT,
     ProposalFailed,
     literature_cases,
-    propose,
     score_claims,
-    verify,
 )
+from ehr_rwe_eln.curation.literature_graph import Deps, build, checkpointer, config
 from ehr_rwe_eln.synth.release import code_version
 
 REFERENCE = Path(__file__).resolve().parent.parent / "data" / "reference"
@@ -72,39 +72,13 @@ def main() -> None:
         )
         return
 
-    usage, rows, stored = Counter(), [], []
+    usage, rows, verified_n, rejected_n = Counter(), [], 0, 0
     start = time.time()
-    for v in chosen:
-        try:
-            proposals, used = propose(v["prompt"], client, settings.model)
-        except ProposalFailed as e:
-            print(f"  {v['gene']} {v['variant_id']}: {e}")
-            continue
-        usage.update(used)
-        verified, rejected = verify(proposals, v["passages"])
-        rows.append((v["expert"], verified))
-        stored += [(v, c, True) for c in verified] + [(v, c, False) for c in rejected]
-        panel = [m for m in v["expert"]["met"] if parse_code(m)[0] in CRITERIA]
-        print(
-            f"  {v['gene']:<5} {v['variant_id']:<26} {len(verified)} verified, {len(rejected)}"
-            f" rejected; panel met {panel};"
-            f" proposed {[c['criterion'] + '_' + c['strength'] for c in verified]}"
-        )
-    summary = {
-        "variants": len(rows),
-        "claims_verified": sum(1 for *_, ok in stored if ok),
-        "claims_rejected": sum(1 for *_, ok in stored if not ok),
-        "criteria_vs_panel": score_claims(rows),
-        "panel_cited_papers": sum(v["cited"] for v in chosen),
-        "panel_cited_in_litvar": sum(v["cited_in_litvar"] for v in chosen),
-        "panel_cited_in_passages": sum(v["cited_in_passages"] for v in chosen),
-        "usage": dict(usage),
-        "cost_usd": round(cost(usage), 4),
-    }
-    with DatabaseSettings().connect() as con:
+    with DatabaseSettings().connect() as con, checkpointer() as saver:
+        # The run first: the graph's store node files proposals under its ID.
         run_id = con.execute(
             "INSERT INTO curation.run (created_at, variant_set, sources, code_version, summary)"
-            " VALUES (%s, 'erepo', %s, %s, %s) RETURNING run_id",
+            " VALUES (%s, 'erepo', %s, %s, '{}') RETURNING run_id",
             [
                 datetime.now(UTC),
                 Jsonb(
@@ -113,34 +87,56 @@ def main() -> None:
                             "model": settings.model,
                             "litvar": "LitVar2",
                             "text": "PubTator3",
+                            "graph": "LangGraph",
                         }
                     }
                 ),
                 code_version(),
-                Jsonb(summary),
             ],
         ).fetchone()[0]
-        with con.cursor() as cur:
-            cur.executemany(
-                "INSERT INTO curation.proposal (run_id, variant_id, gene, criterion, strength,"
-                " pmid, quote, rationale, verified, rejected_why)"
-                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                [
-                    [
-                        run_id,
-                        v["variant_id"],
-                        v["gene"],
-                        c["criterion"],
-                        c["strength"],
-                        c["pmid"],
-                        c["quote"],
-                        c["rationale"],
-                        ok,
-                        c.get("why"),
-                    ]  # fmt: skip
-                    for v, c, ok in stored
-                ],
+        con.commit()
+        graph = build(saver)
+        deps = Deps(con=con, reference=REFERENCE, client=client, model=settings.model)
+        for v in chosen:
+            try:
+                state = graph.invoke(
+                    {
+                        "run_id": run_id,
+                        **{k: v[k] for k in ("variant_id", "gene", "hgvsc", "hgvsp")},
+                    },
+                    config(run_id, v["variant_id"]),
+                    context=deps,
+                )
+            except ProposalFailed as e:
+                con.rollback()
+                print(f"  {v['gene']} {v['variant_id']}: {e}")
+                continue
+            # The graph is paused for the curator; its proposals are stored.
+            con.commit()
+            usage.update(state["usage"])
+            verified, rejected = state["verified"], state["rejected"]
+            verified_n, rejected_n = verified_n + len(verified), rejected_n + len(rejected)
+            rows.append((v["expert"], verified))
+            panel = [m for m in v["expert"]["met"] if parse_code(m)[0] in CRITERIA]
+            print(
+                f"  {v['gene']:<5} {v['variant_id']:<26} {len(verified)} verified,"
+                f" {len(rejected)} rejected; panel met {panel};"
+                f" proposed {[c['criterion'] + '_' + c['strength'] for c in verified]}"
             )
+        summary = {
+            "variants": len(rows),
+            "claims_verified": verified_n,
+            "claims_rejected": rejected_n,
+            "criteria_vs_panel": score_claims(rows),
+            "panel_cited_papers": sum(v["cited"] for v in chosen),
+            "panel_cited_in_litvar": sum(v["cited_in_litvar"] for v in chosen),
+            "panel_cited_in_passages": sum(v["cited_in_passages"] for v in chosen),
+            "usage": dict(usage),
+            "cost_usd": round(cost(usage), 4),
+        }
+        con.execute(
+            "UPDATE curation.run SET summary = %s WHERE run_id = %s", [Jsonb(summary), run_id]
+        )
         con.commit()
     print(f"run {run_id}: {summary['variants']} variants in {time.time() - start:.0f}s")
     print(f"  claims: {summary['claims_verified']} verified, {summary['claims_rejected']} rejected")
