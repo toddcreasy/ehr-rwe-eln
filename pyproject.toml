@@ -78,6 +78,10 @@ ignore = []
 "src/ehr_rwe_eln/dq/**" = ["S608"]
 # Target trial SQL is built from concept set clauses defined in code; values are bound.
 "src/ehr_rwe_eln/tte/**" = ["S608"]
+# Concept counts SQL is built from the event tables and the cdm prefix defined in code.
+"src/ehr_rwe_eln/omop_stats.py" = ["S608"]
+# The agent's tools join fixed WHERE fragments chosen in code; every input is a bound parameter.
+"src/ehr_rwe_eln/agents/omop_tools.py" = ["S608"]
 # Seeded random synthetic ELN entries, not cryptography.
 "src/ehr_rwe_eln/eln/synthetic.py" = ["S311"]
 
