@@ -46,6 +46,10 @@ output "aurora_endpoint" {
   value = aws_rds_cluster.app.endpoint
 }
 
+output "aurora_cluster_resource_id" {
+  value = aws_rds_cluster.app.cluster_resource_id
+}
+
 output "aurora_master_secret_arn" {
   value = aws_rds_cluster.app.master_user_secret[0].secret_arn
 }

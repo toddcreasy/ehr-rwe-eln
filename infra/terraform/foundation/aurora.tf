@@ -16,12 +16,15 @@ resource "aws_rds_cluster" "app" {
   database_name               = "ehr_rwe_eln"
   master_username             = "postgres"
   manage_master_user_password = true
-  db_subnet_group_name        = aws_db_subnet_group.aurora.name
-  vpc_security_group_ids      = [aws_security_group.aurora.id]
-  storage_encrypted           = true
-  backup_retention_period     = 1
-  deletion_protection         = true
-  skip_final_snapshot         = true
+  # The app and monitor sign in as the app role with IAM tokens; postgres is for migrations.
+  iam_database_authentication_enabled = true
+  apply_immediately                   = true
+  db_subnet_group_name                = aws_db_subnet_group.aurora.name
+  vpc_security_group_ids              = [aws_security_group.aurora.id]
+  storage_encrypted                   = true
+  backup_retention_period             = 1
+  deletion_protection                 = true
+  skip_final_snapshot                 = true
 
   # RDS Data API: SQL over HTTPS with IAM auth, so a laptop can reach the private cluster.
   enable_http_endpoint = true

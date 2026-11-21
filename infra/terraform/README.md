@@ -54,6 +54,10 @@ aws redshift-data execute-statement --workgroup-name ehr-rwe-eln --database ehr_
 
 Aurora pauses after 5 idle minutes; the first query after a pause takes about 15 seconds. Aurora has pgvector 0.8.2 (local Compose: 0.8.7). The Redshift Data API signs in with your IAM identity, so it needs no secret.
 
+The app and monitor sign in to Aurora as `app` (migration 019) with a 15-minute IAM token (`DB_IAM_AUTH=true`, `rds-db:connect` on that user only): read and write on the six module schemas, no DDL. Migrations and data loads run as `postgres`. Express Mode still injects `DB_PASSWORD` into the app container, unused: it keeps a secret once given even when the block is removed (`app/service.tf`).
+
+A migration can also run through the RDS Data API, without the tunnel and without handling the database password. Run its `upgrade()` statements in one Data API transaction and set `alembic_version` in the same transaction (how 019 was applied on 2026-11-20).
+
 ## Deploy the app
 
 The service runs the image tag in `app/terraform.tfvars`; tags are immutable, and each is the git commit it was built from.

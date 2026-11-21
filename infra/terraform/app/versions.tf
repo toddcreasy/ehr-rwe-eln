@@ -54,10 +54,11 @@ locals {
 
   # Settings every container gets; see .env.example for what each means.
   database_env = {
-    DB_HOST = local.foundation.aurora_endpoint
-    DB_PORT = "5432"
-    DB_NAME = "ehr_rwe_eln"
-    DB_USER = "postgres"
+    DB_HOST     = local.foundation.aurora_endpoint
+    DB_PORT     = "5432"
+    DB_NAME     = "ehr_rwe_eln"
+    DB_USER     = "app"
+    DB_IAM_AUTH = "true"
   }
   lake_env = {
     OMOP_SOURCE           = "lake"
@@ -67,4 +68,6 @@ locals {
   }
   # ECS reads the Aurora password out of its Secrets Manager secret (JSON) into DB_PASSWORD.
   db_credential_ref = "${local.foundation.aurora_master_secret_arn}:password::"
+  # The one Aurora user the app and monitor may sign in as with an IAM token.
+  aurora_app_user_arn = "arn:aws:rds-db:${local.region}:${local.account_id}:dbuser:${local.foundation.aurora_cluster_resource_id}/app"
 }

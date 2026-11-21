@@ -1,5 +1,6 @@
 # Who may do what. Containers get AWS permissions from roles, never from keys.
-# - execution role: ECS itself, to pull the image, write logs, and read the database password.
+# - execution role: ECS itself, to pull the image, write logs, and read the database password
+#   (which Express Mode still injects; see service.tf).
 # - infrastructure role: ECS Express Mode, to build the load balancer, certificate, and scaling.
 # - app task role: the web app's own AWS calls: Claude on Bedrock for /api/agent.
 # - monitor task role: the daily privacy check, which reads OMOP from the lake through Redshift.
@@ -48,6 +49,14 @@ resource "aws_iam_role_policy" "execution_db_secret" {
   policy = data.aws_iam_policy_document.read_db_secret.json
 }
 
+# Sign in to Aurora as the app user with an IAM token.
+data "aws_iam_policy_document" "aurora_connect" {
+  statement {
+    actions   = ["rds-db:connect"]
+    resources = [local.aurora_app_user_arn]
+  }
+}
+
 data "aws_iam_policy_document" "ecs_trust" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -88,6 +97,11 @@ data "aws_iam_policy_document" "app_bedrock" {
 resource "aws_iam_role_policy" "app_bedrock" {
   role   = aws_iam_role.app.id
   policy = data.aws_iam_policy_document.app_bedrock.json
+}
+
+resource "aws_iam_role_policy" "app_aurora" {
+  role   = aws_iam_role.app.id
+  policy = data.aws_iam_policy_document.aurora_connect.json
 }
 
 resource "aws_iam_role" "monitor" {
@@ -134,6 +148,11 @@ data "aws_iam_policy_document" "monitor" {
 resource "aws_iam_role_policy" "monitor" {
   role   = aws_iam_role.monitor.id
   policy = data.aws_iam_policy_document.monitor.json
+}
+
+resource "aws_iam_role_policy" "monitor_aurora" {
+  role   = aws_iam_role.monitor.id
+  policy = data.aws_iam_policy_document.aurora_connect.json
 }
 
 resource "aws_iam_role" "bastion" {
