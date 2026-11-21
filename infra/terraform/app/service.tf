@@ -60,11 +60,20 @@ resource "aws_ecs_express_gateway_service" "app" {
         value = environment.value
       }
     }
+
+    # Unused: DB_IAM_AUTH signs in as app with a token. Express Mode keeps a secret it was once
+    # given when the block is dropped (2026-11-20: the update left DB_PASSWORD on the new task
+    # definition and the task failed to start), so the block stays to match what ECS holds.
+    secret {
+      name       = "DB_PASSWORD"
+      value_from = local.db_credential_ref
+    }
   }
 
   depends_on = [
     aws_iam_role_policy_attachment.infrastructure,
     aws_iam_role_policy_attachment.execution,
+    aws_iam_role_policy.execution_db_secret,
     aws_iam_role_policy.app_bedrock,
     aws_iam_role_policy.app_aurora,
   ]

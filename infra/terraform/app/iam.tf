@@ -1,5 +1,6 @@
 # Who may do what. Containers get AWS permissions from roles, never from keys.
-# - execution role: ECS itself, to pull the image and write logs.
+# - execution role: ECS itself, to pull the image, write logs, and read the database password
+#   (which Express Mode still injects; see service.tf).
 # - infrastructure role: ECS Express Mode, to build the load balancer, certificate, and scaling.
 # - app task role: the web app's own AWS calls: Claude on Bedrock for /api/agent.
 # - monitor task role: the daily privacy check, which reads OMOP from the lake through Redshift.
@@ -36,7 +37,19 @@ resource "aws_iam_role_policy_attachment" "execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# Sign in to Aurora as the app user with an IAM token; no password anywhere.
+data "aws_iam_policy_document" "read_db_secret" {
+  statement {
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [local.foundation.aurora_master_secret_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "execution_db_secret" {
+  role   = aws_iam_role.execution.id
+  policy = data.aws_iam_policy_document.read_db_secret.json
+}
+
+# Sign in to Aurora as the app user with an IAM token.
 data "aws_iam_policy_document" "aurora_connect" {
   statement {
     actions   = ["rds-db:connect"]
