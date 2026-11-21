@@ -8,7 +8,7 @@ This is an engineering read of the rules, not legal advice. Whether a dataset is
 
 Nothing here binds this repository as it stands:
 
-- The data are [Synthea](https://github.com/synthetichealth/synthea) output, synthetic lab notebook entries, and genotypes simulated with [msprime](https://tskit.dev/msprime/). No living person is the source of any record, so the work is not human subjects research under the Common Rule (45 CFR 46).
+- The data are [Synthea](https://github.com/synthetichealth/synthea) output, synthetic lab notebook entries, and genotypes simulated with [stdpopsim](https://popsim-consortium.github.io/stdpopsim-docs/) on [msprime](https://tskit.dev/msprime/). No living person is the source of any record, so the work is not human subjects research under the Common Rule (45 CFR 46).
 - None of it is protected health information, so the HIPAA Privacy Rule does not apply.
 - The work is not NIH-funded, so the Genomic Data Sharing Policy does not apply.
 
