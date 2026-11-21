@@ -136,8 +136,10 @@ To run the app in Docker instead, `docker compose up -d --build --wait` builds t
 ```bash
 curl localhost:8000/api/health/db
 curl -X POST localhost:8000/api/agent -H 'Content-Type: application/json' \
-  -d '{"prompt": "Is the database reachable?"}'
+  -d '{"prompt": "How many people have essential hypertension?"}'
 ```
+
+The agent's tools read `omop_stats`; build it once with `OMOP_SOURCE=staging uv run python scripts/build_omop_stats.py --target local`. Claude Code picks up the same tools from `.mcp.json`, which starts `python -m ehr_rwe_eln.agents.mcp_server` over stdio.
 
 ## Tests and evals
 

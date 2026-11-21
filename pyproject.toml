@@ -18,6 +18,7 @@ dependencies = [
     "fastapi[standard]>=0.142.2",
     "fhir-resources>=8.3.0",
     "lifelines>=0.30.0",
+    "mcp>=2.3.0",
     "numpy>=2.5.4",
     "pandas>=3.0.6",
     "psycopg[binary]>=3.3.6",

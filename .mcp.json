@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "omop": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "ehr_rwe_eln.agents.mcp_server"]
+    }
+  }
+}

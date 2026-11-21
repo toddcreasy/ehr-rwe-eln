@@ -5,7 +5,7 @@ import logging
 from pydantic import BaseModel, Field
 
 from ehr_rwe_eln.agents.config import AgentSettings
-from ehr_rwe_eln.agents.hello import run_agent
+from ehr_rwe_eln.agents.workbench import run_agent
 
 settings = AgentSettings()
 log = logging.getLogger("ehr_rwe_eln.agents")
