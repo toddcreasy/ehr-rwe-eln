@@ -22,6 +22,14 @@ output "redshift_workgroup" {
   value = aws_redshiftserverless_workgroup.main.workgroup_name
 }
 
+output "redshift_workgroup_arn" {
+  value = aws_redshiftserverless_workgroup.main.arn
+}
+
+output "lake_glue_arns" {
+  value = local.lake_glue_arns
+}
+
 output "redshift_endpoint" {
   value = aws_redshiftserverless_workgroup.main.endpoint[0].address
 }

@@ -17,7 +17,18 @@ resource "aws_iam_role" "redshift" {
   assume_role_policy = data.aws_iam_policy_document.redshift_trust.json
 }
 
-# Read the catalog and get Lake Formation credentials for the lake tables.
+# Read the catalog and get Lake Formation credentials for the lake tables. The Glue reads cover the
+# default catalog (where the omop_cdm resource link lives) and the S3 Tables catalog behind it.
+locals {
+  lake_glue_arns = [
+    "arn:aws:glue:${local.region}:${local.account_id}:catalog",
+    "arn:aws:glue:${local.region}:${local.account_id}:catalog/s3tablescatalog",
+    "arn:aws:glue:${local.region}:${local.account_id}:catalog/s3tablescatalog/*",
+    "arn:aws:glue:${local.region}:${local.account_id}:database/*",
+    "arn:aws:glue:${local.region}:${local.account_id}:table/*",
+  ]
+}
+
 data "aws_iam_policy_document" "redshift_lake" {
   statement {
     actions = [
@@ -28,8 +39,12 @@ data "aws_iam_policy_document" "redshift_lake" {
       "glue:GetTable",
       "glue:GetTables",
       "glue:GetPartitions",
-      "lakeformation:GetDataAccess",
     ]
+    resources = local.lake_glue_arns
+  }
+  # GetDataAccess has no resource-level permissions; Lake Formation grants decide what it returns.
+  statement {
+    actions   = ["lakeformation:GetDataAccess"]
     resources = ["*"]
   }
 }
