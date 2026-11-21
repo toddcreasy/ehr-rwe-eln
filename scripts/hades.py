@@ -9,19 +9,23 @@ The Redshift workgroup is private and HADES connects over JDBC, so this:
 3. gets a temporary Redshift password for the caller's IAM identity (one hour, user IAMR:...),
    so no Redshift password is stored anywhere and HADES has exactly the caller's lake grants,
 4. runs `docker compose run --rm hades <script>` with REDSHIFT_* set,
-5. closes the tunnel and stops the bastion, whatever the script did.
+5. stops the bastion and closes the tunnel, whatever the script did. A thread sends a few bytes
+   through the tunnel every 5 minutes, so Session Manager's 20-minute idle limit never closes it
+   during a long query.
 
 Needs AWS credentials (aws sso login), Docker, and the Session Manager plugin. Scripts live in
 r/; the container sees r/ as /work/r and data/hades/ as /work/data/hades.
 """
 
 import argparse
+import contextlib
 import json
 import os
 import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -31,6 +35,12 @@ from ehr_rwe_eln.config import LakeSettings
 
 ROOT = Path(__file__).resolve().parent.parent
 LOCAL_PORT = 15439
+# Session Manager closes a session after 20 idle minutes, and a long Redshift query sends nothing
+# back until it finishes (CohortMethod's covariate build on 2026-11-20 did, and lost the tunnel).
+KEEPALIVE_S = 300
+# PostgreSQL's SSLRequest, which Redshift answers with one byte: traffic through the tunnel with
+# no login.
+SSL_REQUEST = bytes([0, 0, 0, 8, 4, 210, 22, 47])
 
 
 def terraform_outputs(stack: str) -> dict:
@@ -51,6 +61,14 @@ def wait_for_port(port: int, timeout_s: int = 60) -> None:
                 return
         time.sleep(1)
     raise TimeoutError(f"tunnel did not open on port {port}")
+
+
+def keep_tunnel_alive(port: int, stop: threading.Event) -> None:
+    """Every KEEPALIVE_S, a short connection through the tunnel, so it never sits idle."""
+    while not stop.wait(KEEPALIVE_S):
+        with contextlib.suppress(OSError), socket.create_connection(("127.0.0.1", port), 10) as s:
+            s.sendall(SSL_REQUEST)
+            s.recv(1)
 
 
 def run_container(script: str, args: list[str], env: dict) -> int:
@@ -86,6 +104,7 @@ def main() -> None:
         },
     )["tasks"][0]["taskArn"]
     tunnel = None
+    stop_keepalive = threading.Event()
     try:
         print("starting the bastion", flush=True)
         ecs.get_waiter("tasks_running").wait(cluster=app["cluster"], tasks=[task])
@@ -120,6 +139,9 @@ def main() -> None:
         )
         wait_for_port(LOCAL_PORT)
         print(f"tunnel open on 127.0.0.1:{LOCAL_PORT}", flush=True)
+        threading.Thread(
+            target=keep_tunnel_alive, args=(LOCAL_PORT, stop_keepalive), daemon=True
+        ).start()
 
         serverless = boto3.client("redshift-serverless", region_name=settings.aws_region)
         creds = serverless.get_credentials(
@@ -136,9 +158,13 @@ def main() -> None:
         }
         code = run_container(args.script, args.args, env)
     finally:
-        if tunnel is not None:
-            os.killpg(tunnel.pid, signal.SIGTERM)
+        # The bastion first: on 2026-11-20 the tunnel had already died, killpg raised, and the
+        # bastion was left running.
+        stop_keepalive.set()
         ecs.stop_task(cluster=app["cluster"], task=task, reason="hades.py finished")
+        if tunnel is not None:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(tunnel.pid, signal.SIGTERM)
         print("tunnel closed, bastion stopped", flush=True)
     sys.exit(code)
 

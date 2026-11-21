@@ -13,3 +13,8 @@ GRANT USAGE ON DATABASE awsdatacatalog TO "IAMR:AWSReservedSSO_AdministratorAcce
 -- login disabled, because the grant needs the user to exist before the task's first connection.
 CREATE USER "IAMR:ehr-rwe-eln-monitor" PASSWORD DISABLE;
 GRANT USAGE ON DATABASE awsdatacatalog TO "IAMR:ehr-rwe-eln-monitor";
+
+-- Step 6c: a writable schema in Redshift's own storage (the lake stays read-only) for OHDSI
+-- cohort tables that CohortMethod and other HADES packages read. scripts/write_cohorts.py fills it.
+CREATE SCHEMA IF NOT EXISTS results;
+GRANT USAGE, CREATE ON SCHEMA results TO "IAMR:AWSReservedSSO_AdministratorAccess_3cdbb86f6d3e44fd";

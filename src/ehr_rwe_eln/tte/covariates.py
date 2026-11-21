@@ -1,8 +1,9 @@
-"""Baseline covariates: what was known about each person at time zero.
+"""Baseline covariates: what was known about each person before time zero.
 
-Everything is measured on or before time zero, never after: a covariate recorded after
-treatment starts could be a result of the treatment, and adjusting for it would bias the
-comparison.
+Everything is measured up to the day before time zero. A covariate recorded after treatment
+starts could be a result of the treatment, and adjusting for it would bias the comparison; so
+could one recorded on the day itself, such as the kidney function check drawn when an ACE
+inhibitor is started (2026-11-21; same window as r/run_cohortmethod.R).
 """
 
 import pandas as pd
@@ -41,7 +42,7 @@ def add_covariates(con, protocol: Protocol, table: pd.DataFrame, cdm: str = "cdm
                     SELECT DISTINCT e.person_id
                     FROM tte_eligible e
                     JOIN {cdm}.condition_occurrence co
-                      ON co.person_id = e.person_id AND co.condition_start_date <= e.time_zero
+                      ON co.person_id = e.person_id AND co.condition_start_date < e.time_zero
                     JOIN concepts c ON c.concept_id = co.condition_concept_id
                 )
                 SELECT e.person_id, CASE WHEN h.person_id IS NOT NULL THEN 1 ELSE 0 END
@@ -65,7 +66,7 @@ def add_covariates(con, protocol: Protocol, table: pd.DataFrame, cdm: str = "cdm
                     JOIN {cdm}.measurement m
                       ON m.person_id = e.person_id
                      AND m.measurement_date BETWEEN e.time_zero - {int(covariate.lookback_days)}
-                                                AND e.time_zero
+                                                AND e.time_zero - 1
                      AND m.value_as_number IS NOT NULL
                     JOIN concepts c ON c.concept_id = m.measurement_concept_id
                 )
