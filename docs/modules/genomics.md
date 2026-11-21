@@ -9,17 +9,19 @@ A genotyping study for adults in the [OMOP](https://ohdsi.github.io/CommonDataMo
 1. **Simulate genomes** (`simulate.py`). [stdpopsim](https://popsim-consortium.github.io/stdpopsim-docs/)'s `OutOfAfrica_3G09` model (Gutenkunst et al. 2009) runs on [msprime](https://tskit.dev/msprime/), the coalescent with recombination: it traces simulated chromosomes back through three populations, YRI (Yoruba, West African), CEU (European), and CHB (Han Chinese, East Asian), so allele frequencies, linkage disequilibrium (nearby variants inherited together), and the differences between populations look like real data's. Each person's population follows the race in their OMOP record: Black to YRI, White to CEU, Asian to CHB, any other race at random. That is a simulation convention, not a claim that race is ancestry. It ties ancestry to hypertension the way Synthea's rates differ by race (61% of Black adults, 43% of White), which gives the GWAS population structure to correct.
 2. **Plant an effect.** One common variant on chromosome 1 is chosen, and whole simulated genomes from each person's own population are assigned so that carriers of it are more likely to have the phenotype. Assigning whole genomes, rather than editing one variant, keeps linkage disequilibrium intact.
 3. **Lay it out like dbGaP** (`study.py`): a VCF (variant call format) file per chromosome, one [PLINK](https://www.cog-genomics.org/plink/) binary set, subject phenotypes from OMOP, sample attributes, and a subject-to-sample mapping. Study codes go to people in a random order. The registry linking codes to OMOP persons is written to `data/registry/`, outside the study folder. Each sample's population is in `ancestry_truth.tsv`, an answer key like `truth.json`, never in the study tables.
-4. **Run the GWAS** (`gwas.py`). A score test for every variant, adjusted for age and sex, then the full logistic model on each lead variant. The result is checked against the planted effect: found, nothing else found, and genomic inflation on the chromosomes without it. That inflation is read against 100 phenotypes redrawn from the age-and-sex model alone, with no genetic effect, so it comes with a percentile instead of a bare number.
-5. **Cross-check in [Hail](https://hail.is).** The same study as a Hail MatrixTable, with the GWAS rerun there and compared variant by variant. Hail pins pandas below 3, PySpark 3.5, and Java 11, so it runs in its own container.
-6. **Add a clinical panel** (`panel.py`, `clinvar.py`, `gnomad.py`). The simulated chromosomes have made-up coordinates, which suits a GWAS but not curation, where a variant is looked up by its real position. So the same samples also get a panel VCF of real [ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/) variants at their real GRCh38 positions, in six genes from the [ACMG secondary findings list](https://www.ncbi.nlm.nih.gov/clinvar/docs/acmg/) whose condition Synthea records. Pathogenic variants are planted at a higher rate in people whose OMOP record has the gene's condition; common benign variants at their [gnomAD](https://gnomad.broadinstitute.org) v4 frequency in everyone; variants of uncertain significance at a fixed low rate. The VCF holds positions, alleles, and genotypes only. ClinVar's classification and every carrier are in `panel_truth.json`, the answer key for curating the panel.
+4. **QC, principal components, and REGENIE on AWS** (`scripts/run_regenie.py`, `docker/gwas_task.py`). [PLINK 2](https://www.cog-genomics.org/plink/2.0/) drops people and variants with more than 2% missing calls and variants under 1% frequency, then tests Hardy-Weinberg equilibrium within self-reported White participants only: pooled across populations whose frequencies differ, a sample has too few heterozygotes (the Wahlund effect) and good variants fail. It then computes 10 principal components (PCs) on common variants pruned of LD. [REGENIE](https://rgcgithub.github.io/regenie/) is the primary test: step 1 fits a whole-genome ridge regression of the phenotype on every variant, leaving out one chromosome at a time; step 2 tests each variant with that prediction as an offset and age, sex, and the PCs as covariates, Firth-corrected below p 0.01. REGENIE ships no ARM build, so the image is built by CodeBuild on x86 and runs as an x86 Fargate task (`infra/terraform/app/gwas.tf`); nothing runs on the laptop. Results come back to `data/genomics/regenie/<run>/`.
+5. **Run the GWAS** (`gwas.py`). A score test for every variant, adjusted for age, sex, and the same 10 PCs, then the full logistic model on each lead variant: the readable check on REGENIE. Both are checked against the planted effect: the planted variant itself genome-wide significant, nothing else found, and genomic inflation on the chromosomes without it. That inflation is read against 100 phenotypes redrawn from the covariate model alone, with no genetic effect, so it comes with a percentile instead of a bare number; the same null runs, on the variants QC kept, calibrate REGENIE. A cross-validated classifier from the PCs to each person's simulated population (`ancestry_truth.tsv`) checks that the PCs carry ancestry.
+6. **Cross-check in [Hail](https://hail.is).** The same study as a Hail MatrixTable, with the GWAS rerun there and compared variant by variant. Hail pins pandas below 3, PySpark 3.5, and Java 11, so it runs in its own container.
+7. **Add a clinical panel** (`panel.py`, `clinvar.py`, `gnomad.py`). The simulated chromosomes have made-up coordinates, which suits a GWAS but not curation, where a variant is looked up by its real position. So the same samples also get a panel VCF of real [ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/) variants at their real GRCh38 positions, in six genes from the [ACMG secondary findings list](https://www.ncbi.nlm.nih.gov/clinvar/docs/acmg/) whose condition Synthea records. Pathogenic variants are planted at a higher rate in people whose OMOP record has the gene's condition; common benign variants at their [gnomAD](https://gnomad.broadinstitute.org) v4 frequency in everyone; variants of uncertain significance at a fixed low rate. The VCF holds positions, alleles, and genotypes only. ClinVar's classification and every carrier are in `panel_truth.json`, the answer key for curating the panel.
 
 Genomic inflation (lambda) compares the middle of the observed test statistics with what chance alone gives. 1.0 means well calibrated. Above 1 means something other than the planted effect pushes p-values down, such as population structure. Below 1 means the test is too conservative. On a genome this small lambda is noisy: nearby variants are inherited together, so a few thousand of them behave like a few dozen independent tests, and lambda with no effect at all has a standard deviation of about 0.10.
 
 ## Run it
 
 ```bash
-uv run python scripts/generate_genomics.py   # about 2 minutes
-uv run python scripts/run_gwas.py
+uv run python scripts/generate_genomics.py   # about 3 minutes
+uv run python scripts/run_regenie.py         # on AWS, about 4 minutes (plus 5 to build a new image)
+uv run python scripts/run_gwas.py            # --no-pcs for the uncorrected test
 docker compose run --rm --build hail                                 # optional, 2.4 GB image
 uv run python scripts/generate_panel.py      # the clinical panel, after generate_genomics.py
 ```
@@ -29,6 +31,19 @@ uv run python scripts/generate_panel.py      # the clinical panel, after generat
 The defaults simulate 5,000 adults on three 3 Mb chromosomes with an odds ratio of 1.4 planted on hypertension. Everything is written to `data/genomics/`. The panel's genes, carrier rates, and variant counts are in `src/ehr_rwe_eln/genomics/panel.yaml`. Its first run downloads the ClinVar release the spec names (200 MB, checked against NCBI's md5) to `data/reference/clinvar/`, and asks gnomAD's public API about a few dozen variants, about two minutes at gnomAD's limit of 10 requests a minute. Answers are cached in `data/reference/gnomad/`, so later runs take about 10 seconds and make no requests. After the Hail run, `run_gwas.py` also reports how closely Hail's score statistics agree with its own.
 
 ## Results
+
+### Three populations, corrected, 2026-11-21
+
+The same study as below, with 10 PCs as covariates. QC removed nothing: simulated genotypes have no missing calls, and every variant passed Hardy-Weinberg in the 4,122 White participants. The PCs came from 213 variants left after pruning (frequency 5% or more, r-squared under 0.1 within 500 kb).
+
+| | Uncorrected score test | Score test + 10 PCs | REGENIE + 10 PCs |
+|---|---|---|---|
+| Genomic inflation, all chromosomes | 4.0 | 0.950 | 0.981 |
+| Genomic inflation without chr1 (percentile of 100 null runs) | 4.0 (100) | 0.919 (17) | 0.947 (29) |
+| Planted variant p | 0.58 | 2.2e-11 | 1.5e-11 |
+| Other loci | 12 | 0 | 0 |
+
+The null runs' middle 95% is 0.81 to 1.25. In both corrected tests the locus is led by chr1:1907158:G:A, 3.4 kb from the planted variant and in LD with it (p 2.1e-11 and 1.4e-11); the score test's odds ratio there is 1.46 (1.30 to 1.63) against 1.4 planted. The 10 PCs predict every person's simulated population (100%, 5-fold cross-validated). REGENIE ran in 201 seconds on Fargate, x86, 2 vCPUs.
 
 ### Three populations, no ancestry correction, 2026-11-21
 
@@ -41,7 +56,7 @@ The defaults simulate 5,000 adults on three 3 Mb chromosomes with an odds ratio 
 | Other loci | 12, p 7.5e-9 to 1.4e-13 |
 | Genomic inflation, chromosomes without the effect | 4.0, percentile 100 (null runs' middle 95%: 0.79 to 1.33) |
 
-The age-and-sex score test fails on purpose here. Variants that differ in frequency between populations look associated with hypertension because the populations differ in it, and the planted variant's real effect is hidden by the same confounding: YRI have more hypertension and fewer copies. The truth check still prints "found", because a false locus 65 kb away puts the planted variant inside a significant locus. Principal components and REGENIE (step 6e, PR 2) are the fix.
+The age-and-sex score test fails on purpose here. Variants that differ in frequency between populations look associated with hypertension because the populations differ in it, and the planted variant's real effect is hidden by the same confounding: YRI have more hypertension and fewer copies. The truth check then printed "found", because a false locus 65 kb away put the planted variant inside a significant locus; since PR 2, found means the planted variant itself passes 5e-8. Principal components and REGENIE are the fix (above).
 
 ### One population, 2026-11-18
 

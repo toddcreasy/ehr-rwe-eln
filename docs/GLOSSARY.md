@@ -365,6 +365,18 @@ Variant call format: the standard text file of genotypes, one line per variant a
 
 A widely used toolset for genetic association analysis, and its compact binary genotype format (`.bed`, `.bim`, `.fam`). [PLINK](https://www.cog-genomics.org/plink/)
 
+### Principal components (PCs)
+
+Axes of the largest variation in the genotypes, computed without labels. Across a study the first few separate ancestry groups, so adding them as GWAS covariates removes confounding by population structure. Computed on LD-pruned common variants so that blocks of correlated variants do not dominate them.
+
+### REGENIE
+
+A GWAS tool for large biobanks. Step 1 fits a whole-genome ridge regression that predicts each person's phenotype from all their variants, leaving out one chromosome at a time (LOCO), which captures relatedness and polygenic background like a mixed model does. Step 2 tests each variant with that prediction as an offset; Firth correction keeps binary-trait p-values honest when cases are few or the variant is rare. [REGENIE](https://rgcgithub.github.io/regenie/)
+
+### Hardy-Weinberg equilibrium (HWE)
+
+Genotype counts expected from an allele's frequency when mating is random (p², 2pq, q²). A variant far from it usually means a genotyping error, so QC drops it. Tested within one ancestry group: pooling groups whose frequencies differ produces too few heterozygotes (the Wahlund effect) even when every genotype is right.
+
 ### Hail
 
 An open-source library from the Broad Institute for genomic analysis at scale, built on Apache Spark. Its MatrixTable stores variants by samples with fields on each. Used here as an independent check on the GWAS. [hail.is](https://hail.is)

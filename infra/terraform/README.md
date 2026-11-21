@@ -72,6 +72,15 @@ docker buildx build --platform linux/arm64 -t "$REPO:$TAG" --push .
 
 The first deploy took about 25 minutes: Express Mode builds the load balancer and certificate before it starts a task. Express Mode gives the task a public IP in the public subnets, which is how it pulls from ECR with no NAT gateway. `terraform output app_url` is the public HTTPS URL. A brand-new hostname can stay unresolvable on a Mac that looked it up too early (macOS caches the miss); `sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder` clears it.
 
+## GWAS on AWS
+
+PLINK 2 and REGENIE run in an x86 image (`docker/gwas.Dockerfile`); REGENIE ships no ARM build, so nothing is built or run on the laptop (`app/gwas.tf`):
+
+- **AWS CodeBuild**: a build service that runs commands on a short-lived AWS host, billed per minute. Project `ehr-rwe-eln-gwas` builds the image on x86 from `build/gwas-<tag>.zip` in the bucket and pushes it to ECR repository `ehr-rwe-eln-gwas`.
+- **Fargate task** `ehr-rwe-eln-gwas`: X86_64, 2 vCPUs, 8 GB, on demand in the app cluster. Its role reads and writes only `studies/*` in bucket `ehr-rwe-eln-genomics-<account>`, which is private, TLS only, and expires every object after 30 days.
+
+The image tag is a hash of `docker/gwas.Dockerfile` and `docker/gwas_task.py`, computed the same way in Terraform and in `scripts/run_regenie.py`; changing either file means plan and apply `app/` first. The runner builds the image if ECR lacks the tag (about 5 minutes), uploads the study, runs the task, and downloads the results. A run on 5,000 people and 26,361 variants took 201 seconds, a few cents.
+
 ## Public demo limits
 
 The app has no sign-in. What bounds it, as in glia-nav:
