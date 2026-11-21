@@ -56,7 +56,7 @@ Three places, all on Claude Opus 4.6 through [Amazon Bedrock](https://docs.claud
 
 - **ELN extraction** (`src/ehr_rwe_eln/eln/`). Structured outputs constrain each reply to the extraction schema, and [Pydantic](https://docs.pydantic.dev) validates it before anything is stored. Offline runs go through the [Message Batches API](https://docs.claude.com/en/docs/build-with-claude/batch-processing) at half price.
 - **Literature evidence for variant curation** (`src/ehr_rwe_eln/curation/literature.py`). Claude proposes ACMG criteria from passages that name the variant, each with a PMID and a quote that code checks against what was sent. Proposals change nothing until a curator accepts them on `/curation/`.
-- **The agent** at `POST /api/agent` (`src/ehr_rwe_eln/agents/`), a small tool-using agent on the Anthropic SDK's tool runner. It checks the time and the database.
+- **The agent** at `POST /api/agent` (`src/ehr_rwe_eln/agents/workbench.py`), on the Anthropic SDK's tool runner, with four read-only tools (`agents/omop_tools.py`): concept search and per-concept person counts from `omop_stats` (precomputed by `scripts/build_omop_stats.py`, counts under 11 suppressed, so public calls never reach Redshift), and the newest trial emulation and data quality results. Claude Code gets the same tools from a local MCP server over stdio (`agents/mcp_server.py`, configured in `.mcp.json`); nothing serves MCP on the public demo.
 
 All three are scored by evals in `evals/` against the real model. They are slow and billed, so they run by hand, never in CI.
 
