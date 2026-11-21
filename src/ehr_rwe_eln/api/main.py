@@ -67,14 +67,7 @@ def health() -> dict[str, str]:
 @api.get("/health/db")
 def health_db() -> dict[str, str]:
     try:
-        with psycopg.connect(
-            host=settings.db_host,
-            port=settings.db_port,
-            dbname=settings.db_name,
-            user=settings.db_user,
-            password=settings.db_password.get_secret_value(),
-            connect_timeout=DB_CONNECT_TIMEOUT_S,
-        ) as conn:
+        with settings.connect(connect_timeout=DB_CONNECT_TIMEOUT_S) as conn:
             conn.execute("SELECT 1").fetchone()
     except psycopg.OperationalError as exc:
         log.error("database check failed", extra={"fields": {"error": str(exc)}})

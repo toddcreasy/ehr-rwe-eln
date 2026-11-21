@@ -60,17 +60,12 @@ resource "aws_ecs_express_gateway_service" "app" {
         value = environment.value
       }
     }
-
-    secret {
-      name       = "DB_PASSWORD"
-      value_from = local.db_credential_ref
-    }
   }
 
   depends_on = [
     aws_iam_role_policy_attachment.infrastructure,
     aws_iam_role_policy_attachment.execution,
-    aws_iam_role_policy.execution_db_secret,
     aws_iam_role_policy.app_bedrock,
+    aws_iam_role_policy.app_aurora,
   ]
 }

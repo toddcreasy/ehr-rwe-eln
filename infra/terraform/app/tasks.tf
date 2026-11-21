@@ -57,7 +57,6 @@ resource "aws_ecs_task_definition" "monitor" {
       for k, v in merge(local.database_env, local.lake_env, { LOG_LEVEL = "INFO" }) :
       { name = k, value = v }
     ]
-    secrets = [{ name = "DB_PASSWORD", valueFrom = local.db_credential_ref }]
     logConfiguration = {
       logDriver = "awslogs"
       options = {

@@ -80,6 +80,6 @@ secretGroup = 1
 keywords = ["user", "login"]
 
   [[rules.allowlists]]
-  description = "Postgres's built-in superuser name, the same in every installation"
+  description = "Postgres's built-in superuser name, and app, the password-less IAM role migration 019 creates"
   regexTarget = "secret"
-  regexes = ['''^postgres$''']
+  regexes = ['''^(?:postgres|app)$''']

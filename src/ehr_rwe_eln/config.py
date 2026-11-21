@@ -1,5 +1,6 @@
 from typing import Literal
 
+import boto3
 import psycopg
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,15 +19,26 @@ class DatabaseSettings(BaseSettings):
     db_port: int = 5432
     db_name: str = "ehr_rwe_eln"
     db_user: str = "postgres"
-    db_password: SecretStr
+    db_password: SecretStr | None = None
+    # On AWS the app signs in to Aurora with a 15-minute IAM token from its task role instead of a
+    # password (migration 019's app role). IAM sign-in requires TLS.
+    db_iam_auth: bool = False
+    aws_region: str = "us-east-1"
 
     def connect(self, dbname: str | None = None, **kwargs) -> psycopg.Connection:
+        if self.db_iam_auth:
+            password = boto3.client("rds", region_name=self.aws_region).generate_db_auth_token(
+                DBHostname=self.db_host, Port=self.db_port, DBUsername=self.db_user
+            )
+            kwargs.setdefault("sslmode", "require")
+        else:
+            password = self.db_password.get_secret_value() if self.db_password else None
         return psycopg.connect(
             host=self.db_host,
             port=self.db_port,
             dbname=dbname or self.db_name,
             user=self.db_user,
-            password=self.db_password.get_secret_value(),
+            password=password,
             **kwargs,
         )
 
