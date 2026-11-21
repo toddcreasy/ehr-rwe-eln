@@ -19,6 +19,12 @@ variable "daily_token_limit" {
   default     = 150000
 }
 
+variable "agent_enabled" {
+  description = "AGENT_ENABLED: false turns /api/agent off (503) and leaves the rest of the app up."
+  type        = bool
+  default     = true
+}
+
 variable "model" {
   description = "MODEL: the Bedrock cross-region inference profile every Claude call uses."
   type        = string

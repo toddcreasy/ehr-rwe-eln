@@ -57,4 +57,6 @@ class Settings(DatabaseSettings):
     public_demo: bool = False
     # Most tokens /agent may bill in one day, US Eastern (see api/limits.py).
     daily_token_limit: int = 150_000
+    # The switch for /agent: false refuses every call before the model is reached.
+    agent_enabled: bool = True
     frontend_dir: str = "frontend/out"

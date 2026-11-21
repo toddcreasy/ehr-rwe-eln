@@ -31,6 +31,17 @@ def test_invoke_returns_typed_reply_and_tools_called(monkeypatch):
     assert result["usage"]["total_tokens"] == 15 + 3
 
 
+def test_invoke_returns_no_output_when_the_call_cap_cuts_the_run(monkeypatch):
+    tool_call = [SimpleNamespace(type="tool_use", name="check_database_health")]
+    responses = [response(tool_call, input_tokens=10) for _ in range(4)]
+    monkeypatch.setattr(app, "run_agent", lambda *args: responses)
+
+    result = app.invoke(app.AgentRequest(prompt="Check the database 20 times."))
+
+    assert result["output"] is None
+    assert result["usage"]["total_tokens"] == 40
+
+
 def test_database_health_tool(database, monkeypatch):
     assert check_database_health() == "reachable"
     # Nothing listens on port 1.

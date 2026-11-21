@@ -20,13 +20,16 @@ def app_with_limit(pg, dq_schema, monkeypatch):
     """Builds the app with a given daily token limit, on the rolled-back test connection, with
     the model call stubbed out."""
 
-    def build(limit: int):
+    def build(limit: int, enabled: bool = True, complete: bool = True):
         monkeypatch.setenv("DB_HOST", "localhost")
         monkeypatch.setenv("DB_PASSWORD", "unused")
         monkeypatch.setenv("DAILY_TOKEN_LIMIT", str(limit))
+        monkeypatch.setenv("AGENT_ENABLED", str(enabled).lower())
         main = importlib.reload(importlib.import_module("ehr_rwe_eln.api.main"))
         monkeypatch.setattr(main, "connect", lambda: contextlib.nullcontext(pg))
-        monkeypatch.setattr(main, "invoke", lambda request: {"output": {}, "usage": USAGE})
+        monkeypatch.setattr(
+            main, "invoke", lambda request: {"output": {} if complete else None, "usage": USAGE}
+        )
         limits._calls.clear()
         return TestClient(main.app)
 
@@ -56,6 +59,20 @@ def test_agent_per_address_limit_uses_the_last_forwarded_address(app_with_limit)
     assert client.post("/api/agent", json={"prompt": "hi"}, headers=spoofed).status_code == 429
     other = {"x-forwarded-for": "1.2.3.4, 198.51.100.7"}
     assert client.post("/api/agent", json={"prompt": "hi"}, headers=other).status_code == 200
+
+
+def test_agent_switch_off_refuses_before_the_model(app_with_limit):
+    client = app_with_limit(1_000_000, enabled=False)
+    refused = client.post("/api/agent", json={"prompt": "hi"})
+    assert refused.status_code == 503
+    assert "turned off" in refused.json()["detail"]
+    assert client.get("/api/usage").json()["used"] == 0
+
+
+def test_agent_cut_short_by_the_call_cap_still_counts_its_tokens(app_with_limit):
+    client = app_with_limit(1_000_000, complete=False)
+    assert client.post("/api/agent", json={"prompt": "hi"}).status_code == 502
+    assert client.get("/api/usage").json()["used"] == USAGE["total_tokens"]
 
 
 def test_public_demo_blocks_curator_decisions(monkeypatch):

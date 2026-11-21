@@ -20,6 +20,9 @@ from ehr_rwe_eln.api.log_config import configure_logging
 from ehr_rwe_eln.config import DB_CONNECT_TIMEOUT_S, Settings
 
 settings = Settings()
+
+AGENT_OFF_MESSAGE = "The demo agent is turned off for now; every page still works."
+AGENT_INCOMPLETE_MESSAGE = "The agent didn't reach an answer. Try a simpler question."
 configure_logging(settings.log_level)
 log = logging.getLogger("ehr_rwe_eln.api")
 
@@ -101,7 +104,9 @@ def usage() -> dict:
 
 @api.post("/agent")
 def agent(request: AgentRequest, http_request: Request) -> dict:
-    """Public: no sign-in. Both limits are checked before the model is called."""
+    """Public: no sign-in. The switch and both limits are checked before the model is called."""
+    if not settings.agent_enabled:
+        raise HTTPException(status_code=503, detail=AGENT_OFF_MESSAGE)
     if not within_address_limit(client_address(http_request)):
         log.info("agent address limit", extra={"fields": {}})
         raise HTTPException(status_code=429, detail=ADDRESS_LIMIT_MESSAGE)
@@ -113,6 +118,9 @@ def agent(request: AgentRequest, http_request: Request) -> dict:
     result = invoke(request)
     with connect() as con:
         record_call(con, result["usage"]["total_tokens"])
+    if result["output"] is None:
+        log.warning("agent incomplete", extra={"fields": result["usage"]})
+        raise HTTPException(status_code=502, detail=AGENT_INCOMPLETE_MESSAGE)
     return result
 
 
