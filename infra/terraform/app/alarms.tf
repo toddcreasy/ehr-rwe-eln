@@ -42,3 +42,73 @@ resource "aws_cloudwatch_metric_alarm" "agent_tokens_daily" {
   treat_missing_data  = "notBreaching"
   alarm_actions       = [aws_sns_topic.alerts.arn]
 }
+
+# App errors: the request log line carries the status, so a metric filter counts 5xx responses.
+resource "aws_cloudwatch_log_metric_filter" "app_5xx" {
+  name           = "${local.name}-app-5xx"
+  log_group_name = aws_cloudwatch_log_group.app.name
+  pattern        = "{ $.message = \"request\" && $.status >= 500 }"
+
+  metric_transformation {
+    name          = "App5xx"
+    namespace     = local.name
+    value         = "1"
+    default_value = 0
+    unit          = "Count"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "app_5xx" {
+  alarm_name          = "${local.name}-app-5xx"
+  alarm_description   = "The app returned 3 or more 5xx responses in 5 minutes"
+  namespace           = local.name
+  metric_name         = "App5xx"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 3
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+}
+
+# Bedrock throttles and server errors on MODEL, which the app would otherwise only show as a
+# failed /api/agent call.
+resource "aws_cloudwatch_metric_alarm" "bedrock_errors" {
+  alarm_name          = "${local.name}-bedrock-errors"
+  alarm_description   = "3 or more Bedrock throttles or server errors on ${var.model} in 5 minutes"
+  evaluation_periods  = 1
+  threshold           = 3
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  metric_query {
+    id          = "errors"
+    expression  = "throttles + server_errors"
+    label       = "Throttles and server errors"
+    return_data = true
+  }
+
+  metric_query {
+    id = "throttles"
+    metric {
+      namespace   = "AWS/Bedrock"
+      metric_name = "InvocationThrottles"
+      dimensions  = { ModelId = var.model }
+      stat        = "Sum"
+      period      = 300
+    }
+  }
+
+  metric_query {
+    id = "server_errors"
+    metric {
+      namespace   = "AWS/Bedrock"
+      metric_name = "InvocationServerErrors"
+      dimensions  = { ModelId = var.model }
+      stat        = "Sum"
+      period      = 300
+    }
+  }
+}

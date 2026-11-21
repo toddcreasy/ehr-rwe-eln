@@ -5,8 +5,12 @@ Three stacks, each with its own state file in one S3 bucket, `ehr-rwe-eln-tfstat
 | Stack | What it holds | State key |
 |---|---|---|
 | `bootstrap/` | The state bucket itself (versioned, encrypted, private, old versions expire after 90 days) | `bootstrap/terraform.tfstate` |
-| `foundation/` | VPC, S3 Tables lake with Lake Formation and the Glue catalog, Redshift Serverless, Aurora Serverless v2, the $100 budget | `foundation/terraform.tfstate` |
-| `app/` | ECR, the public ECS Express Mode service, the bastion and monitor task definitions, the daily monitor schedule, the daily token alarm, and their IAM roles. Reads `foundation/` outputs through `terraform_remote_state` | `app/terraform.tfstate` |
+| `foundation/` | VPC, S3 Tables lake with Lake Formation and the Glue catalog, Redshift Serverless, Aurora Serverless v2, the $100 budget, the CloudTrail trail | `foundation/terraform.tfstate` |
+| `app/` | ECR, the public ECS Express Mode service, the bastion and monitor task definitions, the daily monitor schedule, the alarms, Bedrock invocation logging, and their IAM roles. Reads `foundation/` outputs through `terraform_remote_state` | `app/terraform.tfstate` |
+
+Two of these cover the whole account, not just this project: the CloudTrail trail (`foundation/audit.tf`, every Region, a year in `ehr-rwe-eln-cloudtrail-<account ID>`) and Bedrock invocation logging (`app/bedrock_logging.tf`, every Bedrock call in us-east-1, prompts and responses as text, 30 days in `/bedrock/invocations`). Each is one setting per account, so no other repo should manage them.
+
+Alarms, all to the `ehr-rwe-eln-alerts` SNS topic: daily tokens past 80% of the limit, 3 or more app 5xx responses in 5 minutes, 3 or more Bedrock throttles or server errors on `MODEL` in 5 minutes.
 
 Every resource is tagged `project = ehr-rwe-eln`; the budget counts only those.
 
