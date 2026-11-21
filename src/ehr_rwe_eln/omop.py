@@ -82,7 +82,10 @@ class RedshiftSession:
     description), over one Redshift Data API session, so temp tables live across statements.
     Statements take no parameters: callers write integers into the SQL themselves."""
 
-    def __init__(self, settings: LakeSettings, keep_alive_s: int = 900, timeout_s: int = 900):
+    # keep_alive_s: how long the session (and its temp tables) outlives its last statement.
+    # Callers do long local work between statements; run_tte.py's 500 bootstrap replicates went
+    # past 15 minutes on 2026-11-21 and the session expired. An idle session runs no query.
+    def __init__(self, settings: LakeSettings, keep_alive_s: int = 3600, timeout_s: int = 900):
         self.settings = settings
         self.keep_alive_s = keep_alive_s
         self.timeout_s = timeout_s

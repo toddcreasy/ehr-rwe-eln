@@ -30,8 +30,8 @@ def main() -> None:
             report = build_report(omop, protocol, cdm)
             reports.append(report)
             print(f"{protocol.id}: {protocol.name}")
-            for label, persons in report.attrition:
-                print(f"  {persons:>8,}  {label}")
+            for label, remaining in report.attrition:
+                print(f"  {remaining:>8,}  {label}")
             for arm in report.arms:
                 print(
                     f"  {arm.name:<12} {arm.persons:>6,} persons  {arm.events:>5,} events"
