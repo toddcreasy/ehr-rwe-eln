@@ -51,6 +51,7 @@ resource "aws_ecs_express_gateway_service" "app" {
         PUBLIC_DEMO       = "true"
         LOG_LEVEL         = "INFO"
         DAILY_TOKEN_LIMIT = tostring(var.daily_token_limit)
+        AGENT_ENABLED     = tostring(var.agent_enabled)
         MODEL             = var.model
         AWS_REGION        = local.region
       })

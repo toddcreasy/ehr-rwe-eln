@@ -15,7 +15,7 @@ SYSTEM_PROMPT = (
     "date or time, call the "
     "current_time tool and use its result; never guess the time. If the user asks whether the "
     "database is reachable or healthy, call the check_database_health tool and report its result. "
-    "If it reports the database unreachable, suggest starting it with docker compose up -d. "
+    "If it reports the database unreachable, say the demo database is unavailable right now. "
     "Never give medical or clinical advice: if asked for a diagnosis, treatment or dosing, decline "
     "and say this is a research tool on synthetic data."
 )
@@ -45,8 +45,14 @@ def check_database_health() -> str:
     return "reachable"
 
 
+# Model calls per run. The longest real answer is three (both tools, then the reply); past this
+# the runner stops, so one run can't keep calling tools and spending tokens.
+MAX_MODEL_CALLS = 4
+
+
 def run_agent(model_id: str, prompt: str) -> list[ParsedBetaMessage[HelloReply]]:
-    """Run the tool loop to a final typed reply. Returns every model response, in order."""
+    """Run the tool loop to a final typed reply, at most MAX_MODEL_CALLS model calls. Returns every
+    model response, in order; the last has no parsed output if the cap cut the run short."""
     runner = claude_client().beta.messages.tool_runner(
         model=model_id,
         # Thinking counts against max_tokens.
@@ -59,5 +65,6 @@ def run_agent(model_id: str, prompt: str) -> list[ParsedBetaMessage[HelloReply]]
         # Caches the system prompt and tool definitions once they exceed the model's minimum
         # cacheable length. This prompt is below it, so expect cache_read 0 here.
         cache_control={"type": "ephemeral"},
+        max_iterations=MAX_MODEL_CALLS,
     )
     return list(runner)

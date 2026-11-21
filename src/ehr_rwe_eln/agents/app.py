@@ -43,4 +43,6 @@ def invoke(request: AgentRequest) -> dict:
         + fields["cache_write"]
     )
     log.info("agent run", extra={"fields": fields})
-    return {"output": responses[-1].parsed_output.model_dump(), "usage": fields}
+    # None when the run hit MAX_MODEL_CALLS before a final reply; the tokens still count.
+    parsed = responses[-1].parsed_output
+    return {"output": parsed.model_dump() if parsed else None, "usage": fields}
