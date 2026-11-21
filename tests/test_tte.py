@@ -273,3 +273,54 @@ def test_ohdsi_cohorts_match_the_analysis_table(con):
     # Writing again replaces the protocol's rows instead of adding to them.
     write_cohorts(con, PROTOCOL)
     assert con.execute("SELECT count(*) FROM results.cohort").fetchone()[0] == 5
+
+
+def test_per_protocol_deviations_chain_fills_within_the_grace_period():
+    from ehr_rwe_eln.tte.per_protocol import deviations
+
+    table = pd.DataFrame(
+        {
+            "person_id": [1, 2],
+            "arm": [1, 0],
+            "time_zero": [D(2020, 1, 1), D(2020, 1, 1)],
+            "censor_date": [D(2021, 12, 31), D(2020, 6, 30)],
+        }
+    )
+    fills = pd.DataFrame(
+        [
+            # Person 1: a 13-day gap is bridged; the 83-day gap before June ends coverage on
+            # March 10, so they are off the drug from day 69 + 30 = 99.
+            (1, 1, D(2020, 1, 1), D(2020, 1, 28)),
+            (1, 1, D(2020, 2, 10), D(2020, 3, 10)),
+            (1, 1, D(2020, 6, 1), D(2020, 6, 28)),
+            (1, 0, D(2020, 2, 1), D(2020, 2, 28)),  # starts the other drug on day 31
+            # Person 2: covered past the end of follow-up, never takes the other drug.
+            (2, 0, D(2020, 1, 1), D(2020, 7, 31)),
+        ],
+        columns=["person_id", "arm", "start", "stop"],
+    )
+    out = deviations(table, fills).set_index("person_id")
+    assert out.loc[1, "stop_day"] == 99
+    assert out.loc[1, "switch_day"] == 31
+    assert out.loc[2].isna().all()
+
+
+def test_person_periods_strict_lenient_and_time_varying_values():
+    from ehr_rwe_eln.tte.per_protocol import person_periods
+
+    table = pd.DataFrame({"person_id": [1], "arm": [1], "event": [1], "days": [100]})
+    x = pd.DataFrame({"age": [60.0], "egfr": [70.0]})
+    deviation = pd.DataFrame({"person_id": [1], "stop_day": [99.0], "switch_day": [31.0]})
+    measured = pd.DataFrame({"person_id": [1], "name": ["egfr"], "day": [45], "value": [50.0]})
+
+    out = person_periods(table, x, deviation, measured)
+
+    assert out["period"].tolist() == [0, 1, 2, 3]  # days 0-29, 30-59, 60-89, 90-100
+    assert out["eligible"].tolist() == [1, 0, 0, 0]
+    # Strict: starting the other drug on day 31 deviates in period 1.
+    assert out["treatment_strict"].tolist() == [1, 0, 0, 0]
+    # Lenient: only stopping counts, on day 99, in period 3.
+    assert out["treatment_lenient"].tolist() == [1, 1, 1, 0]
+    assert out["outcome"].tolist() == [0, 0, 0, 1]
+    # Measured on day 45, so known from period 2 (day 60); before that, the baseline value.
+    assert out["egfr_now"].tolist() == [70.0, 70.0, 50.0, 50.0]
