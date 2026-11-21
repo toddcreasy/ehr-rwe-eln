@@ -7,6 +7,7 @@ resource "aws_db_subnet_group" "aurora" {
   subnet_ids = aws_subnet.private[*].id
 }
 
+# trivy:ignore:AWS-0079 Encrypted with the AWS managed key; a customer managed key costs $1/month and adds nothing for synthetic data.
 resource "aws_rds_cluster" "app" {
   cluster_identifier          = local.name
   engine                      = "aurora-postgresql"

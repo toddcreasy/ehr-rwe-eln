@@ -18,8 +18,10 @@ terraform {
   }
 }
 
+# The account ID is the state bucket's suffix; Terraform refuses to touch any other account.
 provider "aws" {
-  region = "us-east-1"
+  region              = "us-east-1"
+  allowed_account_ids = [trimprefix(var.state_bucket, "ehr-rwe-eln-tfstate-")]
 
   default_tags {
     tags = {

@@ -12,7 +12,9 @@ Every resource is tagged `project = ehr-rwe-eln`; the budget counts only those.
 
 ## Run a stack
 
-The backend bucket name holds the account ID, so it is passed at init, not written in the repo.
+The backend bucket name holds the account ID, so it is passed at init, not written in the repo. Each provider sets `allowed_account_ids`, so a plan against any other account fails before it reads anything: `bootstrap/` and `foundation/` take `account_id` in `terraform.tfvars`, and `app/` reads it from `state_bucket`.
+
+CI's `terraform` job runs `fmt`, `validate`, TFLint, and Trivy on every PR, with no AWS credentials. A Trivy finding that is a deliberate choice gets a `# trivy:ignore:<ID> <reason>` comment above the resource.
 
 ```sh
 cd infra/terraform/foundation

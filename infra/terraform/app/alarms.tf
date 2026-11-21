@@ -3,6 +3,7 @@
 # a CloudWatch metric, and the alarm emails when a UTC day's total passes 80% of the daily limit.
 # (The app's limit counts US Eastern days, so the two windows are offset by a few hours.)
 
+# trivy:ignore:AWS-0095 SNS encryption needs a customer managed key ($1/month) that CloudWatch may use; the topic carries only alarm text.
 resource "aws_sns_topic" "alerts" {
   name = "${local.name}-alerts"
 }

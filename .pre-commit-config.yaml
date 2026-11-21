@@ -14,6 +14,20 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=1024]
       - id: detect-private-key
+  # Terraform format and lint on staged .tf files; CI's terraform job also runs validate and Trivy.
+  - repo: local
+    hooks:
+      - id: terraform-fmt
+        name: terraform fmt
+        entry: terraform fmt -check -diff
+        language: system
+        files: \.tf$
+      - id: tflint
+        name: tflint
+        entry: bash -c 'tflint --recursive --config "$PWD/.tflint.hcl" --chdir infra/terraform'
+        language: system
+        files: \.tf$
+        pass_filenames: false
   # The same scan as CI's secrets job, on the staged changes before each commit.
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1

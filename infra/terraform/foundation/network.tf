@@ -29,6 +29,7 @@ resource "aws_subnet" "private" {
 }
 
 # Two zones: the minimum a load balancer accepts.
+# trivy:ignore:AWS-0164 Tasks need a public IP to reach ECR and AWS APIs without a NAT gateway; only the app runs here.
 resource "aws_subnet" "public" {
   count                   = 2
   vpc_id                  = aws_vpc.main.id
@@ -90,11 +91,35 @@ resource "aws_security_group" "app" {
   vpc_id      = aws_vpc.main.id
 }
 
-resource "aws_vpc_security_group_egress_rule" "app_all" {
+# Outbound is HTTPS to anywhere plus the two database ports. Every external call the code makes
+# (AWS APIs, Bedrock, NCBI, gnomAD, Ensembl) is HTTPS; DNS goes to the VPC resolver, which
+# security groups don't filter.
+# trivy:ignore:AWS-0104 HTTPS only, to public APIs (NCBI, gnomAD, Ensembl) whose addresses change; no NAT to filter at.
+resource "aws_vpc_security_group_egress_rule" "app_https" {
   security_group_id = aws_security_group.app.id
-  ip_protocol       = "-1"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
   cidr_ipv4         = "0.0.0.0/0"
-  description       = "Outbound to AWS APIs, Bedrock, NCBI, gnomAD"
+  description       = "HTTPS to AWS APIs, Bedrock, NCBI, gnomAD, Ensembl"
+}
+
+resource "aws_vpc_security_group_egress_rule" "app_to_aurora" {
+  security_group_id            = aws_security_group.app.id
+  referenced_security_group_id = aws_security_group.aurora.id
+  ip_protocol                  = "tcp"
+  from_port                    = 5432
+  to_port                      = 5432
+  description                  = "Postgres to Aurora"
+}
+
+resource "aws_vpc_security_group_egress_rule" "app_to_redshift" {
+  security_group_id            = aws_security_group.app.id
+  referenced_security_group_id = aws_security_group.redshift.id
+  ip_protocol                  = "tcp"
+  from_port                    = 5439
+  to_port                      = 5439
+  description                  = "Redshift to the workgroup"
 }
 
 resource "aws_security_group" "aurora" {

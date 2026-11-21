@@ -5,12 +5,23 @@
 # - monitor task role: the daily privacy check, which reads OMOP from the lake through Redshift.
 # - bastion task role: the on-demand tunnel to Aurora (ECS Exec over Systems Manager).
 
+# Only ECS tasks in this account may take these roles (the confused-deputy guard).
 data "aws_iam_policy_document" "ecs_tasks_trust" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
       type        = "Service"
       identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [local.account_id]
+    }
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = ["arn:aws:ecs:${local.region}:${local.account_id}:*"]
     }
   }
 }
@@ -88,16 +99,19 @@ resource "aws_iam_role" "monitor" {
 # and the catalog and Lake Formation calls that reading lake tables makes.
 data "aws_iam_policy_document" "monitor" {
   statement {
-    actions = [
-      "redshift-data:ExecuteStatement",
-      "redshift-data:DescribeStatement",
-      "redshift-data:GetStatementResult",
-    ]
-    resources = ["*"]
+    actions   = ["redshift-data:ExecuteStatement", "redshift-serverless:GetCredentials"]
+    resources = [local.foundation.redshift_workgroup_arn]
   }
+  # These two take a statement ID, not a workgroup, so they can't be scoped by resource; the
+  # condition limits them to statements this role ran.
   statement {
-    actions   = ["redshift-serverless:GetCredentials"]
-    resources = ["arn:aws:redshift-serverless:${local.region}:${local.account_id}:workgroup/*"]
+    actions   = ["redshift-data:DescribeStatement", "redshift-data:GetStatementResult"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "redshift-data:statement-owner-iam-userid"
+      values   = ["$${aws:userid}"]
+    }
   }
   statement {
     actions = [
@@ -107,8 +121,12 @@ data "aws_iam_policy_document" "monitor" {
       "glue:GetDatabases",
       "glue:GetTable",
       "glue:GetTables",
-      "lakeformation:GetDataAccess",
     ]
+    resources = local.foundation.lake_glue_arns
+  }
+  # GetDataAccess has no resource-level permissions; Lake Formation grants decide what it returns.
+  statement {
+    actions   = ["lakeformation:GetDataAccess"]
     resources = ["*"]
   }
 }
