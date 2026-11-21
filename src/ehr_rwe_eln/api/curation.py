@@ -3,12 +3,13 @@ from typing import Literal
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException
+from langgraph.types import Command
 from psycopg.rows import dict_row
-from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field, field_validator
 
 from ehr_rwe_eln.api.demo import not_in_public_demo
 from ehr_rwe_eln.config import DB_CONNECT_TIMEOUT_S, DatabaseSettings
+from ehr_rwe_eln.curation import literature_graph
 from ehr_rwe_eln.curation.rules import POINTS, classify, label
 
 router = APIRouter(prefix="/curation")
@@ -36,6 +37,12 @@ FROM curation.proposal p
 WHERE p.variant_id = %(variant_id)s AND p.run_id = (SELECT max(r.run_id) FROM curation.run r
     WHERE r.variant_set = %(variant_set)s AND r.sources ? 'literature')
 ORDER BY p.verified DESC, p.proposal_id
+"""
+
+# The latest literature run on a rules run's variant set.
+LITERATURE_RUN_SQL = """
+SELECT max(l.run_id) AS run_id FROM curation.run l JOIN curation.run r USING (variant_set)
+WHERE r.run_id = %s AND l.sources ? 'literature'
 """
 
 VARIANTS_SQL = """
@@ -177,19 +184,29 @@ def decide(decision: Decision) -> dict:
                 detail=f"the criteria score {scored['classification']}; a different class"
                 " needs a note saying why",
             )
-        return con.execute(
-            "INSERT INTO curation.decision (run_id, variant_id, curator, accepted, criteria,"
-            " points, computed, classification, note) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
-            " RETURNING *",
-            [
-                decision.run_id,
-                decision.variant_id,
-                decision.curator,
-                list(dict.fromkeys(decision.accepted)),
-                Jsonb(scored["criteria"]),
-                scored["points"],
-                scored["classification"],
-                decision.classification,
-                decision.note,
-            ],
-        ).fetchone()
+        values = {
+            "run_id": decision.run_id,
+            "variant_id": decision.variant_id,
+            "curator": decision.curator,
+            "accepted": list(dict.fromkeys(decision.accepted)),
+            "criteria": scored["criteria"],
+            "points": scored["points"],
+            "computed": scored["classification"],
+            "classification": decision.classification,
+            "note": decision.note,
+        }
+        # A variant in a literature run is paused in its graph, waiting for this: resume it, and
+        # the graph records the decision. Variants with no literature run record directly.
+        lit = con.execute(LITERATURE_RUN_SQL, [decision.run_id]).fetchone()["run_id"]
+        if lit is not None:
+            with literature_graph.checkpointer() as saver:
+                graph = literature_graph.build(saver)
+                config = literature_graph.config(lit, decision.variant_id)
+                if graph.get_state(config).next == ("curator",):
+                    out = graph.invoke(
+                        Command(resume=values),
+                        config,
+                        context=literature_graph.Deps(con=con),
+                    )
+                    return out["decisions"][-1]
+        return literature_graph.record_decision(con, values)

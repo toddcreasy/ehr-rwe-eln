@@ -354,6 +354,8 @@ def literature_cases(con, n: int, reference: Path) -> tuple[list[dict], Counter]
             {
                 "variant_id": variant_id,
                 "gene": gene,
+                "hgvsc": hgvsc,
+                "hgvsp": hgvsp,
                 "expert": expert,
                 "passages": text_found,
                 "prompt": prompt(gene, hgvsc, hgvsp, text_found),

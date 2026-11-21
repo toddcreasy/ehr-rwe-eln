@@ -4,8 +4,11 @@ from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
+from langgraph.checkpoint.memory import InMemorySaver
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+
+from ehr_rwe_eln.curation import literature_graph
 
 V = "chr17:1:A:G"
 
@@ -21,7 +24,13 @@ def client(pg, dq_schema, monkeypatch):
         return contextlib.nullcontext(pg)
 
     monkeypatch.setattr(main.curation, "connect", connect)
-    return TestClient(main.app)
+    saver = InMemorySaver()
+    monkeypatch.setattr(
+        main.curation.literature_graph, "checkpointer", lambda: contextlib.nullcontext(saver)
+    )
+    client = TestClient(main.app)
+    client.saver = saver
+    return client
 
 
 def run(pg, sources: dict) -> int:
@@ -144,3 +153,37 @@ def test_a_class_other_than_the_score_needs_a_note_and_a_name(client, curated):
     assert ok.status_code == 201 and ok.json()["computed"] == "Uncertain significance"
     nameless = client.post("/api/curation/decisions", json=base | {"curator": "  ", "note": "n"})
     assert nameless.status_code == 422
+
+
+def test_a_decision_resumes_the_variants_paused_literature_graph(client, curated, pg):
+    rules, ids = curated
+    lit = pg.execute(
+        "SELECT max(run_id) FROM curation.run WHERE sources ? 'literature'"
+    ).fetchone()[0]
+    graph = literature_graph.build(client.saver)
+    cfg = literature_graph.config(lit, V)
+    deps = literature_graph.Deps(con=pg)
+    # A run that stored its proposals and paused for the curator.
+    graph.update_state(
+        cfg,
+        {"run_id": lit, "variant_id": V, "gene": "BRCA1", "proposal_ids": [ids["ps4"]]},
+        as_node="store",
+    )
+    graph.invoke(None, cfg, context=deps)
+    assert graph.get_state(cfg).next == ("curator",)
+
+    res = client.post(
+        "/api/curation/decisions",
+        json={
+            "run_id": rules,
+            "variant_id": V,
+            "curator": "A",
+            "classification": "Uncertain significance",
+        },
+    )
+    assert res.status_code == 201 and res.json()["curator"] == "A"
+    state = graph.get_state(cfg)
+    assert state.next == ("curator",)  # paused again for the next decision
+    assert [d["decision_id"] for d in state.values["decisions"]] == [res.json()["decision_id"]]
+    history = client.get(f"/api/curation/runs/{rules}/variants/{V}").json()["decisions"]
+    assert len(history) == 1  # recorded once, by the graph
