@@ -26,3 +26,23 @@ output "public_subnet_ids" {
 output "app_security_group_id" {
   value = local.foundation.app_security_group_id
 }
+
+output "gwas_bucket" {
+  value = aws_s3_bucket.gwas.id
+}
+
+output "gwas_repository" {
+  value = aws_ecr_repository.gwas.name
+}
+
+output "gwas_image_tag" {
+  value = local.gwas_image_tag
+}
+
+output "gwas_codebuild_project" {
+  value = aws_codebuild_project.gwas.name
+}
+
+output "gwas_task_definition" {
+  value = aws_ecs_task_definition.gwas.arn_without_revision
+}

@@ -24,6 +24,12 @@ way. The lead variant of each hit is then fit in full for its odds ratio.
   against its own null: the phenotype is redrawn NULL_RUNS times from the age-and-sex model
   alone, the score test rerun, and the observed lambda placed among those null lambdas. A
   percentile near 0 or 100 on every rebuild points at the pipeline; one low draw does not.
+- Population structure: when allele frequencies and the phenotype both differ by ancestry, every
+  variant that differs by ancestry looks associated. Principal components (PCs) of the genotypes
+  recover ancestry (the first two separate the study's three populations), and adding them as
+  covariates removes that confounding. PLINK 2 computes them in the gwas task
+  (docker/gwas_task.py), which also runs REGENIE, the mixed-model test that is the primary GWAS;
+  this score test with the same PCs is the readable check on it, and its null runs calibrate both.
 """
 
 from pathlib import Path
@@ -33,6 +39,8 @@ import polars as pl
 import statsmodels.api as sm
 from bed_reader import open_bed
 from scipy.stats import chi2
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.model_selection import cross_val_score
 
 SIGNIFICANCE = 5e-8
 LOCUS_WINDOW = 500_000
@@ -63,6 +71,21 @@ def load(directory: Path) -> tuple[np.ndarray, pl.DataFrame, pl.DataFrame]:
         .join(phenotypes, on="subject_id", how="left", maintain_order="left")
     )
     return genotypes, variants, people
+
+
+def read_pcs(path: Path, samples: list[str]) -> np.ndarray:
+    """PLINK 2's .eigenvec (people by PCs), in the given sample order."""
+    pcs = pl.read_csv(path, separator="\t").rename(lambda c: c.lstrip("#"))
+    ordered = pl.DataFrame({"IID": samples}).join(pcs, on="IID", how="left", maintain_order="left")
+    return ordered.select(pl.col("^PC\\d+$")).to_numpy()
+
+
+def pc_ancestry_agreement(pcs: np.ndarray, ancestry: np.ndarray) -> float:
+    """How much of each person's simulated population the PCs carry: the cross-validated
+    accuracy (5 folds, each person predicted by a fit on the others) of linear discriminant
+    analysis from the PCs to the population. PLINK computed the PCs without the labels; which
+    PCs hold ancestry varies (LD can take PC2 on a small genome), so all of them are used."""
+    return float(cross_val_score(LinearDiscriminantAnalysis(), pcs, ancestry, cv=5).mean())
 
 
 def score_test(genotypes: np.ndarray, y: np.ndarray, covariates: np.ndarray) -> np.ndarray:
@@ -137,13 +160,16 @@ def inflation(results: pl.DataFrame) -> float:
 
 
 def run_gwas(
-    directory: Path, phenotype: str, null_runs: int = NULL_RUNS
+    directory: Path, phenotype: str, null_runs: int = NULL_RUNS, pcs: Path | None = None
 ) -> tuple[pl.DataFrame, dict]:
+    """pcs: a PLINK 2 .eigenvec whose PCs join age and sex as covariates."""
     genotypes, variants, people = load(directory)
     y = people[phenotype].to_numpy().astype(float)
     age = people["age"].to_numpy().astype(float)
     male = (people["sex"] == "male").to_numpy().astype(float)
     covariates = np.column_stack([np.ones(len(people)), (age - age.mean()) / age.std(), male])
+    if pcs is not None:
+        covariates = np.column_stack([covariates, read_pcs(pcs, people["sample_id"].to_list())])
     statistics = score_test(genotypes, y, covariates)
     null = null_statistics(genotypes, y, covariates, null_runs)
     frequency = genotypes.mean(axis=0) / 2
@@ -182,10 +208,31 @@ def run_gwas(
     return results, summary
 
 
+def read_regenie(path: Path) -> pl.DataFrame:
+    """REGENIE step 2's results in run_gwas's shape: id, chromosome, position, alt_frequency,
+    chi2, p. ALLELE1 is REGENIE's tested allele; alt_frequency is turned to the alternate allele
+    (the last field of the ID) either way."""
+    raw = pl.read_csv(path, separator=" ")
+    alt = pl.col("ID").str.split(":").list.last()
+    return raw.select(
+        pl.col("ID").alias("id"),
+        ("chr" + pl.col("CHROM").cast(pl.String)).alias("chromosome"),
+        pl.col("GENPOS").cast(pl.Int64).alias("position"),
+        pl.when(pl.col("ALLELE1") == alt)
+        .then(pl.col("A1FREQ"))
+        .otherwise(1 - pl.col("A1FREQ"))
+        .alias("alt_frequency"),
+        pl.col("CHISQ").alias("chi2"),
+        (10 ** -pl.col("LOG10P")).alias("p"),
+    )
+
+
 def check_truth(results: pl.DataFrame, summary: dict, truth: dict) -> dict:
-    """Did the GWAS find the planted variant, and nothing else? Also the planted variant's own
-    p, and lambda on the chromosomes it is not on (where nothing should be found), placed
-    among the null runs' lambdas on the same variants."""
+    """Did the GWAS find the planted variant, and nothing else? Found means the planted variant
+    itself is genome-wide significant: a locus nearby can be a false one (population structure
+    gave one 65 kb away on 2026-11-21). Also lambda on the chromosomes it is not on (where
+    nothing should be found), placed among the null runs' lambdas on the same variants;
+    summary["null_statistics"] must cover the same variants as results."""
     planted = truth["variant"]
     hits = [
         locus
@@ -198,10 +245,12 @@ def check_truth(results: pl.DataFrame, summary: dict, truth: dict) -> dict:
         np.minimum(frequency, 1 - frequency) >= COMMON
     )
     null = calibration(results["chi2"].to_numpy()[mask], summary["null_statistics"][:, mask])
+    planted_p = float(results.filter(pl.col("id") == planted["id"])["p"][0])
     return {
-        "planted_found": bool(hits),
+        "planted_found": planted_p < SIGNIFICANCE,
+        "locus_near_planted": bool(hits),
         "lead_is_planted": bool(hits) and hits[0]["id"] == planted["id"],
-        "planted_p": float(results.filter(pl.col("id") == planted["id"])["p"][0]),
+        "planted_p": planted_p,
         "other_loci": len(summary["loci"]) - len(hits),
         "genomic_inflation_null_chromosomes": null["lambda"] if mask.any() else None,
         "calibration_null_chromosomes": null if mask.any() else None,

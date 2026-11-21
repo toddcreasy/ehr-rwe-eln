@@ -96,6 +96,7 @@ def build_study(
             "sample_id": [f"SAMP-{i:05d}" for i in range(1, n + 1)],
             "sex": people["sex"].to_numpy(),
             "age": people["age"].to_numpy(),
+            "race": people["race"].to_numpy(),
             phenotype: people[phenotype].to_numpy(),
             "ancestry": first.population,
         },
@@ -197,7 +198,8 @@ def write_study(out: Path, study: Study, registry: Path) -> None:
         {"subject_id": subjects.index.tolist()}
         | {column: subjects[column].tolist() for column in subjects.columns}
     )
-    table.select("subject_id", "sex", "age", phenotype).write_csv(
+    # Self-reported race, as dbGaP subject phenotype tables carry it; never the simulated ancestry.
+    table.select("subject_id", "sex", "age", "race", phenotype).write_csv(
         out / "subject_phenotypes.tsv", separator="\t"
     )
     table.select("subject_id", "sample_id").write_csv(

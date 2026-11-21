@@ -6,7 +6,8 @@ Runs inside the hail container (docker/hail.Dockerfile), so it imports Hail and 
 this project. Run scripts/generate_genomics.py first. Reads the VCFs and tables in
 data/genomics/; writes data/genomics/study.mt (a Hail MatrixTable: variants as rows, samples as
 columns, genotypes as entries) and data/genomics/hail_gwas.tsv, which scripts/run_gwas.py
-compares with its own results.
+compares with its own results. The covariates match run_gwas.py's: age, sex, and the 10 PCs of
+the newest REGENIE run in data/genomics/regenie/ (scripts/run_regenie.py).
 """
 
 import json
@@ -42,6 +43,9 @@ def main() -> None:
     mapping = hl.import_table(str(DATA / "subject_sample_mapping.tsv"), key="sample_id")
     mt = mt.annotate_cols(subject_id=mapping[mt.s].subject_id)
     mt = mt.annotate_cols(pheno=phenotypes[mt.subject_id])
+    run = sorted(p.parent for p in (DATA / "regenie").glob("*/run.json"))[-1]
+    pcs = hl.import_table(str(run / "pcs.eigenvec"), impute=True).rename({"#FID": "FID"})
+    mt = mt.annotate_cols(pcs=pcs.key_by("IID")[mt.s])
     mt = hl.variant_qc(mt)
     mt.write(str(DATA / "study.mt"), overwrite=True)
 
@@ -56,7 +60,7 @@ def main() -> None:
         test="score",
         y=hl.float(mt.pheno[truth["phenotype"]]),
         x=mt.GT.n_alt_alleles(),
-        covariates=[1.0, mt.age_std, mt.male],
+        covariates=[1.0, mt.age_std, mt.male, *[mt.pcs[f"PC{i}"] for i in range(1, 11)]],
     )
     gwas = gwas.annotate(
         id=hl.format(
