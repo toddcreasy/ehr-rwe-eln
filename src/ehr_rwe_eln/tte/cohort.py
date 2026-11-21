@@ -156,7 +156,8 @@ def build_analysis_table(
                CASE WHEN outcome_date <= censor_date THEN 'outcome'
                     WHEN censor_date = death_date THEN 'death'
                     WHEN censor_date = op_end THEN 'end_of_observation'
-                    ELSE 'administrative' END AS end_reason
+                    ELSE 'administrative' END AS end_reason,
+               censor_date
         FROM eligible ORDER BY person_id
         """
     )
