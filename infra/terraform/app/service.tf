@@ -54,6 +54,8 @@ resource "aws_ecs_express_gateway_service" "app" {
         AGENT_ENABLED     = tostring(var.agent_enabled)
         MODEL             = var.model
         AWS_REGION        = local.region
+        GUARDRAIL_ID      = aws_bedrock_guardrail.agent.guardrail_id
+        GUARDRAIL_VERSION = aws_bedrock_guardrail_version.agent.version
       })
       content {
         name  = environment.key

@@ -112,3 +112,23 @@ resource "aws_cloudwatch_metric_alarm" "bedrock_errors" {
     }
   }
 }
+
+# The guardrail stepping in often means someone is probing the demo (prompt attacks, clinical
+# advice). 20 in an hour is far above what ordinary questions trip.
+resource "aws_cloudwatch_metric_alarm" "guardrail_interventions" {
+  alarm_name        = "${local.name}-guardrail-interventions"
+  alarm_description = "The /api/agent guardrail stepped in 20 or more times in an hour"
+  namespace         = "AWS/Bedrock/Guardrails"
+  metric_name       = "InvocationsIntervened"
+  dimensions = {
+    GuardrailArn     = aws_bedrock_guardrail.agent.guardrail_arn
+    GuardrailVersion = aws_bedrock_guardrail_version.agent.version
+  }
+  statistic           = "Sum"
+  period              = 3600
+  evaluation_periods  = 1
+  threshold           = 20
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+}

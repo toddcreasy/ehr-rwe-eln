@@ -3,13 +3,15 @@
 same functions to Claude Code."""
 
 import json
+import secrets
 
+import boto3
 from anthropic import beta_tool
 from anthropic.types.beta.parsed_beta_message import ParsedBetaMessage
 from pydantic import BaseModel, Field
 
 from ehr_rwe_eln.agents import omop_tools
-from ehr_rwe_eln.agents.config import THINKING, claude_client
+from ehr_rwe_eln.agents.config import THINKING, AgentSettings, claude_client
 from ehr_rwe_eln.config import DB_CONNECT_TIMEOUT_S, DatabaseSettings
 
 SYSTEM_PROMPT = (
@@ -105,9 +107,47 @@ def dq_results_get(table: str | None = None, category: str | None = None) -> str
 TOOLS = [omop_concept_search, omop_concept_count, tte_results_get, dq_results_get]
 
 
+# The Bedrock Guardrail (GUARDRAIL_ID, GUARDRAIL_VERSION; none when empty). Its input checks would
+# flag the system prompt itself as a prompt attack (tested 2026-11-21), so only the visitor's text
+# is tagged for them; the model's output is checked in full. The tag's suffix is random per call,
+# so a visitor can't close the tag early.
+GUARD_TAG = "amazon-bedrock-guardrails-guardContent_"
+# What the agent says when the guardrail blocks the model's output: its refusal replaces the
+# model's JSON, so the structured output can't be parsed.
+BLOCKED_OUTPUT_REPLY = "I can't share that. This is a research demonstration on synthetic data."
+
+
+def guardrail_check(prompt: str, settings: AgentSettings) -> str | None:
+    """The guardrail's refusal if it blocks this prompt, else None. Checked before the model is
+    called, so a blocked prompt costs no model tokens."""
+    out = boto3.client("bedrock-runtime", region_name=settings.aws_region).apply_guardrail(
+        guardrailIdentifier=settings.guardrail_id,
+        guardrailVersion=settings.guardrail_version,
+        source="INPUT",
+        content=[{"text": {"text": prompt}}],
+    )
+    if out["action"] != "GUARDRAIL_INTERVENED":
+        return None
+    return " ".join(o["text"] for o in out.get("outputs", []))
+
+
 def run_agent(model_id: str, prompt: str) -> list[ParsedBetaMessage[AgentReply]]:
     """Run the tool loop to a final typed reply, at most MAX_MODEL_CALLS model calls. Returns every
-    model response, in order; the last has no parsed output if the cap cut the run short."""
+    model response, in order; the last has no parsed output if the cap cut the run short. With a
+    guardrail, every model call goes through it, and a blocked output raises pydantic's
+    ValidationError (its refusal isn't the reply's JSON)."""
+    settings = AgentSettings()
+    content, guardrail = prompt, {}
+    if settings.guardrail_id:
+        suffix = secrets.token_hex(8)
+        content = f"<{GUARD_TAG}{suffix}>{prompt}</{GUARD_TAG}{suffix}>"
+        guardrail = {
+            "extra_headers": {
+                "X-Amzn-Bedrock-GuardrailIdentifier": settings.guardrail_id,
+                "X-Amzn-Bedrock-GuardrailVersion": settings.guardrail_version,
+            },
+            "extra_body": {"amazon-bedrock-guardrailConfig": {"tagSuffix": suffix}},
+        }
     runner = claude_client().beta.messages.tool_runner(
         model=model_id,
         # Thinking counts against max_tokens.
@@ -115,11 +155,12 @@ def run_agent(model_id: str, prompt: str) -> list[ParsedBetaMessage[AgentReply]]
         thinking=THINKING,
         system=SYSTEM_PROMPT,
         tools=TOOLS,
-        messages=[{"role": "user", "content": prompt}],
+        messages=[{"role": "user", "content": content}],
         output_format=AgentReply,
         # Caches the system prompt and tool definitions once they pass the model's minimum
         # cacheable length.
         cache_control={"type": "ephemeral"},
         max_iterations=MAX_MODEL_CALLS,
+        **guardrail,
     )
     return list(runner)

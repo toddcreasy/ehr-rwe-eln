@@ -84,6 +84,12 @@ resource "aws_iam_role" "app" {
 
 # MODEL is a cross-region inference profile: a call goes to the profile, which routes it to the
 # model in one of its regions, so both the profile and each region's model must be allowed.
+# Every model call must go through the agent's guardrail at its pinned version: a call without
+# it is denied, so a code change can't quietly drop it.
+locals {
+  guardrail_pinned = "${aws_bedrock_guardrail.agent.guardrail_arn}:${aws_bedrock_guardrail_version.agent.version}"
+}
+
 data "aws_iam_policy_document" "app_bedrock" {
   statement {
     actions = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
@@ -91,6 +97,16 @@ data "aws_iam_policy_document" "app_bedrock" {
       ["arn:aws:bedrock:${local.region}:${local.account_id}:inference-profile/${var.model}"],
       [for r in var.model_regions : "arn:aws:bedrock:${r}::foundation-model/${trimprefix(var.model, "us.")}"],
     )
+    condition {
+      test     = "StringEquals"
+      variable = "bedrock:GuardrailIdentifier"
+      values   = [local.guardrail_pinned]
+    }
+  }
+  # Checking a prompt before the model (guardrail_check), and the guardrail on each model call.
+  statement {
+    actions   = ["bedrock:ApplyGuardrail"]
+    resources = [aws_bedrock_guardrail.agent.guardrail_arn]
   }
 }
 

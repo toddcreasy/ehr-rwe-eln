@@ -17,6 +17,10 @@ class AgentSettings(BaseSettings):
 
     model: str = "us.anthropic.claude-opus-4-6-v1"
     aws_region: str = "us-east-1"
+    # The Bedrock Guardrail on /api/agent (infra/terraform/app/guardrail.tf). Empty locally,
+    # where no guardrail is used.
+    guardrail_id: str = ""
+    guardrail_version: str = ""
 
 
 def claude_client() -> anthropic.AnthropicBedrock:
