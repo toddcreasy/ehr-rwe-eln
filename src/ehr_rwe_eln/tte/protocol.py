@@ -64,7 +64,7 @@ class ConditionCovariate(Strict):
 
 class MeasurementCovariate(Strict):
     name: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
-    # The latest value within lookback_days up to and including time zero.
+    # The latest value within lookback_days up to the day before time zero.
     measurements: ConceptSet
     lookback_days: int = Field(default=365, gt=0)
     # The 0/1 column marking a missing value; defaults to <name>_missing. Measurements taken
