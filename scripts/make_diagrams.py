@@ -368,7 +368,7 @@ s += [
         NH,
         "module",
         "Synthetic genomics",
-        "msprime study, GWAS",
+        "stdpopsim study, GWAS",
         "5,000 adults on three simulated chromosomes, with an odds ratio of 1.4 planted on "
         "hypertension. A GWAS is checked against the planted effect. A clinical panel puts "
         "real ClinVar variants at their GRCh38 positions in the same people.",

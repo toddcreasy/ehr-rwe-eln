@@ -6,9 +6,9 @@ A genotyping study for adults in the [OMOP](https://ohdsi.github.io/CommonDataMo
 
 ## What it does
 
-1. **Simulate genomes** (`simulate.py`). [msprime](https://tskit.dev/msprime/) runs the coalescent with recombination: it traces simulated chromosomes back through shared ancestors, so allele frequencies and linkage disequilibrium (nearby variants inherited together) look like real data's.
-2. **Plant an effect.** One common variant on chromosome 1 is chosen, and whole simulated genomes are assigned to people so that carriers of it are more likely to have the phenotype. Assigning whole genomes, rather than editing one variant, keeps linkage disequilibrium intact.
-3. **Lay it out like dbGaP** (`study.py`): a VCF (variant call format) file per chromosome, one [PLINK](https://www.cog-genomics.org/plink/) binary set, subject phenotypes from OMOP, sample attributes, and a subject-to-sample mapping. Study codes go to people in a random order. The registry linking codes to OMOP persons is written to `data/registry/`, outside the study folder.
+1. **Simulate genomes** (`simulate.py`). [stdpopsim](https://popsim-consortium.github.io/stdpopsim-docs/)'s `OutOfAfrica_3G09` model (Gutenkunst et al. 2009) runs on [msprime](https://tskit.dev/msprime/), the coalescent with recombination: it traces simulated chromosomes back through three populations, YRI (Yoruba, West African), CEU (European), and CHB (Han Chinese, East Asian), so allele frequencies, linkage disequilibrium (nearby variants inherited together), and the differences between populations look like real data's. Each person's population follows the race in their OMOP record: Black to YRI, White to CEU, Asian to CHB, any other race at random. That is a simulation convention, not a claim that race is ancestry. It ties ancestry to hypertension the way Synthea's rates differ by race (61% of Black adults, 43% of White), which gives the GWAS population structure to correct.
+2. **Plant an effect.** One common variant on chromosome 1 is chosen, and whole simulated genomes from each person's own population are assigned so that carriers of it are more likely to have the phenotype. Assigning whole genomes, rather than editing one variant, keeps linkage disequilibrium intact.
+3. **Lay it out like dbGaP** (`study.py`): a VCF (variant call format) file per chromosome, one [PLINK](https://www.cog-genomics.org/plink/) binary set, subject phenotypes from OMOP, sample attributes, and a subject-to-sample mapping. Study codes go to people in a random order. The registry linking codes to OMOP persons is written to `data/registry/`, outside the study folder. Each sample's population is in `ancestry_truth.tsv`, an answer key like `truth.json`, never in the study tables.
 4. **Run the GWAS** (`gwas.py`). A score test for every variant, adjusted for age and sex, then the full logistic model on each lead variant. The result is checked against the planted effect: found, nothing else found, and genomic inflation on the chromosomes without it. That inflation is read against 100 phenotypes redrawn from the age-and-sex model alone, with no genetic effect, so it comes with a percentile instead of a bare number.
 5. **Cross-check in [Hail](https://hail.is).** The same study as a Hail MatrixTable, with the GWAS rerun there and compared variant by variant. Hail pins pandas below 3, PySpark 3.5, and Java 11, so it runs in its own container.
 6. **Add a clinical panel** (`panel.py`, `clinvar.py`, `gnomad.py`). The simulated chromosomes have made-up coordinates, which suits a GWAS but not curation, where a variant is looked up by its real position. So the same samples also get a panel VCF of real [ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/) variants at their real GRCh38 positions, in six genes from the [ACMG secondary findings list](https://www.ncbi.nlm.nih.gov/clinvar/docs/acmg/) whose condition Synthea records. Pathogenic variants are planted at a higher rate in people whose OMOP record has the gene's condition; common benign variants at their [gnomAD](https://gnomad.broadinstitute.org) v4 frequency in everyone; variants of uncertain significance at a fixed low rate. The VCF holds positions, alleles, and genotypes only. ClinVar's classification and every carrier are in `panel_truth.json`, the answer key for curating the panel.
@@ -30,7 +30,22 @@ The defaults simulate 5,000 adults on three 3 Mb chromosomes with an odds ratio 
 
 ## Results
 
-On the current 23,421-person build, 2026-11-18:
+### Three populations, no ancestry correction, 2026-11-21
+
+| | Value |
+|---|---|
+| People | 5,000 (2,256 with hypertension): 4,177 CEU, 455 YRI, 368 CHB |
+| Variants | 26,361 |
+| Planted variant | chr1:1903772:C:A, alternate allele frequency 0.721 in cases and 0.698 in controls; 0.13 in YRI, 0.80 in CEU, 0.36 in CHB |
+| Planted variant significant | no, p 0.58 |
+| Other loci | 12, p 7.5e-9 to 1.4e-13 |
+| Genomic inflation, chromosomes without the effect | 4.0, percentile 100 (null runs' middle 95%: 0.79 to 1.33) |
+
+The age-and-sex score test fails on purpose here. Variants that differ in frequency between populations look associated with hypertension because the populations differ in it, and the planted variant's real effect is hidden by the same confounding: YRI have more hypertension and fewer copies. The truth check still prints "found", because a false locus 65 kb away puts the planted variant inside a significant locus. Principal components and REGENIE (step 6e, PR 2) are the fix.
+
+### One population, 2026-11-18
+
+The study before stdpopsim: 5,000 people from one population of fixed size, on the 23,421-person build. The calibration below is from this study.
 
 | | Value |
 |---|---|

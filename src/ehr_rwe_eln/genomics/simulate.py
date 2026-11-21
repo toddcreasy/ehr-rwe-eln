@@ -1,30 +1,46 @@
-"""Synthetic genotypes for OMOP persons, with a genetic effect planted on a phenotype.
+"""Synthetic genotypes for OMOP persons, with population structure and a genetic effect planted
+on a phenotype.
 
-msprime simulates the ancestry of a sample of people (the coalescent: tracing their DNA back
-through a population of fixed size, with recombination breaking it into segments), then drops
-mutations onto that history. The result has what real genotype data has and random numbers do
-not: allele frequencies with many rare variants, and linkage disequilibrium (LD), the
-correlation between nearby variants that makes a real association show up as a peak of
-neighboring variants rather than one spike. Each chromosome is simulated on its own, so
-chromosomes are independent, as unlinked chromosomes are.
+stdpopsim is a catalog of published population histories; it runs msprime, which simulates the
+ancestry of a sample of people (the coalescent: tracing their DNA back through the populations
+it came from, with recombination breaking it into segments), then drops mutations onto that
+history. The result has what real genotype data has and random numbers do not: allele
+frequencies with many rare variants, and linkage disequilibrium (LD), the correlation between
+nearby variants that makes a real association show up as a peak of neighboring variants rather
+than one spike. Each chromosome is simulated on its own, so chromosomes are independent, as
+unlinked chromosomes are.
+
+The history is stdpopsim's HomSap OutOfAfrica_3G09 (Gutenkunst et al. 2009): three populations,
+YRI (Yoruba, West African), CEU (European), and CHB (Han Chinese, East Asian), split from one
+African population, with migration between them. Their allele frequencies differ, which is
+population structure: if ancestry is also linked to the phenotype, every variant whose
+frequency differs between populations looks associated with it. That is what principal
+components and mixed models in a GWAS correct. Each chromosome keeps its name's average
+recombination rate, uniform along the simulated stretch; no genetic map is downloaded.
+
+Each person's population follows the race recorded in OMOP (RACE_TO_POPULATION). That is a
+simulation convention only: race is a social category, not genetic ancestry. It links ancestry
+to the phenotype the way Synthea's rates differ by race, so the GWAS has confounding to correct.
 
 The phenotype comes from OMOP and is not changed. The effect is planted by choosing which
-simulated genome each person gets: genomes carrying more copies of one chosen variant are
-more likely to go to people with the phenotype (each copy multiplies the odds by roughly the
-chosen odds ratio). Whole genomes move together, so LD around the planted variant is intact.
+simulated genome each person gets, among genomes of their own population: genomes carrying more
+copies of one chosen variant are more likely to go to people with the phenotype (each copy
+multiplies the odds by roughly the chosen odds ratio). Whole genomes move together, so LD around
+the planted variant is intact.
 
 Synthetic only: no real genome is used, and no simulated genome resembles a real person's.
 """
 
 from dataclasses import dataclass
 
-import msprime
 import numpy as np
+import stdpopsim
 
-# Human-like defaults: effective population size and per-base rates per generation.
-POPULATION_SIZE = 10_000
-RECOMBINATION_RATE = 1e-8
-MUTATION_RATE = 1e-8
+SPECIES = "HomSap"
+MODEL = "OutOfAfrica_3G09"
+POPULATIONS = ("YRI", "CEU", "CHB")
+# Races with no population in the model get one of the three at random.
+RACE_TO_POPULATION = {"black": "YRI", "white": "CEU", "asian": "CHB"}
 
 
 @dataclass
@@ -37,19 +53,28 @@ class Chromosome:
     dosage: np.ndarray
     # Phased haplotypes as (variants, people, 2), for the VCF.
     haplotypes: np.ndarray
+    population: np.ndarray  # each simulated genome's population name
+
+
+def ancestry(race: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """A population for each person, from their recorded race (RACE_TO_POPULATION)."""
+    drawn = rng.choice(POPULATIONS, len(race))
+    return np.array([RACE_TO_POPULATION.get(r, d) for r, d in zip(race, drawn, strict=True)])
 
 
 def simulate_chromosome(
-    name: str, people: int, length: int, seed: int, min_maf: float
+    name: str, counts: dict[str, int], length: int, seed: int, min_maf: float
 ) -> Chromosome:
-    ancestry = msprime.sim_ancestry(
-        samples=people,
-        population_size=POPULATION_SIZE,
-        sequence_length=length,
-        recombination_rate=RECOMBINATION_RATE,
-        random_seed=seed,
-    )
-    ts = msprime.sim_mutations(ancestry, rate=MUTATION_RATE, random_seed=seed)
+    """counts: people to simulate from each population. Only the first length bases of the
+    named chromosome are simulated."""
+    species = stdpopsim.get_species(SPECIES)
+    model = species.get_demographic_model(MODEL)
+    contig = species.get_contig(name, left=0, right=length, mutation_rate=model.mutation_rate)
+    samples = {p: n for p, n in counts.items() if n}
+    ts = stdpopsim.get_engine("msprime").simulate(model, contig, samples=samples, seed=seed)
+    names = [ts.population(p).metadata["name"] for p in range(ts.num_populations)]
+    population = np.array([names[p] for p in ts.individuals_population])
+    people = ts.num_individuals
     positions, ref, alt, rows = [], [], [], []
     for variant in ts.variants():
         # Two alleles only, as on a genotyping array; the rare multi-allelic site is dropped.
@@ -65,7 +90,13 @@ def simulate_chromosome(
         rows.append(haplotypes.astype(np.int8))
     haplotypes = np.stack(rows)
     return Chromosome(
-        name, np.array(positions), ref, alt, haplotypes.sum(axis=2, dtype=np.int8), haplotypes
+        name,
+        np.array(positions),
+        ref,
+        alt,
+        haplotypes.sum(axis=2, dtype=np.int8),
+        haplotypes,
+        population,
     )
 
 

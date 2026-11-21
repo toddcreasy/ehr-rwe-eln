@@ -48,8 +48,8 @@ dev = [
 # Synthetic genotypes and GWAS; not needed by the app.
 genomics = [
     "bed-reader>=1.1.0",
-    "msprime>=1.4.4",
     "polars>=2.0.0",
+    "stdpopsim>=0.3.0",
     "tskit>=1.0.3",
 ]
 # Publishing OMOP to the S3 Tables lake; not needed by the app.

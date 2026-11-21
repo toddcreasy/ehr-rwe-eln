@@ -297,6 +297,14 @@ Lambda: the middle of the observed test statistics divided by what chance alone 
 
 A simulator of genomes under the coalescent, a model that traces sampled chromosomes back through shared ancestors with recombination. Its output looks like real data in allele frequencies and linkage disequilibrium. [msprime](https://tskit.dev/msprime/)
 
+### stdpopsim
+
+A catalog of published population histories for humans and other species, run on msprime. The study uses its out-of-Africa model of three populations (Yoruba, European, Han Chinese). [stdpopsim](https://popsim-consortium.github.io/stdpopsim-docs/)
+
+### Population structure
+
+Groups within a study whose allele frequencies differ because of their ancestry. When ancestry is also linked to the trait, variants that only mark ancestry look associated with it, and genomic inflation rises. Principal components or a mixed model in the GWAS correct for it.
+
 ### ClinVar
 
 NCBI's public archive of what labs and expert panels have concluded about human variants: pathogenic, benign, or of uncertain significance, with a review status shown as zero to four stars (three is an expert panel). The clinical panel plants real ClinVar variants. [ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/)

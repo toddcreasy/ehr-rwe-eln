@@ -12,7 +12,9 @@ specimen genotyped from them. Here:
   folder. A real study keeps this link with the data holder and never distributes it; it is
   written here so the genotypes can be joined back to the OMOP records for testing. Codes are
   assigned in a random order, never by person_id.
-- truth.json: the simulation settings and the planted variant, the answer key for the GWAS.
+- truth.json: the simulation settings and the planted variant, the answer key for the GWAS;
+  ancestry_truth.tsv: each sample's simulated population, the answer key for the principal
+  components. Neither is part of a real release.
 """
 
 import gzip
@@ -25,7 +27,16 @@ import pandas as pd
 import polars as pl
 from bed_reader import to_bed
 
-from ehr_rwe_eln.genomics.simulate import Chromosome, assign_genomes, simulate_chromosome
+from ehr_rwe_eln.genomics.simulate import (
+    MODEL,
+    POPULATIONS,
+    RACE_TO_POPULATION,
+    SPECIES,
+    Chromosome,
+    ancestry,
+    assign_genomes,
+    simulate_chromosome,
+)
 
 GENOTYPE_CODES = np.array(["0|0", "0|1", "1|0", "1|1"])
 
@@ -46,16 +57,19 @@ def build_study(
     seed: int,
     min_maf: float = 0.01,
 ) -> Study:
-    """people: one row per person (indexed by person_id) with sex, age, and the 0/1 phenotype
-    column. The planted variant is drawn from chromosome 1 among variants with minor allele
-    frequency 0.2 to 0.3, common enough to find."""
+    """people: one row per person (indexed by person_id) with sex, age, race, and the 0/1
+    phenotype column. Each person's population comes from their race (simulate.ancestry). The
+    planted variant is drawn from chromosome 1 among variants with minor allele frequency 0.2
+    to 0.3, common enough to find."""
     rng = np.random.default_rng(seed)
     n = len(people)
     # Study codes go to people in a random order, so a code says nothing about the person (the
     # GDS policy's "random, unique codes"; HIPAA 164.514(c): not derived from their data).
     people = people.iloc[rng.permutation(n)]
+    population = ancestry(people["race"].to_numpy(), rng)
+    counts = {p: int((population == p).sum()) for p in POPULATIONS}
     simulated = [
-        simulate_chromosome(f"chr{c}", n, length, seed + c, min_maf)
+        simulate_chromosome(f"chr{c}", counts, length, seed + c, min_maf)
         for c in range(1, chromosomes + 1)
     ]
     first = simulated[0]
@@ -63,10 +77,18 @@ def build_study(
     minor = np.minimum(frequency, 1 - frequency)
     candidates = np.flatnonzero((minor >= 0.2) & (minor <= 0.3))
     causal = int(rng.choice(candidates))
-    order = assign_genomes(first.dosage[causal], people[phenotype].to_numpy(), odds_ratio, rng)
+    # Each person gets a genome from their own population; the effect is planted within each.
+    cases_all = people[phenotype].to_numpy()
+    order = np.empty(n, dtype=np.int64)
+    for p in POPULATIONS:
+        who = np.flatnonzero(population == p)
+        genomes = np.flatnonzero(first.population == p)
+        picked = assign_genomes(first.dosage[causal, genomes], cases_all[who], odds_ratio, rng)
+        order[who] = genomes[picked]
     for chromosome in simulated:
         chromosome.dosage = chromosome.dosage[:, order]
         chromosome.haplotypes = chromosome.haplotypes[:, order, :]
+        chromosome.population = chromosome.population[order]
 
     subjects = pd.DataFrame(
         {
@@ -75,6 +97,7 @@ def build_study(
             "sex": people["sex"].to_numpy(),
             "age": people["age"].to_numpy(),
             phenotype: people[phenotype].to_numpy(),
+            "ancestry": first.population,
         },
         index=pd.Index([f"SUBJ-{i:05d}" for i in range(1, n + 1)], name="subject_id"),
     )
@@ -89,6 +112,14 @@ def build_study(
         "min_maf": min_maf,
         "seed": seed,
         "odds_ratio_planted": odds_ratio,
+        "ancestry": {
+            "model": f"stdpopsim {SPECIES} {MODEL}",
+            "from_race": RACE_TO_POPULATION,
+            "people": counts,
+            "cases": {
+                p: int(cases[subjects["ancestry"].to_numpy() == p].sum()) for p in POPULATIONS
+            },
+        },
         "variant": {
             "chromosome": first.name,
             "position": int(first.positions[causal]),
@@ -96,6 +127,10 @@ def build_study(
             "alt_frequency": float(dosage.mean() / 2),
             "alt_frequency_cases": float(dosage[cases].mean() / 2),
             "alt_frequency_controls": float(dosage[~cases].mean() / 2),
+            "alt_frequency_by_population": {
+                p: float(dosage[subjects["ancestry"].to_numpy() == p].mean() / 2)
+                for p in POPULATIONS
+            },
         },
         "variants": int(sum(len(c.positions) for c in simulated)),
     }
@@ -113,7 +148,9 @@ def write_vcf(path: Path, chromosome: Chromosome, length: int, samples: list[str
     codes = chromosome.haplotypes[:, :, 0] * 2 + chromosome.haplotypes[:, :, 1]
     with gzip.open(path, "wt") as f:
         f.write("##fileformat=VCFv4.2\n")
-        f.write("##source=ehr-rwe-eln synthetic genotypes (msprime); not real people\n")
+        f.write(
+            "##source=ehr-rwe-eln synthetic genotypes (stdpopsim on msprime); not real people\n"
+        )
         f.write(f"##contig=<ID={chromosome.name},length={length}>\n")
         f.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
         f.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t" + "\t".join(samples))
@@ -170,4 +207,5 @@ def write_study(out: Path, study: Study, registry: Path) -> None:
         "sample_id", pl.lit("Whole blood").alias("body_site"), pl.lit("DNA").alias("analyte_type")
     ).write_csv(out / "sample_attributes.tsv", separator="\t")
     table.select("subject_id", "person_id").write_csv(registry, separator="\t")
+    table.select("sample_id", "ancestry").write_csv(out / "ancestry_truth.tsv", separator="\t")
     (out / "truth.json").write_text(json.dumps(study.truth, indent=2) + "\n")

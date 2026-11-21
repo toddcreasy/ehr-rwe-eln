@@ -15,7 +15,7 @@ from ehr_rwe_eln.genomics.gwas import (
     run_gwas,
     score_test,
 )
-from ehr_rwe_eln.genomics.simulate import assign_genomes
+from ehr_rwe_eln.genomics.simulate import POPULATIONS, RACE_TO_POPULATION, assign_genomes
 from ehr_rwe_eln.genomics.study import build_study, write_study
 
 
@@ -25,6 +25,7 @@ def people(n=1500, seed=0) -> pd.DataFrame:
         {
             "age": rng.integers(18, 90, n),
             "sex": rng.choice(["female", "male"], n),
+            "race": rng.choice(["white", "black", "asian", "other"], n, p=[0.7, 0.15, 0.1, 0.05]),
             "hypertension": (rng.random(n) < 0.4).astype(int),
         },
         index=pd.Index(np.arange(100, 100 + n), name="person_id"),
@@ -137,3 +138,27 @@ def test_compare_with_hail_joins_on_variant_id(tmp_path):
     comparison = compare_with_hail(results, tmp_path / "hail_gwas.tsv")
     assert comparison["variants"] == 3 and comparison["matched"] == 2
     assert comparison["chi2_max_difference"] == pytest.approx(0.001)
+
+
+def test_each_person_gets_a_genome_from_the_population_their_race_maps_to(study):
+    out, s = study
+    by_race = dict(zip(people().index, people()["race"], strict=True))
+    races = s.subjects["person_id"].map(by_race)
+    for race, population in RACE_TO_POPULATION.items():
+        assert (s.subjects.loc[races == race, "ancestry"] == population).all()
+    assert set(s.subjects.loc[races == "other", "ancestry"]) <= set(POPULATIONS)
+    for chromosome in s.chromosomes:
+        assert (chromosome.population == s.subjects["ancestry"].to_numpy()).all()
+    key = pl.read_csv(out / "ancestry_truth.tsv", separator="\t")
+    assert key["sample_id"].to_list() == s.subjects["sample_id"].tolist()
+    truth = json.loads((out / "truth.json").read_text())
+    assert sum(truth["ancestry"]["people"].values()) == 1500
+    assert "ancestry" not in pl.read_csv(out / "subject_phenotypes.tsv", separator="\t").columns
+
+
+def test_populations_differ_in_allele_frequency(study):
+    _, s = study
+    first = s.chromosomes[0]
+    frequency = {p: first.dosage[:, first.population == p].mean(axis=1) / 2 for p in POPULATIONS}
+    # Structure: many common variants differ by more than 0.2 between YRI and CEU.
+    assert (np.abs(frequency["YRI"] - frequency["CEU"]) > 0.2).mean() > 0.05
