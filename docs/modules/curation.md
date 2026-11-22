@@ -4,7 +4,7 @@ Package: `ehr_rwe_eln.curation`. Back to the [README](../../README.md). Terms ar
 
 Classifies variants the way a clinical lab starts to: it applies the [ACMG/AMP](https://doi.org/10.1038/gim.2015.30) criteria that data alone can decide, with each gene's thresholds from its [ClinGen](https://clinicalgenome.org) expert panel, adds them up on the Bayesian points scale, and says what it could not decide and why. It curates the [clinical panel](genomics.md#clinical-panel) planted in the synthetic study, and is scored against ClinVar's expert-panel classifications, which it never reads.
 
-It also matches each study subject's conditions against the panel genes with the [Human Phenotype Ontology](#phenotype-matching) (HPO), and checks whether that finds the planted carriers.
+It also matches each study subject's conditions against the panel genes with the [Human Phenotype Ontology](#phenotype-matching) (HPO), and checks whether that finds the planted carriers, both with its own score and with [Exomiser](#exomiser).
 
 ## Who decides what
 
@@ -60,6 +60,9 @@ uv run python scripts/curate_literature.py             # Claude proposes literat
 uv run pytest evals/test_curation_literature.py -s     # the literature eval, about $0.15
 uv run fastapi dev                                     # then http://127.0.0.1:8000/curation/
 uv run python scripts/match_phenotypes.py              # HPO phenotype scores and their eval, 15 s; reads OMOP from the lake
+uv run python scripts/run_exomiser.py fetch            # Exomiser's data release into S3, once, 38 min
+uv run python scripts/run_exomiser.py run --tasks 6    # Exomiser on all 5,000 subjects on Fargate, 75 min, about $2
+uv run python scripts/run_exomiser.py summarize --study <id>   # its checks again, from the downloaded results
 ```
 
 `uv run python scripts/import_enigma_pvs1.py` and `scripts/import_enigma_functional.py` refresh ENIGMA's tables when the panel releases a new version. The `erepo` run downloads ClinGen's Evidence Repository export (33 MB, CC0) to `data/reference/clingen/` the first time. Both curation runs read positions and alleles only. gnomAD, VEP, and exon answers are cached under `data/reference/` per release, so reruns make no requests. A first run asks gnomAD about several hundred variants at its limit of 10 requests a minute, about 10 minutes; when gnomAD answers that it is overloaded, the client waits and retries, and never records a busy answer as "absent".
@@ -134,6 +137,33 @@ Every interval is above 0.5, and each score comes close to what knowing the cond
 
 Scoring by a subject's single best-matching term instead of the average (a sensitivity check, in `phenotype_eval.json`) gives group AUCs of 0.74, 0.75, and 0.68; the average stays the method because it was chosen before the eval and is the standard.
 
+## Exomiser
+
+`exomiser.py`, `scripts/run_exomiser.py`, `docker/exomiser_task.py`. [Exomiser](https://github.com/exomiser/Exomiser) 15.1.0 with data release 2609 (hg38), the standard open tool for ranking a person's genes by their variants and phenotype ([glossary](../GLOSSARY.md#exomiser-and-hiphive)). It runs on AWS, never on the laptop: the data is 33 GB of zips, kept in the genomics bucket under `reference/exomiser/2609/` with each zip's SHA-256, and every run unpacks it on a Fargate task's disk ([infra](../../infra/terraform/README.md#exomiser-on-aws)).
+
+1. **Inputs.** Per subject, a VCF of their panel calls and a phenopacket (v1) with their sex and the HPO terms from [phenotype matching](#phenotype-matching) (`subject_hpo.tsv`). One analysis for everyone, in FULL mode so every gene with a variant is scored: frequencies from UK10K and gnomAD exomes and genomes, missense pathogenicity from REVEL, MVP, and AlphaMissense, then OMIM and hiPhive. SpliceAI is left out (non-commercial license), and CADD and REMM (separate downloads, and not needed for a panel of known variants).
+2. **Scores.** For each gene a person has a variant in, Exomiser gives a variant score (how rare and how damaging), a phenotype score (hiPhive), and a combined score. A gene appears once per mode of inheritance; the best combined score is kept.
+3. **Check against the answer key.** Exomiser's data release includes ClinVar, so its variant score already knows which panel variants are pathogenic: the variant and combined scores show only that Exomiser reads ClinVar. The phenotype score is the test, read two ways: how often it ranks a carrier's planted gene first among the person's genes, and, per gene, the AUC for picking out the pathogenic carriers among everyone with a panel variant in that gene, next to our Resnik score on the same people.
+
+2026-11-22, 5,000 subjects, 123 pathogenic carriers (one carries two planted genes, BRCA2 and MSH2, and counts as a hit when either comes first):
+
+| Score | Planted gene ranked first |
+|---|---|
+| Variant | 123 of 123 |
+| Combined | 123 of 123 |
+| Phenotype | 36 of 123 (29%); picking one of the person's genes at random gives about 15% |
+
+| Gene | People with a variant there | Pathogenic carriers | Exomiser phenotype AUC (95% interval) | Resnik AUC, same people |
+|---|---|---|---|---|
+| MSH2 | 4,171 | 13 | 0.97 (0.96 to 0.98) | 0.88 (0.80 to 0.95) |
+| BRCA2 | 4,422 | 10 | 0.74 (0.58 to 0.88) | 0.73 (0.56 to 0.88) |
+| BRCA1 | 3,991 | 11 | 0.65 (0.47 to 0.81) | 0.72 (0.59 to 0.84) |
+| LDLR | 4,831 | 74 | 0.55 (0.48 to 0.62) | 0.69 (0.62 to 0.74) |
+| APC | 4,946 | 8 | 0.53 (0.27 to 0.78) | 0.50 (0.32 to 0.65) |
+| MLH1 | 2,424 | 8 | 0.37 (0.15 to 0.63) | 0.39 (0.16 to 0.62) |
+
+hiPhive is better on MSH2 and no better than chance on LDLR, the gene with most of the carriers, where our score reaches 0.69. A likely reason: hiPhive compares a person's terms with each gene's human, mouse, and zebrafish phenotypes, and common cardiovascular terms match many genes, while our score is standardized over the study per gene, so a term everyone has adds nothing. The other genes have too few carriers to tell the two apart. The same limit holds as for our score: carriers were planted by condition, so a phenotype can point to a gene group, not a gene within it.
+
 ## Limits
 
 - The rules decide only what data alone can. Missense variants, which need functional studies, case data, or segregation, come out uncertain; literature proposals can point a curator to that evidence but do not change the class.
@@ -143,5 +173,6 @@ Scoring by a subject's single best-matching term instead of the average (a sensi
 - PVS1 from RNA evidence for variants outside the canonical sites (the panels' "PVS1 (RNA)"), and initiation codon (start-loss) variants, are not applied: they need lab data the rules do not have.
 - Thresholds are read on gnomAD v4 joined. ENIGMA's are defined on gnomAD v2.1 and v3.1 non-cancer subsets, and PM2 for BRCA1 and BRCA2 also requires read depth of at least 25, not checked. Founder variants, which InSiGHT excludes from BA1 and BS1, are not excepted.
 - Phenotype matching is checked only against carriers planted by condition, so it can show that a score finds the right group of genes, not that it tells genes apart. Synthea records diseases, rarely the findings (polyp counts, age at diagnosis, family history) that separate Lynch syndrome from FAP or BRCA1 from BRCA2. The condition mapping is hand-checked for 17 concepts only; the rest rely on name matches and OMOP ancestors.
+- Exomiser ran on panel variants only, so each person has 3 to 8 genes to rank, not a whole exome, and its ranks are not comparable with published exome or genome benchmarks.
 - The curator's name is what they type: the app has no sign-in, so a decision records who said they made it, not a verified identity.
 - This tool includes data from the gnomAD v4 release. For research and demonstration; not for clinical use.

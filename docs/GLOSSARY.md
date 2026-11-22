@@ -361,6 +361,14 @@ The Human Phenotype Ontology: about 20,000 terms for clinical findings ("Breast 
 
 How telling an HPO term is: minus the log of the share of genes annotated with it or anything under it. A term every gene has scores 0. Two terms are as similar as their most informative shared ancestor (Resnik): breast carcinoma and colon cancer share "Neoplasm", which says less than either. A person's score for a gene averages, over the person's terms, the best match to any of the gene's terms. [Resnik 1995](https://arxiv.org/abs/cmp-lg/9511007), [Köhler et al. 2009](https://doi.org/10.1016/j.ajhg.2009.09.003)
 
+### Exomiser and hiPhive
+
+Exomiser ranks the genes a person carries variants in, for rare disease diagnosis. Each gene gets a variant score (rarity from gnomAD and UK10K, damage from missense predictors and ClinVar), a phenotype score, and a combined score from both. hiPhive is its phenotype scorer: it matches the person's HPO terms against what is known of each gene in human disease, mouse and zebrafish models, and genes nearby in protein interaction networks. Here it ranks the panel genes for every study subject and is checked against the planted carriers. AGPL. [Exomiser](https://github.com/exomiser/Exomiser), [Smedley et al. 2015](https://doi.org/10.1038/nprot.2015.124)
+
+### Phenopacket
+
+A GA4GH standard file describing one person for genomic analysis: their sex, HPO terms, and links to their genome files. Exomiser reads each subject's sample this way. [Phenopacket schema](https://phenopacket-schema.readthedocs.io)
+
 ### VCF
 
 Variant call format: the standard text file of genotypes, one line per variant and one column per sample. [VCF 4.2 specification](https://samtools.github.io/hts-specs/VCFv4.2.pdf)

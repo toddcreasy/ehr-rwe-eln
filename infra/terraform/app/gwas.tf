@@ -11,8 +11,10 @@ locals {
   gwas_image_tag = substr(sha256(join("", [for f in local.gwas_files : filesha256("${path.module}/../../../docker/${f}")])), 0, 12)
 }
 
-# Study files in (studies/<id>/input/), results out (studies/<id>/output/), and the image's build
-# context (build/). Synthetic data only; private, TLS only, and every object expires after 30 days.
+# Study files in (studies/<id>/input/), results out (studies/<id>/output/), the images' build
+# contexts (build/), and Exomiser's data bundle (reference/exomiser/<release>/, exomiser.tf).
+# Synthetic data and public reference data only; private, TLS only. Studies and build contexts
+# expire after 30 days; the reference data stays until a release is replaced.
 resource "aws_s3_bucket" "gwas" {
   bucket = "${local.name}-genomics-${local.account_id}"
 }
@@ -32,7 +34,7 @@ resource "aws_s3_bucket_ownership_controls" "gwas" {
   }
 }
 
-# trivy:ignore:AWS-0132 SSE-S3 rather than a customer managed key ($1/month); synthetic data, private, TLS only, expires in 30 days.
+# trivy:ignore:AWS-0132 SSE-S3 rather than a customer managed key ($1/month); synthetic and public reference data, private, TLS only.
 resource "aws_s3_bucket_server_side_encryption_configuration" "gwas" {
   bucket = aws_s3_bucket.gwas.id
   rule {
@@ -44,12 +46,17 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "gwas" {
 
 resource "aws_s3_bucket_lifecycle_configuration" "gwas" {
   bucket = aws_s3_bucket.gwas.id
-  rule {
-    id     = "expire-after-30-days"
-    status = "Enabled"
-    filter {}
-    expiration {
-      days = 30
+  dynamic "rule" {
+    for_each = ["studies/", "build/"]
+    content {
+      id     = "expire-${trimsuffix(rule.value, "/")}-after-30-days"
+      status = "Enabled"
+      filter {
+        prefix = rule.value
+      }
+      expiration {
+        days = 30
+      }
     }
   }
 }
@@ -102,8 +109,10 @@ resource "aws_ecr_lifecycle_policy" "gwas" {
   })
 }
 
-# CodeBuild: builds the image from build/gwas-<tag>.zip on an x86 host and pushes it. Privileged
-# mode is what lets a CodeBuild container run docker build.
+# CodeBuild: builds an image from a zip under build/ on an x86 host and pushes it. By default the
+# gwas image from build/gwas-<tag>.zip; scripts/run_exomiser.py overrides the source, DOCKERFILE,
+# REPOSITORY, and TAG to build the exomiser image. Privileged mode is what lets a CodeBuild
+# container run docker build.
 resource "aws_cloudwatch_log_group" "gwas_build" {
   name              = "/codebuild/${local.name}-gwas"
   retention_in_days = 30
@@ -156,7 +165,7 @@ data "aws_iam_policy_document" "gwas_build" {
       "ecr:PutImage",
       "ecr:UploadLayerPart",
     ]
-    resources = [aws_ecr_repository.gwas.arn]
+    resources = [aws_ecr_repository.gwas.arn, aws_ecr_repository.exomiser.arn]
   }
 }
 
@@ -181,7 +190,7 @@ resource "aws_codebuild_project" "gwas" {
         }
         build = {
           commands = [
-            "docker build --platform linux/amd64 -f gwas.Dockerfile -t $REPOSITORY:$TAG .",
+            "docker build --platform linux/amd64 -f $DOCKERFILE -t $REPOSITORY:$TAG .",
             "docker push $REPOSITORY:$TAG",
           ]
         }
@@ -199,6 +208,10 @@ resource "aws_codebuild_project" "gwas" {
     image           = "aws/codebuild/amazonlinux-x86_64-standard:5.0"
     privileged_mode = true
 
+    environment_variable {
+      name  = "DOCKERFILE"
+      value = "gwas.Dockerfile"
+    }
     environment_variable {
       name  = "REPOSITORY"
       value = aws_ecr_repository.gwas.repository_url

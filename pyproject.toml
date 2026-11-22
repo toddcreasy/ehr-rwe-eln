@@ -14,6 +14,7 @@ dependencies = [
     # 4.7 and later, and MODEL is Opus 4.6.
     "anthropic>=1.13,<2",
     "boto3>=1.44.7",
+    "botocore>=1.44.7",
     "diffprivlib>=0.6.6",
     "fastapi[standard]>=0.142.2",
     "fhir-resources>=8.3.0",

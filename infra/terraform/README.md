@@ -76,10 +76,18 @@ The first deploy took about 25 minutes: Express Mode builds the load balancer an
 
 PLINK 2 and REGENIE run in an x86 image (`docker/gwas.Dockerfile`); REGENIE ships no ARM build, so nothing is built or run on the laptop (`app/gwas.tf`):
 
-- **AWS CodeBuild**: a build service that runs commands on a short-lived AWS host, billed per minute. Project `ehr-rwe-eln-gwas` builds the image on x86 from `build/gwas-<tag>.zip` in the bucket and pushes it to ECR repository `ehr-rwe-eln-gwas`.
-- **Fargate task** `ehr-rwe-eln-gwas`: X86_64, 2 vCPUs, 8 GB, on demand in the app cluster. Its role reads and writes only `studies/*` in bucket `ehr-rwe-eln-genomics-<account>`, which is private, TLS only, and expires every object after 30 days.
+- **AWS CodeBuild**: a build service that runs commands on a short-lived AWS host, billed per minute. Project `ehr-rwe-eln-gwas` builds an image on x86 from `build/<name>-<tag>.zip` in the bucket and pushes it to ECR; the runner names the Dockerfile and repository, so the same project builds the GWAS and Exomiser images.
+- **Fargate task** `ehr-rwe-eln-gwas`: X86_64, 2 vCPUs, 8 GB, on demand in the app cluster. Its role reads and writes only `studies/*` in bucket `ehr-rwe-eln-genomics-<account>`, which is private and TLS only. Objects under `studies/` and `build/` expire after 30 days; `reference/` (Exomiser's data) is kept.
 
 The image tag is a hash of `docker/gwas.Dockerfile` and `docker/gwas_task.py`, computed the same way in Terraform and in `scripts/run_regenie.py`; changing either file means plan and apply `app/` first. The runner builds the image if ECR lacks the tag (about 5 minutes), uploads the study, runs the task, and downloads the results. A run on 5,000 people and 26,361 variants took 201 seconds, a few cents.
+
+## Exomiser on AWS
+
+Exomiser 15.1.0 (Java 21) runs in its own x86 image, `docker/exomiser.Dockerfile`, built by the same CodeBuild project into ECR repository `ehr-rwe-eln-exomiser` (`app/exomiser.tf`); the CLI zip is checked against its SHA-256 at build time. The image tag is a hash of the Dockerfile and `docker/exomiser_task.py`, computed the same way in Terraform and in `scripts/run_exomiser.py`.
+
+- **Data, once per release**: `run_exomiser.py fetch` runs a task that downloads release 2609 (hg38 20.0 GB, phenotype 13.3 GB) from the address in Exomiser's release notes into `reference/exomiser/2609/`. The host publishes no checksums, so the task checks each zip's size against the server's and tests the archive, then stores its SHA-256 in the object's metadata. 38 minutes, nothing through the laptop.
+- **Fargate task** `ehr-rwe-eln-exomiser`: X86_64, 4 vCPUs, 16 GB (12 GB Java heap), 200 GiB of task disk. Its role reads and writes only `studies/*` and `reference/exomiser/*` in the genomics bucket. Each task copies both zips, checks them against the stored SHA-256, unpacks them (about 15 minutes), then runs Exomiser's batch command on its slice of people, about 4.5 seconds a person.
+- **Parallel runs**: `run --tasks K` splits the people into K slices under `studies/exomiser-<id>/part-<k>/` and runs them at once. Fargate counts vCPUs running at once across the account, so K is capped by that quota: 6 tasks under 30 vCPU. The full run, 5,000 people in 6 tasks, took 75 minutes, about $2. `exomiser.tf` requests 210 vCPU for 50 tasks, about 25 minutes (see [Account limits hit](#account-limits-hit)).
 
 ## Public demo limits
 
@@ -123,3 +131,4 @@ On 2026-11-20 this ran the 18 migrations and copied the module data (data-only `
 ## Account limits hit
 
 - VPCs per region: default 5. Raised to 10 on 2026-11-19 through Service Quotas (`L-F678F1CE`), approved within 30 minutes.
+- Fargate On-Demand vCPUs running at once (`L-3032A538`): default 6, 30 on this account. 210 requested on 2026-11-22 through Terraform (`aws_servicequotas_service_quota.fargate_vcpu` in `app/exomiser.tf`); AWS opened a support case and asked for the architecture (X86_64), operating system (Linux), and use case, answered the same day. Pending.
