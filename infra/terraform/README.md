@@ -60,15 +60,15 @@ A migration can also run through the RDS Data API, without the tunnel and withou
 
 ## Deploy the app
 
-The service runs the image tag in `app/terraform.tfvars`; tags are immutable, and each is the git commit it was built from. The image builds on AWS, never on the laptop: CodeBuild project `ehr-rwe-eln-app` (`app/app_build.tf`) builds the repository's `Dockerfile` on an ARM host, since the app runs on ARM Fargate (Graviton, about 20% cheaper than x86).
+The service runs the image tag in `app/terraform.tfvars`; tags are immutable, and each is the git commit it was built from. The image builds on AWS, never on the laptop: CodeBuild project `ehr-rwe-eln-app` (`app/app_build.tf`) builds the repository's `Dockerfile` on an x86 host. Every task here is x86, the app included (decided 2026-11-22; it ran on ARM until then).
 
 ```sh
 git checkout main && git pull
-uv run python scripts/build_app_image.py   # about 10 cents; prints the tag
+uv run python scripts/build_app_image.py   # a few cents; prints the tag
 # set image_tag = "<TAG>" in infra/terraform/app/terraform.tfvars, then plan and apply app/
 ```
 
-The runner needs a clean working tree. It uploads `git archive` of HEAD (tracked files only, so never `.env` or `data/`) to `build/app-<commit>.zip` in the genomics bucket and skips the build if ECR already has the tag. Images up to `1b0e4c3` were built on the laptop with `docker buildx`.
+The runner needs a clean working tree. It uploads `git archive` of HEAD (tracked files only, so never `.env` or `data/`) to `build/app-<commit>.zip` in the genomics bucket and skips the build if ECR already has the tag. Images up to `1b0e4c3` were ARM, built on the laptop with `docker buildx`.
 
 The first deploy took about 25 minutes: Express Mode builds the load balancer and certificate before it starts a task. Express Mode gives the task a public IP in the public subnets, which is how it pulls from ECR with no NAT gateway. `terraform output app_url` is the public HTTPS URL. A brand-new hostname can stay unresolvable on a Mac that looked it up too early (macOS caches the miss); `sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder` clears it.
 

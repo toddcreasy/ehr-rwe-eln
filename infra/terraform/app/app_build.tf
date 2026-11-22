@@ -1,7 +1,8 @@
-# CodeBuild for the app image: builds the repository's Dockerfile on an ARM host (the app runs on
-# ARM Fargate) and pushes it to the app's ECR repository, tagged with its git commit. The source is
-# a zip of that commit (git archive) that scripts/build_app_image.py uploads under build/ in the
-# genomics bucket, where objects expire after 30 days. Nothing builds on the laptop.
+# CodeBuild for the app image: builds the repository's Dockerfile on an x86 host (the app runs on
+# x86 Fargate, like every other task here) and pushes it to the app's ECR repository, tagged with
+# its git commit. The source is a zip of that commit (git archive) that scripts/build_app_image.py
+# uploads under build/ in the genomics bucket, where objects expire after 30 days. Nothing builds
+# on the laptop.
 
 resource "aws_cloudwatch_log_group" "app_build" {
   name              = "/codebuild/${local.name}-app"
@@ -66,7 +67,7 @@ resource "aws_codebuild_project" "app" {
         }
         build = {
           commands = [
-            "DOCKER_BUILDKIT=1 docker build --platform linux/arm64 -t $REPOSITORY:$TAG .",
+            "DOCKER_BUILDKIT=1 docker build --platform linux/amd64 -t $REPOSITORY:$TAG .",
             "docker push $REPOSITORY:$TAG",
           ]
         }
@@ -78,11 +79,11 @@ resource "aws_codebuild_project" "app" {
     type = "NO_ARTIFACTS"
   }
 
-  # The Next.js and uv builds want more memory than the small ARM host's 4 GB.
+  # The Next.js and uv builds want more memory than the small host's 3 GB.
   environment {
-    type            = "ARM_CONTAINER"
-    compute_type    = "BUILD_GENERAL1_LARGE"
-    image           = "aws/codebuild/amazonlinux-aarch64-standard:3.0"
+    type            = "LINUX_CONTAINER"
+    compute_type    = "BUILD_GENERAL1_MEDIUM"
+    image           = "aws/codebuild/amazonlinux-x86_64-standard:5.0"
     privileged_mode = true
 
     environment_variable {
