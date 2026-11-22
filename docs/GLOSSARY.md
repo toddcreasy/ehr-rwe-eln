@@ -101,6 +101,10 @@ The International Classification of Diseases, 10th revision, Clinical Modificati
 
 The Unified Code for Units of Measure, a grammar for writing units unambiguously (`mg/dL`, `umol/L`, `pg/mL`). OMOP and FHIR both use it; the ELN bridge normalizes every unit spelling it reads to a UCUM code. [ucum.org](https://ucum.org)
 
+### OMOP Genomic
+
+OHDSI's vocabulary of genes and variants, all in the Measurement domain: a concept per gene ("BRCA1 gene variant measurement") and per known variant at the DNA, transcript, and protein level. A test result is a measurement row with the variant or gene as its concept and the genotype as its value. [Athena](https://athena.ohdsi.org)
+
 ### CPT4
 
 Current Procedural Terminology, the American Medical Association's procedure codes. Athena can include it, but only after a separate step with a [UMLS](#umls) key fills in the codes. This project does not use it, and a download that includes it breaks the build ([INSTALL.md](INSTALL.md#get-the-vocabularies)). [CPT](https://www.ama-assn.org/practice-management/cpt)

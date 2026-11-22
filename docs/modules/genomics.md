@@ -13,6 +13,7 @@ A genotyping study for adults in the [OMOP](https://ohdsi.github.io/CommonDataMo
 5. **Run the GWAS** (`gwas.py`). A score test for every variant, adjusted for age, sex, and the same 10 PCs, then the full logistic model on each lead variant: the readable check on REGENIE. Both are checked against the planted effect: the planted variant itself genome-wide significant, nothing else found, and genomic inflation on the chromosomes without it. That inflation is read against 100 phenotypes redrawn from the covariate model alone, with no genetic effect, so it comes with a percentile instead of a bare number; the same null runs, on the variants QC kept, calibrate REGENIE. A cross-validated classifier from the PCs to each person's simulated population (`ancestry_truth.tsv`) checks that the PCs carry ancestry.
 6. **Cross-check in [Hail](https://hail.is).** The same study as a Hail MatrixTable, with the GWAS rerun there and compared variant by variant. Hail pins pandas below 3, PySpark 3.5, and Java 11, so it runs in its own container.
 7. **Add a clinical panel** (`panel.py`, `clinvar.py`, `gnomad.py`). The simulated chromosomes have made-up coordinates, which suits a GWAS but not curation, where a variant is looked up by its real position. So the same samples also get a panel VCF of real [ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/) variants at their real GRCh38 positions, in six genes from the [ACMG secondary findings list](https://www.ncbi.nlm.nih.gov/clinvar/docs/acmg/) whose condition Synthea records. Pathogenic variants are planted at a higher rate in people whose OMOP record has the gene's condition; common benign variants at their [gnomAD](https://gnomad.broadinstitute.org) v4 frequency in everyone; variants of uncertain significance at a fixed low rate. The VCF holds positions, alleles, and genotypes only. ClinVar's classification and every carrier are in `panel_truth.json`, the answer key for curating the panel.
+8. **Panel carriers into OMOP** (`omop.py`, `scripts/write_panel_omop.py`). Each carrier of a panel variant becomes a `measurement` row in the staging OMOP, as a clinical panel report lists only what it found: `value_as_concept_id` is the genotype (LOINC Heterozygous or Homozygous), the date each person's observation period end (the panel has no test date). `measurement_concept_id` is the most specific standard [OMOP Genomic](https://athena.ohdsi.org) concept there is: the variant's own DNA concept, matched on its GRCh38 position (substitutions); its transcript concept, matched on HGVS c. notation on the MANE Select transcript from Ensembl VEP (how insertions and deletions match, since VCF and HGVS place them differently); otherwise its gene's concept, with the HGVS in `measurement_source_value`. Only OMOP Genomic is loaded from the Athena download in `data/vocab_genomic/`. The rows are checked against `panel_truth.json` before they are committed, then republished to the lake.
 
 Genomic inflation (lambda) compares the middle of the observed test statistics with what chance alone gives. 1.0 means well calibrated. Above 1 means something other than the planted effect pushes p-values down, such as population structure. Below 1 means the test is too conservative. On a genome this small lambda is noisy: nearby variants are inherited together, so a few thousand of them behave like a few dozen independent tests, and lambda with no effect at all has a standard deviation of about 0.10.
 
@@ -24,6 +25,9 @@ uv run python scripts/run_regenie.py         # on AWS, about 4 minutes (plus 5 t
 uv run python scripts/run_gwas.py            # --no-pcs for the uncorrected test
 docker compose run --rm --build hail                                 # optional, 2.4 GB image
 uv run python scripts/generate_panel.py      # the clinical panel, after generate_genomics.py
+uv run python scripts/write_panel_omop.py    # panel carriers into the staging OMOP, about 30 seconds
+uv run python scripts/publish_omop.py --tables vocabulary concept concept_synonym \
+    concept_relationship concept_ancestor measurement
 ```
 
 `generate_genomics.py` and `generate_panel.py` read their people and conditions from OMOP: oMOP is read from the lake through Redshift; `OMOP_SOURCE=staging` reads the staging Postgres instead (see [Who reads the lake](cohort.md#who-reads-the-lake)).
@@ -99,3 +103,17 @@ ClinVar release 2026-11-15, gnomAD v4, on the same 5,000 subjects, 2026-11-19:
 48 variants: 3 pathogenic, 3 benign, and 2 of uncertain significance per gene, each with at least two ClinVar stars (several submitters agree, or an expert panel). The pathogenic ones are 10 frameshifts, 7 nonsense variants, and 1 splice acceptor; 17 of 18 are absent from gnomAD and the last is at 2.5 in a million. In the study, each benign variant's frequency is within 0.008 of gnomAD's. Variants of 50 bp or more are left out: those count as structural variants, which panels call and curate separately.
 
 The carrier rates are set in the spec at about twice what studies report among people with each condition, so a study this size has carriers to test with; without the condition they are near population rates. These are real variants in synthetic people: no carrier is a real person, and the rates are not estimates of anything.
+
+### Panel in OMOP
+
+OMOP Genomic release 20240216 (Athena download of 2026-11-21), Ensembl VEP release 116, 2026-11-21:
+
+| | Value |
+|---|---|
+| Vocabulary loaded | 289,919 concepts, 718,851 synonyms, 802,468 relationships, 570,556 ancestor rows; no link skipped |
+| Measurement rows | 46,596, one per carrier genotype; every carrier in `panel_truth.json` and no one else |
+| Variants on their own DNA concept | 5 (an MLH1 and four APC substitutions) |
+| On their own transcript concept | 1 (APC c.5803del) |
+| On their gene's concept | 42, including every LDLR variant |
+
+OMOP Genomic holds about 62,000 standard DNA variants and 63,000 transcript variants, mostly from cancer gene panels; ClinVar has millions, so most panel variants have no concept of their own and are found by gene concept plus `measurement_source_value`. Most rows (46,230) are carriers of the 18 benign variants, 184 to 4,757 each, since benign variants are common; the 30 pathogenic and uncertain variants have 366 carriers between them.
