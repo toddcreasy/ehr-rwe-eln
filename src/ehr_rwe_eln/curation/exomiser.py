@@ -209,6 +209,37 @@ def phenotype_auc(
     return out
 
 
+def variant_context(
+    results: dict[str, dict[str, dict[str, float]]],
+    carriers: dict[str, list[str]],
+    gene_of: dict[str, str],
+    auc: dict[str, float],
+) -> list[dict]:
+    """For the curator, per panel variant: each carrier's phenotype rank for the variant's gene
+    and how many genes that carrier has, best rank first, with the gene's study-wide AUC.
+    Carriers come from the genotypes (variant -> samples), not the answer key; only people
+    Exomiser scored count. No sample IDs leave this function."""
+    out = []
+    for variant_id, samples in sorted(carriers.items()):
+        gene = gene_of[variant_id]
+        found = sorted(
+            (r, len(results[s]))
+            for s in samples
+            if s in results and (r := rank(results[s], gene, "phenotype")) is not None
+        )
+        out.append(
+            {
+                "variant_id": variant_id,
+                "gene": gene,
+                "subjects": len(found),
+                "ranks": [r for r, _ in found],
+                "genes": [n for _, n in found],
+                "auc": auc.get(gene),
+            }
+        )
+    return out
+
+
 def read_results_zip(path: Path) -> dict[str, dict[str, dict[str, float]]]:
     with zipfile.ZipFile(path) as z:
         return read_gene_results(z)

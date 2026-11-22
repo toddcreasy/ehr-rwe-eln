@@ -24,7 +24,9 @@ comes first. Exomiser's data release includes ClinVar, so its variant score know
 variants are pathogenic; the phenotype score is the part to read. Per gene, it also compares
 Exomiser's phenotype score with our Resnik score (phenotype_scores.tsv) on the same people: the
 AUC for picking out the pathogenic carriers among everyone with a panel variant in the gene.
-Writes data/genomics/exomiser/<id>/run.json.
+Writes data/genomics/exomiser/<id>/run.json, and curation.exomiser: for each panel variant, its
+carriers' phenotype ranks for the variant's gene (carriers from the genotypes, not the answer
+key), shown on /curation/ as context, never as evidence.
 
 summarize: the same checks on a run already downloaded.
 
@@ -45,13 +47,16 @@ import numpy as np
 import polars as pl
 from botocore.config import Config
 
+from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.curation.exomiser import (
     check_planted,
     phenotype_auc,
     read_results_zip,
+    variant_context,
     write_inputs,
 )
 from ehr_rwe_eln.genomics.omop import read_panel_genotypes
+from ehr_rwe_eln.genomics.panel import read_panel_carriers
 
 ROOT = Path(__file__).resolve().parent.parent
 STUDY = ROOT / "data" / "genomics"
@@ -196,16 +201,47 @@ def summarize(out: Path, ran: set[str], run: dict) -> None:
     for z in sorted(out.glob("part-*/results.zip")):
         results |= read_results_zip(z)
     carriers = {s: g for s, g in planted().items() if s in ran}
+    by_gene = phenotype_auc(results, carriers, resnik(), np.random.default_rng(0))
     summary = {
         **run,
         "people_with_results": len(results),
         "planted_gene_first": check_planted(results, carriers),
-        "phenotype_auc_by_gene": phenotype_auc(
-            results, carriers, resnik(), np.random.default_rng(0)
-        ),
+        "phenotype_auc_by_gene": by_gene,
     }
     (out / "run.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary, indent=2))
+
+    # Context for the curator. Each variant's gene comes from the panel; who carries it comes
+    # from the genotypes.
+    truth = json.loads((STUDY / "panel_truth.json").read_text())["variants"]
+    rows = variant_context(
+        results,
+        read_panel_carriers(STUDY / "panel.vcf.gz"),
+        {v["id"]: v["gene"] for v in truth},
+        {g: r["exomiser"]["auc"] for g, r in by_gene.items()},
+    )
+    release = run["data_release"]
+    with DatabaseSettings().connect() as con:
+        con.execute("DELETE FROM curation.exomiser WHERE data_release = %s", [release])
+        with con.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO curation.exomiser (data_release, variant_id, gene, subjects, ranks,"
+                " genes, auc, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, now())",
+                [
+                    [
+                        release,
+                        r["variant_id"],
+                        r["gene"],
+                        r["subjects"],
+                        r["ranks"],
+                        r["genes"],
+                        r["auc"],
+                    ]
+                    for r in rows
+                ],
+            )
+        con.commit()
+    print(f"curation.exomiser: {len(rows)} variants, data release {release}")
 
 
 def main() -> None:

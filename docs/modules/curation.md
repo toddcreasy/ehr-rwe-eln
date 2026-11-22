@@ -13,6 +13,7 @@ It also matches each study subject's conditions against the panel genes with the
 | The rules (`rules.py`) | The criteria data alone can settle: frequency (BA1, BS1, PM2), null variants (PVS1, PM5_PTC), ENIGMA's calibrated assays (PS3, BS3). Each with its reason, and what it could not decide | `curation.assessment` | Yes: the points and class come from these |
 | Claude (`literature.py`) | Nothing. It proposes PS3, BS3, PS4, or PP1 from passages that name the variant; code rejects any claim whose PMID was not sent or whose quote is not in the passage | `curation.proposal` | No |
 | HPO phenotype (`phenotype.py`) | Nothing. Where the variant's carriers fall on a phenotype score for the gene's group | `curation.phenotype` | No: context, not PP4 |
+| Exomiser (`exomiser.py`) | Nothing. Where Exomiser's phenotype score ranks the variant's gene for each carrier | `curation.exomiser` | No: context, not PP4 |
 | The curator (`/curation/`) | The class. Accepts the verified proposals they agree with, sees the rescored points, records a class with their name and the time; a class other than the score needs a note | `curation.decision`, added to and never changed | Yes, and only a decision is final |
 
 The rules' points and class stand until a curator decides. Nothing Claude writes reaches a class without a person accepting it.
@@ -163,6 +164,8 @@ Scoring by a subject's single best-matching term instead of the average (a sensi
 | MLH1 | 2,424 | 8 | 0.37 (0.15 to 0.63) | 0.39 (0.16 to 0.62) |
 
 hiPhive is better on MSH2 and no better than chance on LDLR, the gene with most of the carriers, where our score reaches 0.69. A likely reason: hiPhive compares a person's terms with each gene's human, mouse, and zebrafish phenotypes, and common cardiovascular terms match many genes, while our score is standardized over the study per gene, so a term everyone has adds nothing. The other genes have too few carriers to tell the two apart. The same limit holds as for our score: carriers were planted by condition, so a phenotype can point to a gene group, not a gene within it.
+
+**Context for the curator, not evidence.** `summarize` stores in `curation.exomiser`, for each panel variant, where the phenotype score ranks the variant's gene for each carrier (carriers from `panel.vcf.gz`, not the answer key), how many genes each carrier has, and the gene's AUC above, with no subject IDs. `/curation/` shows it under the HPO match: how many carriers have the gene first, the median rank, and the AUC, so a curator sees how little to read into it. Only the phenotype score: the variant score includes ClinVar, which would show the curator ClinVar's answer under another name. Not scored as PP4, for the same reasons as the HPO score.
 
 ## Limits
 

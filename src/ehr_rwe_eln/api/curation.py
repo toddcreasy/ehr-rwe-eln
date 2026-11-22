@@ -163,7 +163,19 @@ def variant(run_id: int, variant_id: str) -> dict:
             " WHERE variant_id = %s ORDER BY hpo_release DESC LIMIT 1",
             [variant_id],
         ).fetchone()
-    return {**found, "proposals": proposals, "decisions": decisions, "phenotype": phenotype}
+        # Carriers' Exomiser phenotype ranks, from the latest data release run. Context only.
+        exomiser = con.execute(
+            "SELECT data_release, gene, subjects, ranks, genes, auc FROM curation.exomiser"
+            " WHERE variant_id = %s ORDER BY data_release DESC LIMIT 1",
+            [variant_id],
+        ).fetchone()
+    return {
+        **found,
+        "proposals": proposals,
+        "decisions": decisions,
+        "phenotype": phenotype,
+        "exomiser": exomiser,
+    }
 
 
 @router.post("/score")
