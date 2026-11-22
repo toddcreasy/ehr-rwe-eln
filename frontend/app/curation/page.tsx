@@ -56,6 +56,14 @@ type Detail = Row & {
   proposals: Proposal[];
   decisions: Decision[];
   phenotype: { hpo_release: string; gene_group: string[]; subjects: number; percentiles: number[] } | null;
+  exomiser: {
+    data_release: string;
+    gene: string;
+    subjects: number;
+    ranks: number[];
+    genes: number[];
+    auc: number | null;
+  } | null;
 };
 type Score = { criteria: Criterion[]; points: number | null; classification: string };
 
@@ -336,6 +344,40 @@ function Phenotypes({ p }: { p: NonNullable<Detail["phenotype"]> }) {
   );
 }
 
+function median(xs: number[]) {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+function Exomiser({ e }: { e: NonNullable<Detail["exomiser"]> }) {
+  const first = e.ranks.filter((r) => r === 1).length;
+  return (
+    <section className={`${box} flex flex-col gap-2 text-sm`}>
+      <h3 className={h3}>Carriers&apos; Exomiser rank (context, not evidence)</h3>
+      {e.subjects === 0 ? (
+        <p className={muted}>No one in the synthetic genomics study carries this variant.</p>
+      ) : (
+        <p>
+          Exomiser&apos;s phenotype score ranks {e.gene} first for {first} of {e.subjects.toLocaleString("en-US")}{" "}
+          {e.subjects === 1 ? "carrier" : "carriers"}, median rank {median(e.ranks)} of about {median(e.genes)} panel
+          genes each carrier has a variant in.
+        </p>
+      )}
+      {e.auc !== null && (
+        <p className={muted}>
+          Across the study, the score picks out {e.gene}&apos;s pathogenic carriers with AUC {e.auc.toFixed(2)} (0.5 is
+          chance).
+        </p>
+      )}
+      <p className={`text-xs ${muted}`}>
+        Only the phenotype score is shown: Exomiser&apos;s variant score includes ClinVar. Not scored as PP4: PP4 is
+        judged for one patient under each expert panel&apos;s rules, and this rank follows neither. Exomiser 15.1.0, data release {e.data_release}.
+      </p>
+    </section>
+  );
+}
+
 function VariantDetail({ v, onSaved }: { v: Detail; onSaved: () => void }) {
   return (
     <article className="flex flex-col gap-4">
@@ -371,6 +413,7 @@ function VariantDetail({ v, onSaved }: { v: Detail; onSaved: () => void }) {
       </div>
 
       {v.phenotype && <Phenotypes p={v.phenotype} />}
+      {v.exomiser && <Exomiser e={v.exomiser} />}
 
       <DecisionForm key={`${v.run_id} ${v.variant_id}`} v={v} onSaved={onSaved} />
 

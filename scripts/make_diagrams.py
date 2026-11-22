@@ -859,6 +859,19 @@ s.append(
         MW,
     )
 )
+s.append(
+    table(
+        MX[1],
+        740,
+        "module",
+        "curation.exomiser",
+        "per variant, data release",
+        "Where Exomiser's phenotype score ranks the variant's gene for each carrier. Context for"
+        " the curator, not evidence. No foreign key: matched by variant_id.",
+        MIG + "022_curation_exomiser.py",
+        MW,
+    )
+)
 s.append(arrow([(MX[0] + MW / 2, 660), (MX[0] + MW / 2, 628)]))
 s.append(f'<text x="{MX[0] + MW / 2 + 6}" y="648" class="e">run_id</text>')
 s.append(arrow([(MX[1] + MW / 2, 660), (MX[1] + MW / 2, 628)]))

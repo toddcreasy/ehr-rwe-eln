@@ -10,6 +10,7 @@ from ehr_rwe_eln.curation.exomiser import (
     phenotype_auc,
     rank,
     read_gene_results,
+    variant_context,
     vcf,
     write_inputs,
 )
@@ -86,6 +87,28 @@ def test_results_keep_each_genes_best_mode_and_rank_by_each_score():
     # A person with two planted genes counts once, as first if either one comes first.
     both = check_planted(results, {"S1": {"BRCA1", "BRCA2"}})
     assert both["combined"] == {"carriers": 1, "first": 1, "not_scored": 0}
+
+
+def test_variant_context_ranks_each_carrier_best_first_without_sample_ids():
+    scored = {"combined": 0.0, "variant": 0.0}
+    results = {
+        "S1": {"LDLR": {**scored, "phenotype": 0.4}, "APC": {**scored, "phenotype": 0.9}},
+        "S2": {"LDLR": {**scored, "phenotype": 0.8}, "APC": {**scored, "phenotype": 0.1}},
+    }
+    carriers = {"v1": ["S1", "S2", "S9"], "v2": []}
+    rows = variant_context(results, carriers, {"v1": "LDLR", "v2": "APC"}, {"LDLR": 0.55})
+    # S9 has no results, so it is not counted; the ranks are sorted, so order says nothing.
+    assert rows == [
+        {
+            "variant_id": "v1",
+            "gene": "LDLR",
+            "subjects": 2,
+            "ranks": [1, 2],
+            "genes": [2, 2],
+            "auc": 0.55,
+        },
+        {"variant_id": "v2", "gene": "APC", "subjects": 0, "ranks": [], "genes": [], "auc": None},
+    ]
 
 
 def test_phenotype_auc_compares_both_scores_on_the_people_exomiser_scored():

@@ -85,6 +85,25 @@ def test_sets_list_rules_runs_only_and_variants_count_the_latest_proposals(clien
     assert len(detail["proposals"]) == 5 and detail["sources"] == {"gnomad": "gnomad_r4"}
     assert client.get(f"/api/curation/runs/{rules}/variants/nope").status_code == 404
     assert detail["phenotype"] is None
+    assert detail["exomiser"] is None
+
+
+def test_detail_shows_the_latest_exomiser_release_of_carrier_ranks(client, curated, pg):
+    rules, _ = curated
+    for release, ranks in [("2512", [4]), ("2609", [1, 3])]:
+        pg.execute(
+            "INSERT INTO curation.exomiser VALUES (%s, %s, 'BRCA1', %s, %s, %s, 0.65, now())",
+            [release, V, len(ranks), ranks, [7] * len(ranks)],
+        )
+    found = client.get(f"/api/curation/runs/{rules}/variants/{V}").json()["exomiser"]
+    assert found == {
+        "data_release": "2609",
+        "gene": "BRCA1",
+        "subjects": 2,
+        "ranks": [1, 3],
+        "genes": [7, 7],
+        "auc": 0.65,
+    }
 
 
 def test_detail_shows_the_latest_release_of_carrier_phenotypes(client, curated, pg):
