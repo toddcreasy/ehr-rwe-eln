@@ -21,7 +21,7 @@ resource "aws_ecs_express_gateway_service" "app" {
   task_role_arn           = aws_iam_role.app.arn
   cpu                     = "512"
   memory                  = "1024"
-  cpu_architecture        = "ARM64"
+  cpu_architecture        = "X86_64"
   health_check_path       = "/api/health"
 
   network_configuration = [{
