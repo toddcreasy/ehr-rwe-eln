@@ -62,3 +62,7 @@ output "exomiser_image_tag" {
 output "exomiser_task_definition" {
   value = aws_ecs_task_definition.exomiser.arn_without_revision
 }
+
+output "app_codebuild_project" {
+  value = aws_codebuild_project.app.name
+}
