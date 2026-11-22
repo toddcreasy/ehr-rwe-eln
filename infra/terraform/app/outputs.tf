@@ -46,3 +46,19 @@ output "gwas_codebuild_project" {
 output "gwas_task_definition" {
   value = aws_ecs_task_definition.gwas.arn_without_revision
 }
+
+output "exomiser_repository" {
+  value = aws_ecr_repository.exomiser.name
+}
+
+output "exomiser_repository_url" {
+  value = aws_ecr_repository.exomiser.repository_url
+}
+
+output "exomiser_image_tag" {
+  value = local.exomiser_image_tag
+}
+
+output "exomiser_task_definition" {
+  value = aws_ecs_task_definition.exomiser.arn_without_revision
+}

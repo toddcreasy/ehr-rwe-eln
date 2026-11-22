@@ -6,7 +6,8 @@ Usage: uv run python scripts/match_phenotypes.py   (after scripts/generate_panel
 Downloads the HPO release named below to data/reference/hpo/<release>/ the first time, and
 never changes it. Each subject's OMOP conditions become HPO terms
 (src/ehr_rwe_eln/curation/phenotype.py); each gene gets a Resnik similarity score. Writes:
-- data/genomics/phenotype_scores.tsv, by subject_id (the OMOP person_id stays in the registry);
+- data/genomics/phenotype_scores.tsv, by subject_id (the OMOP person_id stays in the registry),
+  and subject_hpo.tsv, each subject's HPO terms (for scripts/run_exomiser.py);
 - curation.phenotype: for each panel variant, where its carriers fall on the score for the
   variant's gene group, shown on /curation/ as context, never as evidence;
 - data/genomics/phenotype_eval.json: per gene and gene group, how well the score ranks the
@@ -176,6 +177,14 @@ def main() -> None:
             }
         results[aggregate] = {"genes": by_gene, "groups": by_group}
     out.to_csv(STUDY / "phenotype_scores.tsv", sep="\t", index=False)
+    # Each subject's HPO terms, for Exomiser (scripts/run_exomiser.py).
+    pd.DataFrame(
+        {
+            "subject_id": subjects,
+            "hpo_release": ont.release,
+            "hpo_ids": [",".join(sorted(terms[person_of[s]])) for s in subjects],
+        }
+    ).to_csv(STUDY / "subject_hpo.tsv", sep="\t", index=False)
 
     # Context for the curator: where each carrier of a panel variant falls on the phenotype
     # score for the variant's gene group. Carriers come from the genotypes, not the answer key.
