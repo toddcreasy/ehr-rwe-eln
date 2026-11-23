@@ -89,6 +89,14 @@ Exomiser 15.1.0 (Java 21) runs in its own x86 image, `docker/exomiser.Dockerfile
 - **Fargate task** `ehr-rwe-eln-exomiser`: X86_64, 4 vCPUs, 16 GB (12 GB Java heap), 200 GiB of task disk. Its role reads and writes only `studies/*` and `reference/exomiser/*` in the genomics bucket. Each task copies both zips, checks them against the stored SHA-256, unpacks them (about 15 minutes), then runs Exomiser's batch command on its slice of people, about 4.5 seconds a person.
 - **Parallel runs**: `run --tasks K` splits the people into K slices under `studies/exomiser-<id>/part-<k>/` and runs them at once. Fargate counts vCPUs running at once across the account, so K is capped by that quota: 6 tasks under 30 vCPU. The full run, 5,000 people in 6 tasks, took 75 minutes, about $2. `exomiser.tf` requests 210 vCPU for 50 tasks, about 25 minutes (see [Account limits hit](#account-limits-hit)).
 
+## BIAS on AWS
+
+BIAS-2015 v3.0.0 runs on Ensembl's own VEP 115 image, pinned by digest, in `docker/bias.Dockerfile`; the BIAS source tarball is checked against its SHA-256 at build time. The same CodeBuild project builds it into ECR repository `ehr-rwe-eln-bias` (`app/bias.tf`), and the image tag is a hash of the Dockerfile and `docker/bias_task.py`, as for the others.
+
+- **Reference data, once**: `run_bias.py fetch` runs a task that downloads the VEP 115 GRCh38 cache (25 GB) and the genome FASTA from EBI's Ensembl mirror in parallel 64 MB ranges, checks each file against Ensembl's `CHECKSUMS`, and stores it in `reference/vep/115/`; BIAS's 2026.03.01 tables with REVEL and AlphaMissense go to `reference/bias/2026.03.01/`. The main Ensembl FTP site gave 0.27 MB/s; the mirror about 21 MB/s.
+- **Fargate task** `ehr-rwe-eln-bias`: X86_64, 4 vCPUs, 16 GB, 200 GiB of task disk. Its role reads and writes only `studies/*`, `reference/vep/*`, and `reference/bias/*` (the fetch writes the reference data). Each run copies gnomAD v4.1 exomes one chromosome at a time from AWS's public gnomAD bucket (`gnomad-public-us-east-1`, unsigned) and keeps only the run's positions with `tabix -R`: the image's htslib cannot read over HTTPS. Then it unpacks the cache, runs VEP once, and BIAS once per skip list.
+- **A run**: 883 variants, 935 seconds, about 6 cents of Fargate time.
+
 ## Public demo limits
 
 The app has no sign-in. What bounds it, as in glia-nav:
@@ -131,4 +139,4 @@ On 2026-11-20 this ran the 18 migrations and copied the module data (data-only `
 ## Account limits hit
 
 - VPCs per region: default 5. Raised to 10 on 2026-11-19 through Service Quotas (`L-F678F1CE`), approved within 30 minutes.
-- Fargate On-Demand vCPUs running at once (`L-3032A538`): default 6, 30 on this account. 210 requested on 2026-11-22 through Terraform (`aws_servicequotas_service_quota.fargate_vcpu` in `app/exomiser.tf`); AWS opened a support case and asked for the architecture (X86_64), operating system (Linux), and use case, answered the same day. Pending.
+- Fargate On-Demand vCPUs running at once (`L-3032A538`): default 6, 30 on this account. 210 requested on 2026-11-22 through Terraform (`aws_servicequotas_service_quota.fargate_vcpu` in `app/exomiser.tf`); AWS opened a support case and asked for the architecture (X86_64), operating system (Linux), and use case, answered the same day. Applied that day (the support case still showed open).

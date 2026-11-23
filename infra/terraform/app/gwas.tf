@@ -110,9 +110,9 @@ resource "aws_ecr_lifecycle_policy" "gwas" {
 }
 
 # CodeBuild: builds an image from a zip under build/ on an x86 host and pushes it. By default the
-# gwas image from build/gwas-<tag>.zip; scripts/run_exomiser.py overrides the source, DOCKERFILE,
-# REPOSITORY, and TAG to build the exomiser image. Privileged mode is what lets a CodeBuild
-# container run docker build.
+# gwas image from build/gwas-<tag>.zip; scripts/run_exomiser.py and scripts/run_bias.py override
+# the source, DOCKERFILE, REPOSITORY, and TAG to build their images. Privileged mode is what lets
+# a CodeBuild container run docker build.
 resource "aws_cloudwatch_log_group" "gwas_build" {
   name              = "/codebuild/${local.name}-gwas"
   retention_in_days = 30
@@ -165,7 +165,7 @@ data "aws_iam_policy_document" "gwas_build" {
       "ecr:PutImage",
       "ecr:UploadLayerPart",
     ]
-    resources = [aws_ecr_repository.gwas.arn, aws_ecr_repository.exomiser.arn]
+    resources = [aws_ecr_repository.gwas.arn, aws_ecr_repository.exomiser.arn, aws_ecr_repository.bias.arn]
   }
 }
 

@@ -53,12 +53,12 @@ def read_erepo(path: Path, genes: set[str]) -> dict[int, dict]:
     return out
 
 
-def score_criteria(assessments: list[dict]) -> dict:
+def score_criteria(assessments: list[dict], codes: list[str] = SCORED) -> dict:
     """Per criterion, against the panel's codes (in each assessment's evidence["expert"]):
     agreed (both met), extra (the rules met it, the panel did not: split by whether the panel
     marked it not met or did not list it), missed (the panel met it, the rules did not), and
-    among agreed, how often the strength matches too."""
-    counts = {code: Counter() for code in SCORED}
+    among agreed, how often the strength matches too. codes: which criteria to score."""
+    counts = {code: Counter() for code in codes}
     for a in assessments:
         expert = a["evidence"].get("expert")
         if not expert:
@@ -66,7 +66,7 @@ def score_criteria(assessments: list[dict]) -> dict:
         theirs = dict(parse_code(c) for c in expert["met"])
         not_met = {parse_code(c)[0] for c in expert["not_met"]}
         ours = {c["code"]: c["strength"] for c in a["met"]}
-        for code in SCORED:
+        for code in codes:
             c = counts[code]
             if code in ours and code in theirs:
                 c["agreed"] += 1
