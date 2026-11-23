@@ -29,7 +29,7 @@ import sys
 
 import numpy as np
 import pandas as pd
-from mbi import Dataset, Domain, LinearMeasurement, estimation, junction_tree
+from mbi import Dataset, Domain, LinearMeasurement, estimation, junction_tree, marginal_oracles
 from scipy.special import softmax
 
 from ehr_rwe_eln.synth.bayes_net import decode, encode
@@ -67,6 +67,18 @@ def _measure(data: Dataset, clique, sigma: float, rng: np.random.Generator) -> L
     return LinearMeasurement(x + rng.normal(0, sigma, x.size), clique, sigma)
 
 
+# mbi compiles variable elimination once per clique and model shape and keeps every copy: about
+# 230 new programs a round on the person summary, 0.9 GB a round. Uncompiled it gives the same
+# marginals, faster, and keeps nothing.
+_eliminate = marginal_oracles.variable_elimination.__wrapped__
+
+
+def _marginal(model, clique) -> np.ndarray:
+    if model.marginals.supports(clique):
+        return model.project(clique).datavector()
+    return _eliminate(model.potentials, clique, float(model.total)).datavector()
+
+
 def _worst(cands, answers, model, epsilon, sigma, rng):
     """The candidate the model fits worst, chosen with the exponential mechanism. A marginal's
     error drops by the error noise alone would leave, so large marginals are not favored just
@@ -75,7 +87,7 @@ def _worst(cands, answers, model, epsilon, sigma, rng):
     keys = list(cands)
     errors = np.array([
         cands[cl] * (
-            np.linalg.norm(answers[cl] - model.project(cl).datavector(), 1)
+            np.linalg.norm(answers[cl] - _marginal(model, cl), 1)
             - math.sqrt(2 / math.pi) * sigma * model.domain.size(cl)
         )
         for cl in keys
@@ -136,7 +148,7 @@ def synthesize(table: pd.DataFrame, spec: Spec, release: Release) -> tuple[pd.Da
         }
         cl = _worst(small, answers, model, epsilon, sigma, rng)
         measurements.append(_measure(data, cl, sigma, rng))
-        before = model.project(cl).datavector()
+        before = _marginal(model, cl)
         potentials = model.potentials.expand(list({m.clique for m in measurements}))
         model = md.estimate(domain, measurements, iters=settings.round_iters, warm_start=potentials)
         spend.append({"mechanism": "exponential and gaussian", "of": f"round {len(spend)}",
@@ -148,7 +160,7 @@ def synthesize(table: pd.DataFrame, spec: Spec, release: Release) -> tuple[pd.Da
         size = junction_tree.hypothetical_model_size(domain, list(model.cliques))
         print(f"    round {len(spend) - 1}: {', '.join(cl)}; model {size:.1f} MB,"
               f" peak memory {peak:.1f} GB", flush=True)  # fmt: skip
-        after = model.project(cl).datavector()
+        after = _marginal(model, cl)
         if np.linalg.norm(after - before, 1) <= sigma * math.sqrt(2 / math.pi) * domain.size(cl):
             sigma /= 2
             epsilon *= 2
