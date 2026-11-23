@@ -59,7 +59,9 @@ def candidates(weights: dict[tuple[str, ...], float]) -> dict[tuple[str, ...], f
     }
     return {
         sub: sum(w * len(set(sub) & set(cl)) for cl, w in weights.items())
-        for sub in sorted(closure, key=len)
+        # Sorted fully: set order changes with each process's string hashing, and the order
+        # decides which marginal the seeded draw in _worst picks.
+        for sub in sorted(closure, key=lambda c: (len(c), c))
     }
 
 
@@ -153,7 +155,7 @@ def synthesize(table: pd.DataFrame, spec: Spec, release: Release) -> tuple[pd.Da
         cl = _worst(small, answers, model, epsilon, sigma, rng)
         measurements.append(_measure(data, cl, sigma, rng))
         before = _marginal(model, cl)
-        potentials = model.potentials.expand(list({m.clique for m in measurements}))
+        potentials = model.potentials.expand(list(dict.fromkeys(m.clique for m in measurements)))
         model = md.estimate(domain, measurements, iters=settings.round_iters, warm_start=potentials)
         spend.append({"mechanism": "exponential and gaussian", "of": f"round {len(spend)}",
                       "pairs": [list(cl)], "rho": epsilon**2 / 8 + 0.5 / sigma**2,
@@ -169,7 +171,7 @@ def synthesize(table: pd.DataFrame, spec: Spec, release: Release) -> tuple[pd.Da
             sigma /= 2
             epsilon *= 2
 
-    model = md.estimate(domain, measurements, iters=settings.iters, warm_start=potentials)
+    model = md.estimate(domain, measurements, iters=settings.iters, warm_start=model.potentials)
     # mbi samples with numpy's global generator; seeding it makes the release repeatable.
     np.random.seed(spec.seed)
     sampled = model.synthetic_data()

@@ -200,6 +200,10 @@ class Spec(Strict):
                 if parent not in seen:
                     raise ValueError(f"{column.name}: parent {parent} must be listed before it")
             seen.add(column.name)
+        if self.pgm.rounds is not None and self.pgm.rounds < len(self.columns):
+            # AIM's one-way histograms cost a round's share each; fewer rounds than columns
+            # would spend more than the whole budget on them.
+            raise ValueError(f"pgm.rounds must be at least the {len(self.columns)} columns")
         if self.vae.condition is not None and self.vae.condition not in seen:
             raise ValueError(f"vae.condition {self.vae.condition} is not a column")
         for method in ("mst", "aim"):
@@ -210,9 +214,13 @@ class Spec(Strict):
                     f"{method} releases need a seed: their noise is numpy's, not secure noise"
                     " for real data"
                 )
+        queried: set[frozenset[str]] = set()
         for query in self.workload:
             if len(set(query.columns)) != len(query.columns):
                 raise ValueError(f"workload query {query.columns} repeats a column")
+            if frozenset(query.columns) in queried:
+                raise ValueError(f"workload query {query.columns} is listed twice")
+            queried.add(frozenset(query.columns))
             for name in query.columns:
                 if name not in seen:
                     raise ValueError(f"workload column {name} is not a column")

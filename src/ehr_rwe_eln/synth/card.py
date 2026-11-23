@@ -392,13 +392,20 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
         *(
             [
                 "",
-                "AIM's workload: every pair of columns at weight 1, and these at their weights.",
-                "",
-                "| Workload marginal | Weight |",
-                "|---|---|",
-                *(f"| {' x '.join(q.columns)} | {q.weight:g} |" for q in spec.workload),
+                "AIM's workload: every pair of columns at weight 1"
+                + (", and these at their weights." if spec.workload else "."),
+                *(
+                    [
+                        "",
+                        "| Workload marginal | Weight |",
+                        "|---|---|",
+                        *(f"| {' x '.join(q.columns)} | {q.weight:g} |" for q in spec.workload),
+                    ]
+                    if spec.workload
+                    else []
+                ),
             ]
-            if release["method"] == "aim" and spec.workload
+            if release["method"] == "aim"
             else []
         ),
         "",
