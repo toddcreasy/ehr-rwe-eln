@@ -54,6 +54,7 @@ const METHODS: Record<string, string> = {
   bayes_net: "Bayesian network",
   independent: "Independent columns",
   vae: "Variational autoencoder",
+  mst: "MST",
 };
 
 const fmt = (n: number) => n.toLocaleString("en-US");

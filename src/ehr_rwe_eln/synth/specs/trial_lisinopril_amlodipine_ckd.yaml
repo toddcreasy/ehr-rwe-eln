@@ -24,6 +24,8 @@ releases:
   # Effectively no privacy: separates what the declared structure loses from what noise loses.
   - {method: bayes_net, epsilon: 1000}
   - {method: vae, epsilon: 4}
+  - {method: mst, epsilon: 1}
+  - {method: mst, epsilon: 4}
 # 1,890 people: batches of 128 give the VAE more steps per epoch than the default 512.
 vae: {batch_size: 128}
 columns:
