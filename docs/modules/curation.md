@@ -64,6 +64,9 @@ uv run python scripts/match_phenotypes.py              # HPO phenotype scores an
 uv run python scripts/run_exomiser.py fetch            # Exomiser's data release into S3, once, 38 min
 uv run python scripts/run_exomiser.py run --tasks 6    # Exomiser on all 5,000 subjects on Fargate, 75 min, about $2
 uv run python scripts/run_exomiser.py summarize --study <id>   # its checks again, from the downloaded results
+uv run python scripts/run_bias.py fetch                # VEP 115 cache, FASTA, and BIAS-2015 tables into S3, once
+uv run python scripts/run_bias.py run                  # BIAS-2015 three ways on the 883 erepo variants, 16 min
+uv run python scripts/run_bias.py summarize --study <id>       # its scores again, no task
 ```
 
 `uv run python scripts/import_enigma_pvs1.py` and `scripts/import_enigma_functional.py` refresh ENIGMA's tables when the panel releases a new version. The `erepo` run downloads ClinGen's Evidence Repository export (33 MB, CC0) to `data/reference/clingen/` the first time. Both curation runs read positions and alleles only. gnomAD, VEP, and exon answers are cached under `data/reference/` per release, so reruns make no requests. A first run asks gnomAD about several hundred variants at its limit of 10 requests a minute, about 10 minutes; when gnomAD answers that it is overloaded, the client waits and retries, and never records a busy answer as "absent".
@@ -166,6 +169,47 @@ Scoring by a subject's single best-matching term instead of the average (a sensi
 hiPhive is better on MSH2 and no better than chance on LDLR, the gene with most of the carriers, where our score reaches 0.69. A likely reason: hiPhive compares a person's terms with each gene's human, mouse, and zebrafish phenotypes, and common cardiovascular terms match many genes, while our score is standardized over the study per gene, so a term everyone has adds nothing. The other genes have too few carriers to tell the two apart. The same limit holds as for our score: carriers were planted by condition, so a phenotype can point to a gene group, not a gene within it.
 
 **Context for the curator, not evidence.** `summarize` stores in `curation.exomiser`, for each panel variant, where the phenotype score ranks the variant's gene for each carrier (carriers from `panel.vcf.gz`, not the answer key), how many genes each carrier has, and the gene's AUC above, with no subject IDs. `/curation/` shows it under the HPO match: how many carriers have the gene first, the median rank, and the AUC, so a curator sees how little to read into it. Only the phenotype score: the variant score includes ClinVar, which would show the curator ClinVar's answer under another name. Not scored as PP4, for the same reasons as the HPO score.
+
+## BIAS-2015 baseline
+
+`bias.py`, `scripts/run_bias.py`, `docker/bias_task.py`. [BIAS-2015](https://github.com/bitscopic/BIAS-2015) v3.0.0 (Bitscopic) applies 19 ACMG/AMP criteria automatically from a VEP-annotated VCF and its own data tables ([glossary](../GLOSSARY.md#bias-2015)). It is the open baseline to compare the rules with: same 883 Evidence Repository variants, same expert panel classes and criteria as the answer key, same points scale. It runs on AWS ([infra](../../infra/terraform/README.md#bias-on-aws)): Ensembl VEP 115 with the GRCh38 cache, gnomAD v4.1 exomes and the same dated ClinVar VCF as the rules as custom annotations, and REVEL and AlphaMissense as plugins; then BIAS's tables of 2026-03-01.
+
+BIAS reads ClinVar in several criteria. PP5 and BP6 are ClinVar's own verdict, PS4 counts ClinVar submitters, PS1 and PM5 look for a known pathogenic change at the same amino acid. PM1, PP2, and BP1 come from ClinVar too, at the level of a gene or domain. The panels' classifications are themselves in ClinVar, so a run with these criteria partly reads the answer. Three runs, from BIAS's `--skip_list` (`bias.py`, `SKIPS`):
+
+- `all_codes`: everything.
+- `no_clinvar_per_variant`: without PP5, BP6, PS1, PM5, PS4.
+- `no_clinvar`: also without PM1, PP2, BP1.
+
+2026-11-22, ClinVar 2026-11-15, rules run 8; all 883 variants came back from every run, 935 seconds:
+
+| | Agreement | Panel P/LP found (of 385) | P/LP calls right | Panel B/LB found (of 104) | Reversals |
+|---|---|---|---|---|---|
+| Our rules | 56.9% | 50 | 50 of 53 (94%) | 67 | 0 |
+| BIAS, all codes | 87.2% | 385 | 385 of 490 (79%) | 102 | 0 |
+| BIAS, no per-variant ClinVar | 61.3% | 180 | 180 of 259 (69%) | 48 | 4 |
+| BIAS, no ClinVar | 59.9% | 130 | 130 of 172 (76%) | 50 | 3 |
+
+With every code, BIAS finds every pathogenic variant because PP5 fires on 392 of them and PS4 on 492: that 87% measures ClinVar, not BIAS. Without ClinVar the two agree about as often, but differently. BIAS calls pathogenic more often and finds 2.6 times as many (130 against 50); it also calls 39 uncertain variants pathogenic, against our 3, and reverses 3, against none. A wrong pathogenic call costs more than a missed one, which is why the rules leave so much to the curator.
+
+By criterion, against the panels' Met and Not Met (BIAS's numbers are the same in all three runs except for the skipped codes):
+
+| Criterion | Rules precision | Rules recall | BIAS precision | BIAS recall |
+|---|---|---|---|---|
+| PVS1 | 97% | 50% | 75% | 68% |
+| PM2 | 97% | 94% | 91% | 86% |
+| BA1 | 91% | 97% | 96% | 67% |
+| BS1 | 77% | 87% | 29% | 32% |
+| PS3 | 96% | 39% | 30% | 35% |
+| BS3 | 68% | 27% | never applied | 0% |
+| PP3 | not applied | | 71% | 66% |
+| BP4 | not applied | | 42% | 25% |
+| BP7 | not applied | | 60% | 76% |
+| PM1 (all codes only) | not applied | | 16% | 88% |
+| PS4 (all codes only) | from literature | | 44% | 86% |
+
+On the codes both apply, the panel thresholds make the rules more precise. BIAS's BS1 uses one cut-off for every gene, where each panel sets its own. Its PS3 comes from a literature-mining table and fires on 268 variants, 131 of them where the panel considered PS3 and said not met. Its PM2 matches the panels' strength 285 times of 622, since most panels have moved PM2 down to supporting. Where BIAS covers ground the rules do not (PP3 and BP4 from REVEL and AlphaMissense, BP7 for synonymous variants), its recall is the reason to look at it: missense predictors and splicing are the two gaps the ClinVar comparison above points to.
+
+Two differences in inputs. The rules used Ensembl 116 through the REST API and gnomAD v4 joined (exomes and genomes); BIAS ran on VEP 115, the release its tables were built for, and gnomAD v4.1 exomes only, which VEP found for 483 of the 883 variants. Per gene, without ClinVar, BIAS agrees more often on LDLR (68% against 63%), MLH1, MSH2, and BRCA1, and less often on APC and BRCA2; MLH1 and MSH2 have 16 and 12 variants, too few to read much into.
 
 ## Limits
 

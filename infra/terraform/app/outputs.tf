@@ -66,3 +66,19 @@ output "exomiser_task_definition" {
 output "app_codebuild_project" {
   value = aws_codebuild_project.app.name
 }
+
+output "bias_repository" {
+  value = aws_ecr_repository.bias.name
+}
+
+output "bias_repository_url" {
+  value = aws_ecr_repository.bias.repository_url
+}
+
+output "bias_image_tag" {
+  value = local.bias_image_tag
+}
+
+output "bias_task_definition" {
+  value = aws_ecs_task_definition.bias.arn_without_revision
+}

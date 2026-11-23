@@ -365,6 +365,10 @@ How telling an HPO term is: minus the log of the share of genes annotated with i
 
 Exomiser ranks the genes a person carries variants in, for rare disease diagnosis. Each gene gets a variant score (rarity from gnomAD and UK10K, damage from missense predictors and ClinVar), a phenotype score, and a combined score from both. hiPhive is its phenotype scorer: it matches the person's HPO terms against what is known of each gene in human disease, mouse and zebrafish models, and genes nearby in protein interaction networks. Here it ranks the panel genes for every study subject and is checked against the planted carriers. AGPL. [Exomiser](https://github.com/exomiser/Exomiser), [Smedley et al. 2015](https://doi.org/10.1038/nprot.2015.124)
 
+### BIAS-2015
+
+Bitscopic's open classifier that applies 19 ACMG/AMP criteria automatically to a VCF annotated by VEP, from its own tables (gene constraint, domains, literature mining, ClinVar summaries) and the annotations' frequencies and missense scores. Each criterion it meets comes with a strength and a reason. Here it is a baseline for the rules on the Evidence Repository variants, run with and without its ClinVar-based criteria, since the panels' answers are in ClinVar. AGPL, for non-commercial academic use. [BIAS-2015](https://github.com/bitscopic/BIAS-2015)
+
 ### Phenopacket
 
 A GA4GH standard file describing one person for genomic analysis: their sex, HPO terms, and links to their genome files. Exomiser reads each subject's sample this way. [Phenopacket schema](https://phenopacket-schema.readthedocs.io)
