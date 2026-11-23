@@ -22,6 +22,9 @@ releases:
   - {method: bayes_net, epsilon: 4}
   - {method: vae, epsilon: 1}
   - {method: vae, epsilon: 4}
+  # MST (synth/mst.py) chooses its own column pairs; at the Bayes net's budgets, to compare.
+  - {method: mst, epsilon: 1}
+  - {method: mst, epsilon: 4}
 # 30% of people are kept out of every release, to evaluate against.
 holdout_fraction: 0.3
 # The utility test predicts death from the other columns.

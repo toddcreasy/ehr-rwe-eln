@@ -18,7 +18,7 @@ of its method and epsilon (a few minutes for the VAE).
 
 from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.omop import connect_omop
-from ehr_rwe_eln.synth import bayes_net, vae
+from ehr_rwe_eln.synth import bayes_net, mst, vae
 from ehr_rwe_eln.synth.distribution import privacy_flags
 from ehr_rwe_eln.synth.fidelity import fidelity_report, subgroup_report, utility_auc
 from ehr_rwe_eln.synth.parity import load_trial, parity_report, repeated_draws, trial_estimate
@@ -178,7 +178,7 @@ def main() -> None:
                 release = next(
                     r for r in spec.releases if (r.method, r.epsilon) == (method, epsilon)
                 )
-                module = vae if method == "vae" else bayes_net
+                module = {"vae": vae, "mst": mst}.get(method, bayes_net)
                 draws = repeated_draws(train, spec, release, protocol, module.synthesize, real)
                 trial = parity_report(real, trial_estimate(synthetic, protocol), draws)
                 save_report(con, release_id, "trial", trial)
