@@ -109,7 +109,7 @@ The app has no sign-in. What bounds it, as in glia-nav:
 | Tasks | Express Mode scaling | Exactly 1 |
 | Daily token alarm | CloudWatch metric `ehr-rwe-eln/AgentTokens` from the `agent run` log lines | Email past 120,000 in a UTC day (SNS; confirm the subscription email) |
 | Budget | `foundation/budget.tf` | $100 a month, credits excluded, email at 50% and 80% actual and 100% forecast |
-| Redshift | `foundation/redshift.tf` | 60 RPU-hours a month, then the workgroup stops |
+| Redshift | `foundation/redshift.tf` | 120 RPU-hours a month (about $45 at list price), then the workgroup stops |
 | Logs | `/ecs/ehr-rwe-eln` | 30 days |
 
 `GET /api/usage` shows today's allowance. Visitors never touch Redshift: the API reads only Aurora.
