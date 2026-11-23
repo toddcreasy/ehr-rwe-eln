@@ -43,33 +43,36 @@ def main() -> None:
     staging = DatabaseSettings().connect()
     ok = True
 
-    for path in sorted(PROTOCOLS.glob("*.yaml")):
-        protocol = load_protocol(path)
-        print(f"protocol {protocol.id}: {protocol.name}")
-        a_staging, t_staging = trial_table(staging, protocol, "cdm")
-        a_lake, t_lake = trial_table(lake, protocol, lake_cdm)
-        if a_staging == a_lake:
-            print(
-                f"  OK      attrition: {a_staging[-1][1]:,} eligible after {len(a_staging)} steps"
-            )
-        else:
-            print(f"  DIFFER  attrition\n    staging {a_staging}\n    lake    {a_lake}")
-            ok = False
-        ok &= same("analysis table with covariates", t_staging, t_lake)
-        for outcome in protocol.negative_controls:
-            control = protocol.model_copy(update={"outcome": outcome})
-            ok &= same(
-                f"negative control {outcome.name}",
-                trial_table(staging, control, "cdm")[1],
-                trial_table(lake, control, lake_cdm)[1],
-            )
+    # The with block ends the Redshift session, which is billed while open.
+    with lake:
+        for path in sorted(PROTOCOLS.glob("*.yaml")):
+            protocol = load_protocol(path)
+            print(f"protocol {protocol.id}: {protocol.name}")
+            a_staging, t_staging = trial_table(staging, protocol, "cdm")
+            a_lake, t_lake = trial_table(lake, protocol, lake_cdm)
+            if a_staging == a_lake:
+                eligible, steps = a_staging[-1][1], len(a_staging)
+                print(f"  OK      attrition: {eligible:,} eligible after {steps} steps")
+            else:
+                print(f"  DIFFER  attrition\n    staging {a_staging}\n    lake    {a_lake}")
+                ok = False
+            ok &= same("analysis table with covariates", t_staging, t_lake)
+            for outcome in protocol.negative_controls:
+                control = protocol.model_copy(update={"outcome": outcome})
+                ok &= same(
+                    f"negative control {outcome.name}",
+                    trial_table(staging, control, "cdm")[1],
+                    trial_table(lake, control, lake_cdm)[1],
+                )
 
-    for path in sorted(SPECS.glob("*.yaml")):
-        spec = load_spec(path)
-        print(f"synthetic data spec {spec.name}")
-        ok &= same(
-            "source table", build_source(staging, spec, "cdm"), build_source(lake, spec, lake_cdm)
-        )
+        for path in sorted(SPECS.glob("*.yaml")):
+            spec = load_spec(path)
+            print(f"synthetic data spec {spec.name}")
+            ok &= same(
+                "source table",
+                build_source(staging, spec, "cdm"),
+                build_source(lake, spec, lake_cdm),
+            )
 
     staging.rollback()
     if not ok:

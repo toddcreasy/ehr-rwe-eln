@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 
 from ehr_rwe_eln.config import DatabaseSettings, LakeSettings
 
@@ -124,7 +125,7 @@ class RedshiftSession:
         # statement is not waited on: it fails as its connection closes). A session that has
         # already expired refuses it, which is just as good.
         if self.session_id:
-            with contextlib.suppress(self.client.exceptions.ClientError):
+            with contextlib.suppress(ClientError, BotoCoreError):
                 self.client.execute_statement(
                     Sql="SELECT pg_terminate_backend(pg_backend_pid())", SessionId=self.session_id
                 )
