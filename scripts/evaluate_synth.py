@@ -85,11 +85,22 @@ def privacy_row(label: str, report: dict) -> str:
 
 def main() -> None:
     omop, cdm = connect_omop()
-    with DatabaseSettings().connect() as con, omop:
+    with DatabaseSettings().connect() as con:
         releases = con.execute(
             "SELECT release_id, method, epsilon, spec, withdrawn_at FROM synth.release"
             " ORDER BY release_id"
         ).fetchall()
+        # Every spec's source is read first, so the Redshift session (billed while open) ends
+        # before the hours of scoring and trial redraws.
+        tables = {}
+        with omop:
+            for *_, spec_json, _ in releases:
+                spec = Spec.model_validate(spec_json)
+                key = spec.model_dump_json(
+                    include={"name", "columns", "holdout_fraction", "protocol"}
+                )
+                if key not in tables:
+                    tables[key] = split(build_source(omop, spec, cdm), spec)
         sources, trial_lines, privacy_lines, summaries, subgroup_lines = {}, [], [], [], []
         review = []
         print(
@@ -100,7 +111,7 @@ def main() -> None:
             spec = Spec.model_validate(spec_json)
             key = spec.model_dump_json(include={"name", "columns", "holdout_fraction", "protocol"})
             if key not in sources:
-                train, holdout = split(build_source(omop, spec, cdm), spec)
+                train, holdout = tables[key]
                 target = spec.utility_target
                 trtr = utility_auc(train, holdout, spec.columns, target) if target else None
                 floor = None
