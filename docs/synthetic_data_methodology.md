@@ -211,7 +211,7 @@ Kept: the shares are right at both epsilons and overall fidelity improves at eps
 
 ### Trial table (1,890 people, 26 events)
 
-The real analysis gives a weighted hazard ratio of 1.00 (95% CI 0.43 to 2.32) for lisinopril against amlodipine, and a crude (unweighted) hazard ratio of 1.22. (0.97, 0.42 to 2.25, before step 6c ended covariate windows the day before time zero; the table below was rerun on 2026-11-22.)
+The real analysis gives a weighted hazard ratio of 1.00 (95% CI 0.43 to 2.32) for lisinopril against amlodipine, and a crude (unweighted) hazard ratio of 1.22. (0.97, 0.42 to 2.25, before step 6c ended covariate windows the day before time zero; the table below was rerun on 2026-11-22, on AWS.)
 
 | Release | Events | Release HR (95% CI) | Estimable | Covers real HR | Spurious effect | Median HR, 20 draws |
 |---|---|---|---|---|---|---|
@@ -220,12 +220,13 @@ The real analysis gives a weighted hazard ratio of 1.00 (95% CI 0.43 to 2.32) fo
 | Bayesian network, epsilon 16 | 35 | 4.38 (1.55 to 12.37) | 95% | 90% | 5% | 1.19 |
 | Bayesian network, epsilon 1000 (no real privacy) | 26 | 0.63 (0.29 to 1.37) | 100% | 95% | 5% | 1.65 |
 | VAE, epsilon 4 | 27 | 1.62 (0.69 to 3.81) | 95% | 95% | 0% | 0.96 |
-| MST, epsilon 1 | 36 | 1.42 (0.69 to 2.90) | 85% | 65% | 20% | 1.06 |
-| MST, epsilon 4 | 22 | 1.65 (0.63 to 4.30) | 100% | 100% | 0% | 1.06 |
+| MST, epsilon 1 | 36 | 1.42 (0.69 to 2.90) | 85% | 70% | 15% | 0.96 |
+| MST, epsilon 4 | 22 | 1.65 (0.63 to 4.30) | 100% | 100% | 0% | 0.99 |
 
 - With 26 events, DP synthetic tables give confident wrong answers often: 45% of the Bayesian network's draws at epsilon 1, and 15% at epsilon 4, show an effect the real data does not.
 - Noise is clipped at zero, which can only raise sparse counts: the epsilon 1 release has 118 events against 26 real ones.
-- MST at epsilon 4 and the VAE do best: every MST draw and 95% of the VAE's cover the real hazard ratio, and none shows a spurious effect. MST at epsilon 1 is better than the Bayesian network at epsilon 1 (20% spurious against 45%) but not safe. Its event counts stay near the real 26 (36 and 22): its model is fitted to the noisy counts as a whole, not clipped at zero cell by cell.
+- MST at epsilon 4 and the VAE do best: every MST draw and 95% of the VAE's cover the real hazard ratio, and none shows a spurious effect. MST at epsilon 1 is better than the Bayesian network at epsilon 1 (15% spurious against 45%) but not safe. Its event counts stay near the real 26 (36 and 22): its model is fitted to the noisy counts as a whole, not clipped at zero cell by cell.
+- MST's draws repeat exactly only on the same kind of processor: its model is fitted in 32-bit floating point (JAX), and the last bits differ between the laptop (ARM) and Fargate (x86). On the laptop the epsilon 1 draws gave 65% covering and 20% spurious. Every other number here, and every stored release, is the same on both.
 - A single release is not enough to judge a method on a cohort this small. The stored epsilon 4 release gives a hazard ratio of 12.22, though 75% of draws at that setting cover the real one.
 - Without real privacy (epsilon 1000), the Bayesian network's median drifts above 1. The spec makes the outcome depend only on arm and follow-up, so propensity weighting has nothing to adjust and the synthetic estimate follows the crude association. This is a structure limit, not a privacy one.
 

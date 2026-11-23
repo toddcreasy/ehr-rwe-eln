@@ -104,6 +104,7 @@ BIAS-2015 v3.0.0 runs on Ensembl's own VEP 115 image, pinned by digest, in `dock
 - **Image**: `docker/synth.Dockerfile`, Python with the locked dependencies and the `synth` group, no project code. Built by the gwas CodeBuild project into ECR repository `ehr-rwe-eln-synth`; the tag is a hash of the Dockerfile, `docker/synth_task.py`, `pyproject.toml`, and `uv.lock`, so only a dependency change needs a new image and an apply.
 - **Code**: each run uploads `git archive` of HEAD to `build/source-<commit>.zip` (the tree must be clean), and the task runs that commit's script with `CODE_VERSION` set to it, which each release records.
 - **Role** `ehr-rwe-eln-synth`: the monitor's lake access (its own Redshift user and Lake Formation grants, `infra/redshift/grants.sql`), Aurora as `app`, and `build/source-*` read-only.
+- **A run**: the first, on 2026-11-22, rescored all 22 releases from the lake (20 trial redraws for each of 7 trial releases) in 21 minutes, about 9 cents. Every report matched the laptop's to rounding except MST's trial redraws (see the methodology, section 5).
 
 ## Public demo limits
 
