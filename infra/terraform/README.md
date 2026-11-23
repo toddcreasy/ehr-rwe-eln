@@ -97,6 +97,14 @@ BIAS-2015 v3.0.0 runs on Ensembl's own VEP 115 image, pinned by digest, in `dock
 - **Fargate task** `ehr-rwe-eln-bias`: X86_64, 4 vCPUs, 16 GB, 200 GiB of task disk. Its role reads and writes only `studies/*`, `reference/vep/*`, and `reference/bias/*` (the fetch writes the reference data). Each run copies gnomAD v4.1 exomes one chromosome at a time from AWS's public gnomAD bucket (`gnomad-public-us-east-1`, unsigned) and keeps only the run's positions with `tabix -R`: the image's htslib cannot read over HTTPS. Then it unpacks the cache, runs VEP once, and BIAS once per skip list.
 - **A run**: 883 variants, 935 seconds, about 6 cents of Fargate time.
 
+## Synthetic releases on AWS
+
+`scripts/synthesize.py` and `scripts/evaluate_synth.py` run as Fargate task `ehr-rwe-eln-synth` (`app/synth.tf`): X86_64, 4 vCPUs, 16 GB, about 25 cents an hour. `scripts/run_synth.py <script> [args]` starts one and prints its log when it stops.
+
+- **Image**: `docker/synth.Dockerfile`, Python with the locked dependencies and the `synth` group, no project code. Built by the gwas CodeBuild project into ECR repository `ehr-rwe-eln-synth`; the tag is a hash of the Dockerfile, `docker/synth_task.py`, `pyproject.toml`, and `uv.lock`, so only a dependency change needs a new image and an apply.
+- **Code**: each run uploads `git archive` of HEAD to `build/source-<commit>.zip` (the tree must be clean), and the task runs that commit's script with `CODE_VERSION` set to it, which each release records.
+- **Role** `ehr-rwe-eln-synth`: the monitor's lake access (its own Redshift user and Lake Formation grants, `infra/redshift/grants.sql`), Aurora as `app`, and `build/source-*` read-only.
+
 ## Public demo limits
 
 The app has no sign-in. What bounds it, as in glia-nav:

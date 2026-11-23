@@ -257,11 +257,13 @@ The real analysis gives a weighted hazard ratio of 1.00 (95% CI 0.43 to 2.32) fo
 
 ## 8. Reproducing and provenance
 
+Releases 1 to 22 were made on a laptop and copied to Aurora; from release 23 they are made on AWS, as a Fargate task that writes to Aurora directly.
+
 ```bash
-uv run python scripts/synthesize.py
-uv run python scripts/synthesize.py --spec src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
-uv run python scripts/synthesize.py --method mst   # one method's releases only
-uv run python scripts/evaluate_synth.py
+uv run python scripts/run_synth.py synthesize.py
+uv run python scripts/run_synth.py synthesize.py --spec src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
+uv run python scripts/run_synth.py synthesize.py --method mst   # one method's releases only
+uv run python scripts/run_synth.py evaluate_synth.py
 uv run python scripts/synth_cards.py
 
 # Hand a release to someone, and withdraw one
