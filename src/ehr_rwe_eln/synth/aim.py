@@ -27,6 +27,7 @@ import math
 import resource
 import sys
 
+import jax
 import numpy as np
 import pandas as pd
 from mbi import Dataset, Domain, LinearMeasurement, estimation, junction_tree, marginal_oracles
@@ -100,6 +101,9 @@ def _worst(cands, answers, model, epsilon, sigma, rng):
 def synthesize(table: pd.DataFrame, spec: Spec, release: Release) -> tuple[pd.DataFrame, list]:
     """A synthetic table with the spec's columns, and the privacy spend of each round. The
     number of rows is the model's total, from the noisy histograms."""
+    # The model fit still keeps its compiled programs (11 GB over the person summary's two
+    # releases); start each fit clean, so the trial's 20 redraws in one process don't add up.
+    jax.clear_caches()
     columns = spec.columns
     names = [c.name for c in columns]
     codes = encode(table, columns)
