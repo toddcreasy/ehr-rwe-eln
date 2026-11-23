@@ -2,6 +2,7 @@
 Postgres. Needs only boto3 and psycopg, so it runs in the app image (publishing to the lake, in
 cohort/lake.py, needs the lake dependency group)."""
 
+import contextlib
 import datetime
 import time
 from dataclasses import dataclass
@@ -84,7 +85,8 @@ class RedshiftSession:
 
     # keep_alive_s: how long the session (and its temp tables) outlives its last statement.
     # Callers do long local work between statements; run_tte.py's 500 bootstrap replicates went
-    # past 15 minutes on 2026-11-21 and the session expired. An idle session runs no query.
+    # past 15 minutes on 2026-11-21 and the session expired. An idle session is still billed
+    # as compute until it ends (8 RPUs for the hour, 2026-11-23), so leaving the block ends it.
     def __init__(self, settings: LakeSettings, keep_alive_s: int = 3600, timeout_s: int = 900):
         self.settings = settings
         self.keep_alive_s = keep_alive_s
@@ -118,7 +120,14 @@ class RedshiftSession:
         return self
 
     def __exit__(self, *exc):
-        # The Data API has no call to end a session; it expires keep_alive_s after the last use.
+        # The Data API has no call to end a session, so the session ends its own backend (the
+        # statement is not waited on: it fails as its connection closes). A session that has
+        # already expired refuses it, which is just as good.
+        if self.session_id:
+            with contextlib.suppress(self.client.exceptions.ClientError):
+                self.client.execute_statement(
+                    Sql="SELECT pg_terminate_backend(pg_backend_pid())", SessionId=self.session_id
+                )
         self.session_id = None
 
 
