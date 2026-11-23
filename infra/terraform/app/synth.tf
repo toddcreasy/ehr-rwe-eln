@@ -98,13 +98,14 @@ resource "aws_lakeformation_permissions" "synth_link" {
   }
 }
 
-# 4 vCPU and 16 GB: AIM's model fitting on the person summary used 7.5 GB and four cores.
+# 4 vCPU and 30 GB, the most Fargate gives 4 vCPUs: AIM on the person summary ran out of 16 GB
+# (its model grows each round; aim.py logs the peak per round).
 resource "aws_ecs_task_definition" "synth" {
   family                   = "${local.name}-synth"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "4096"
-  memory                   = "16384"
+  memory                   = "30720"
   execution_role_arn       = aws_iam_role.execution.arn
   task_role_arn            = aws_iam_role.synth.arn
 

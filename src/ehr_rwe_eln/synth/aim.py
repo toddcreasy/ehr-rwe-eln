@@ -24,6 +24,8 @@ of columns at weight 1, the authors' default, so columns outside the queries are
 
 import itertools
 import math
+import resource
+import sys
 
 import numpy as np
 import pandas as pd
@@ -140,6 +142,12 @@ def synthesize(table: pd.DataFrame, spec: Spec, release: Release) -> tuple[pd.Da
         spend.append({"mechanism": "exponential and gaussian", "of": f"round {len(spend)}",
                       "pairs": [list(cl)], "rho": epsilon**2 / 8 + 0.5 / sigma**2,
                       "sigma": sigma})  # fmt: skip
+        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (
+            2**30 if sys.platform == "darwin" else 2**20
+        )
+        size = junction_tree.hypothetical_model_size(domain, list(model.cliques))
+        print(f"    round {len(spend) - 1}: {', '.join(cl)}; model {size:.1f} MB,"
+              f" peak memory {peak:.1f} GB", flush=True)  # fmt: skip
         after = model.project(cl).datavector()
         if np.linalg.norm(after - before, 1) <= sigma * math.sqrt(2 / math.pi) * domain.size(cl):
             sigma /= 2
