@@ -41,13 +41,13 @@ The reports read real data, so they are for internal review, not for release.
 
 ## Run it
 
-OMOP is read from the lake through Redshift; `OMOP_SOURCE=staging` reads the staging Postgres instead (see [Who reads the lake](cohort.md#who-reads-the-lake)). Releases, reports, and cards stay in Postgres.
+Releases are made and evaluated on AWS: `scripts/run_synth.py` runs either script at the current commit as a Fargate task, which reads OMOP from the lake through Redshift and writes releases and reports to Aurora (see [Synthetic releases on AWS](../../infra/terraform/README.md#synthetic-releases-on-aws)). Run locally, the same scripts read the lake (or the staging Postgres with `OMOP_SOURCE=staging`, see [Who reads the lake](cohort.md#who-reads-the-lake)) and write to the Compose Postgres; keep that to the tests and small specs, since MST, AIM, and the trial redraws take minutes to hours of several cores.
 
 ```bash
 export SPEC=src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
-uv run python scripts/synthesize.py
-uv run python scripts/synthesize.py --spec $SPEC
-uv run python scripts/evaluate_synth.py
+uv run python scripts/run_synth.py synthesize.py
+uv run python scripts/run_synth.py synthesize.py --spec $SPEC --method mst
+uv run python scripts/run_synth.py evaluate_synth.py
 uv run python scripts/synth_cards.py
 
 # Hand a release to someone, and withdraw one later

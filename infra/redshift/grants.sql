@@ -18,3 +18,8 @@ GRANT USAGE ON DATABASE awsdatacatalog TO "IAMR:ehr-rwe-eln-monitor";
 -- cohort tables that CohortMethod and other HADES packages read. scripts/write_cohorts.py fills it.
 CREATE SCHEMA IF NOT EXISTS results;
 GRANT USAGE, CREATE ON SCHEMA results TO "IAMR:AWSReservedSSO_AdministratorAccess_3cdbb86f6d3e44fd";
+
+-- The synth task's role (infra/terraform/app/synth.tf), which makes and evaluates synthetic
+-- releases from the lake. Same as the monitor's.
+CREATE USER "IAMR:ehr-rwe-eln-synth" PASSWORD DISABLE;
+GRANT USAGE ON DATABASE awsdatacatalog TO "IAMR:ehr-rwe-eln-synth";

@@ -82,3 +82,19 @@ output "bias_image_tag" {
 output "bias_task_definition" {
   value = aws_ecs_task_definition.bias.arn_without_revision
 }
+
+output "synth_repository" {
+  value = aws_ecr_repository.synth.name
+}
+
+output "synth_repository_url" {
+  value = aws_ecr_repository.synth.repository_url
+}
+
+output "synth_image_tag" {
+  value = local.synth_image_tag
+}
+
+output "synth_task_definition" {
+  value = aws_ecs_task_definition.synth.arn_without_revision
+}

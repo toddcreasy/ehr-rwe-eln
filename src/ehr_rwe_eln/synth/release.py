@@ -9,6 +9,7 @@ not part of the synthetic data, whose row count is noisy.
 """
 
 import json
+import os
 import shutil
 import subprocess
 from datetime import UTC, datetime
@@ -23,7 +24,10 @@ from ehr_rwe_eln.synth.spec import Release, Spec
 
 def code_version() -> str | None:
     """The git commit, with -dirty when there are uncommitted changes; None without git or
-    outside a checkout (the app container has neither)."""
+    outside a checkout (the app container has neither). The synth task on AWS has no checkout
+    either; it runs one commit's code and says which in CODE_VERSION."""
+    if os.environ.get("CODE_VERSION"):
+        return os.environ["CODE_VERSION"]
     git = shutil.which("git")
     if git is None:
         return None
