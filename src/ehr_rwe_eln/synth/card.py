@@ -40,6 +40,11 @@ def _spend(entry: dict) -> str:
             f" noise multiplier {entry['noise_multiplier']:.2f}, gradient clip"
             f" {entry['max_grad_norm']:g}, {entry['steps']} steps |"
         )
+    if "rho" in entry:
+        what = entry.get("pairs") or entry.get("columns")
+        listed = ", ".join(" x ".join(p) if isinstance(p, list) else p for p in what)
+        noise = f", noise sd {entry['sigma']:.1f}" if "sigma" in entry else ""
+        return f"| {entry['of'].capitalize()}: {listed} | rho {entry['rho']:.5f}{noise} |"
     if entry.get("of"):
         return f"| Noisy {entry['of']} | epsilon {entry['epsilon']:.4f} |"
     return (
@@ -267,6 +272,8 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
         "independent": "independent columns (a baseline: each column's noisy histogram alone,"
         " no relationships kept)",
         "vae": "variational autoencoder trained with differentially private SGD (Opacus)",
+        "mst": "MST (noisy one-way histograms, a privately chosen tree of column pairs and their"
+        " noisy histograms, then a graphical model fitted to them and sampled)",
     }[release["method"]]
     trial = reports.get("trial")
     spurious = trial["repeated"]["spurious_effect"] if trial else None
@@ -297,6 +304,7 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
         f"| Method | {method} |",
         f"| Privacy budget | epsilon {release['epsilon']:g}"
         + (f", delta {spec.vae.delta:g}" if release["method"] == "vae" else "")
+        + (f", delta {spec.pgm.delta:g}" if release["method"] == "mst" else "")
         + " |",
         f"| Rows | {release['rows']:,} (a noisy count) |",
         f"| Trained on | {release['source_rows']:,} people;"
@@ -354,7 +362,12 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
         "",
         "Every category list and numeric range below is fixed in the spec, never read from the"
         " data. Parents are the columns each column's distribution was measured against; they"
-        " were declared, not learned, so they cost no privacy.",
+        " were declared, not learned, so they cost no privacy."
+        + (
+            " MST does not use them: it chooses its own pairs, and pays for the choice below."
+            if release["method"] == "mst"
+            else ""
+        ),
         "",
         "| Column | Source | Domain | Parents |",
         "|---|---|---|---|",
@@ -363,7 +376,13 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
         "## Privacy spend",
         "",
         "Each mechanism that touched the source, and what it spent. The spends add up to the"
-        " release's budget (sequential composition).",
+        " release's budget (sequential composition)"
+        + (
+            f": in zCDP, where the rho values add up to the rho that gives epsilon"
+            f" {release['epsilon']:g} at delta {spec.pgm.delta:g}."
+            if release["method"] == "mst"
+            else "."
+        ),
         "",
         "| Mechanism | Spend |",
         "|---|---|",
@@ -417,6 +436,11 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
     if release["method"] == "bayes_net":
         lines.append(
             "- Only the relationships named as parents are kept; others survive only through them."
+        )
+    if release["method"] == "mst":
+        lines.append(
+            "- Only the column pairs MST chose (a tree) are measured; other relationships survive"
+            " only through that tree, and the choice itself is noisy."
         )
     lines.append("")
     return "\n".join(lines)

@@ -37,7 +37,9 @@ Synthetic rows are not real people, so a match between a synthetic row and a rea
 
 **Variational autoencoder (VAE)** (`synth/vae.py`). A neural network that compresses each row to 16 numbers and rebuilds it, trained with DP-SGD through Meta's [Opacus](https://opacus.ai). Each training step clips every person's gradient to length 1 and adds Gaussian noise; Opacus chooses the noise for the target epsilon over the planned steps. The guarantee is (epsilon, delta)-DP: delta is a small probability that the guarantee does not hold, set to 1e-5, well under one over the number of people. Privacy is tracked with the Rényi DP (RDP) accountant, whose epsilon is a guaranteed upper bound; Opacus's default accountant warned that its numerical integration was divergent on this data. One percent of epsilon buys a noisy row count. The person summary's VAE is conditional on age (`vae.condition`): 10% of epsilon buys a noisy age histogram (one count per ten-year bin; each person is in one bin, so the bins together cost that 10%), the decoder takes each row's age band as an input instead of generating it, and a release draws ages from the noisy histogram before the decoder fills in the rest. DP-SGD gets the remaining 89%. Training settings are fixed in the spec, not tuned on the source: every training run on private data spends privacy, tuning runs included.
 
-**Randomness.** The specs here are seeded so that each release can be remade exactly. That is acceptable only because the source is synthetic: anyone who knows the seed can regenerate the noise and subtract it. A spec over real data must set `seed: null`, which makes diffprivlib draw from a cryptographically secure generator. The VAE would need Opacus's secure mode, which depends on the `torchcsprng` package; its last release (2021) supports only torch 1.8 and Python up to 3.9, so it cannot be installed on this stack. The spec therefore refuses VAE releases without a seed: on real data, only the Bayesian network can be used here.
+**MST** (`synth/mst.py`). The general form of the mechanism that won the 2018 NIST synthetic data contest ([McKenna, Miklau, and Sheldon 2021](https://arxiv.org/abs/2108.04978)), adapted from its authors' code in [private-pgm](https://github.com/ryan112358/private-pgm) and fitted with their `mbi` library. It ignores the spec's parents and picks its own structure, paying privacy for the choice. A third of the budget measures every column's histogram with Gaussian noise. A third chooses a tree of column pairs (each column joined to the rest, 20 pairs for 21 columns), one pair at a time with the exponential mechanism: it favors the pairs that a model of the single columns gets most wrong, with enough chance that no one person decides the choice. The last third measures each chosen pair's histogram. A graphical model (a Markov random field: one table of weights per measured pair) is then fitted to all the noisy histograms by mirror descent and sampled, which costs nothing more. The budget is tracked in zero-concentrated DP (zCDP), whose cost rho adds up across the three steps; rho is converted to (epsilon, delta) with delta 1e-9, the authors' default. Columns use the Bayesian network's encoding, so the two release the same bins.
+
+**Randomness.** The specs here are seeded so that each release can be remade exactly. That is acceptable only because the source is synthetic: anyone who knows the seed can regenerate the noise and subtract it. A spec over real data must set `seed: null`, which makes diffprivlib draw from a cryptographically secure generator. The VAE would need Opacus's secure mode, which depends on the `torchcsprng` package; its last release (2021) supports only torch 1.8 and Python up to 3.9, so it cannot be installed on this stack. The spec therefore refuses VAE releases without a seed. MST is refused without one too: its Gaussian noise comes from numpy's floating-point generator, which can leak the value it hides ([Mironov 2012](https://doi.org/10.1145/2382196.2382264)). On real data, only the Bayesian network can be used here.
 
 **What is not covered by DP.** The evaluation reports in sections 4 and 5 are computed on the source and are not differentially private. They are for reviewers and stay internal. The holdout split is by a hash of `person_id`, which is not sensitive.
 
@@ -81,10 +83,13 @@ A failed attack shows only that this attack failed. These checks bound risk from
 | VAE conditional on age, epsilon 4 (18) | 0.041 | 0.069 | age x BMI (0.193) | 0.126 | 0.727 |
 | VAE, epsilon 1 (5, before) | 0.038 | 0.073 | age x BMI (0.386) | 0.210 | 0.730 |
 | VAE, epsilon 4 (6, before) | 0.046 | 0.077 | age x BMI (0.270) | 0.128 | 0.724 |
+| MST, epsilon 1 (19) | 0.003 | 0.026 | diabetes x HbA1c (0.158) | 0.093 | 0.747 |
+| MST, epsilon 4 (20) | 0.001 | 0.021 | diabetes x HbA1c (0.150) | 0.081 | 0.754 |
 
 - The Bayesian network at epsilon 4 matches single columns at the noise floor and comes closest on relationships (pair TVD 0.023 against a floor of 0.012). At epsilon 1 the four measurement columns carry more noise (worst, BMI, at 0.069).
 - Its worst pair is now hyperlipidemia x eGFR, a relationship the spec does not declare: eGFR depends on chronic kidney disease and age, hyperlipidemia on age, so the spec links them only through age.
 - The VAE matches single columns worse (DP noise on 63,100 network weights trained from 16,385 people) but predicts death better, because in the Bayesian network death depends on age alone. Its worst pair is still age x BMI: it learns structure from data, not from the spec.
+- MST is the best release on almost every measure: single columns below the noise floor at epsilon 4 (0.001; the floor is the gap between two real samples, and MST is fitted to the training sample itself), the lowest pair TVD (0.021), and the best death prediction (TSTR 0.754 against 0.685 for the Bayesian network). At epsilon 1 it still beats the Bayesian network at epsilon 4 on single columns, pairs, and utility. Its tree finds relationships the spec left out: age x BMI, the VAE's worst pair, and hyperlipidemia x eGFR, the Bayesian network's, are both chosen, and death is tied to eGFR (and heart failure at epsilon 4) instead of age alone. Its own worst pair, diabetes x HbA1c, is one the tree reaches only through insulin and age.
 - The independent-columns baseline keeps every column and loses every relationship, and predicts death no better than guessing: the checks can tell a useless release from a useful one.
 
 **Structure: age as a parent of the measurements.** Releases 2 to 4 gave each measurement only its condition as a parent, so BMI, blood pressure, eGFR, and HbA1c ignored age: age x BMI was the worst pair in every release, and children were off in every release, because their values came from the adult-heavy whole. The current spec adds age as each measurement's second parent (releases 13 and 14). That costs no privacy, since the structure is declared, but gives each measurement's histogram ten times the cells for the same noise:
@@ -108,6 +113,8 @@ At epsilon 4 the structure is a clear gain: children and the oldest groups reach
 | Bayesian network, epsilon 4 | 49.2% | 35.0% / 35.5% | 0.503 | +0.2% / +1.3% |
 | VAE, epsilon 1 | 50.9% | 9.4% / 8.8% | 0.509 | +0.2% / +1.2% |
 | VAE, epsilon 4 | 50.5% | 19.6% / 19.5% | 0.506 | +0.2% / +1.3% |
+| MST, epsilon 1 | 50.9% | 32.9% / 32.6% | 0.505 | +0.2% / +1.4% |
+| MST, epsilon 4 | 50.6% | 32.5% / 32.0% | 0.503 | +0.1% / +1.2% |
 
 - Every release is at chance on every attack; the copy shows the attacks detect leakage when it exists.
 - Exact matches rose with the age parents (from 21% to 35% at epsilon 4), equally for training and held-out people. That is the release resembling the population more closely on a coarse encoding, not copying: a held-out person, whom the synthesizer never saw, is as likely to have a twin in it.
@@ -186,21 +193,39 @@ At epsilon 4 it removes the structural error. At epsilon 1 the noise swamps the 
 
 Kept: the shares are right at both epsilons and overall fidelity improves at epsilon 4. Making older people realistic remains open (section 7).
 
+**MST by subgroup (releases 19 and 20, against the Bayesian network's 13 and 14).**
+
+| Group | Bayes net 1 | MST 1 | Bayes net 4 | MST 4 |
+|---|---|---|---|---|
+| Age 0 to 9 | +0.012, 1.04 | +0.014, 1.00 | +0.001, 1.04 | +0.008, 1.00 |
+| Age 80 to 89 | +0.036, 0.98 | +0.045, 0.91 | +0.005, 0.97 | +0.007, 0.97 |
+| Age 90 or more | +0.047, 0.98 | +0.068, 0.96 | +0.003, 1.07 | +0.020, 0.97 |
+| Race: Black | +0.020, 1.00 | +0.015, 1.01 | +0.008, 0.99 | +0.010, 1.00 |
+| Race: Native American | +0.003, 1.01 | +0.029, 0.98 | -0.014, 0.96 | -0.003, 1.19 |
+| Black, 80 to 89, share | 2.03 | 1.62 | 2.03 | 2.00 |
+| Groups and cells flagged on the card | 1 | 4 | 2 | 4 |
+
+- MST is closer overall but not within every group: people 90 and over are +0.020 past their floor at epsilon 4, against +0.003 for the Bayesian network, whose spec gives age to every measurement. MST's tree ties age to seven columns and reaches the rest through them.
+- It did not choose age x race either (race joins the tree through hypertension), so older Black people are still about twice their share at epsilon 4, and the cards flag the same age-by-race cells. A structure learned from noisy data favors the relationships that move the most people; a small group's relationship rarely wins.
+- Privacy attacks are at chance (membership AUC 0.505 and 0.503). Exact matches (32%) sit between the Bayesian network at epsilon 1 and 4, equally for training and held-out people.
+
 ### Trial table (1,890 people, 26 events)
 
-The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.25) for lisinopril against amlodipine, and a crude (unweighted) hazard ratio of 1.22.
+The real analysis gives a weighted hazard ratio of 1.00 (95% CI 0.43 to 2.32) for lisinopril against amlodipine, and a crude (unweighted) hazard ratio of 1.22. (0.97, 0.42 to 2.25, before step 6c ended covariate windows the day before time zero; the table below was rerun on 2026-11-22.)
 
 | Release | Events | Release HR (95% CI) | Estimable | Covers real HR | Spurious effect | Median HR, 20 draws |
 |---|---|---|---|---|---|---|
-| Bayesian network, epsilon 1 | 118 | 5.47 (2.85 to 10.52) | 100% | 50% | 55% | 0.75 |
-| Bayesian network, epsilon 4 | 46 | 12.22 (2.96 to 50.40) | 95% | 75% | 20% | 0.86 |
-| Bayesian network, epsilon 16 | 35 | 4.38 (1.55 to 12.37) | 100% | 95% | 5% | 1.21 |
-| Bayesian network, epsilon 1000 (no real privacy) | 26 | 0.63 (0.29 to 1.37) | 100% | 95% | 0% | 1.59 |
-| VAE, epsilon 4 | 27 | 1.62 (0.69 to 3.81) | 100% | 100% | 0% | 1.08 |
+| Bayesian network, epsilon 1 | 118 | 5.47 (2.85 to 10.52) | 90% | 45% | 45% | 0.76 |
+| Bayesian network, epsilon 4 | 46 | 12.22 (2.96 to 50.40) | 90% | 75% | 15% | 0.87 |
+| Bayesian network, epsilon 16 | 35 | 4.38 (1.55 to 12.37) | 95% | 90% | 5% | 1.19 |
+| Bayesian network, epsilon 1000 (no real privacy) | 26 | 0.63 (0.29 to 1.37) | 100% | 95% | 5% | 1.65 |
+| VAE, epsilon 4 | 27 | 1.62 (0.69 to 3.81) | 95% | 95% | 0% | 0.96 |
+| MST, epsilon 1 | 36 | 1.42 (0.69 to 2.90) | 85% | 65% | 20% | 1.06 |
+| MST, epsilon 4 | 22 | 1.65 (0.63 to 4.30) | 100% | 100% | 0% | 1.06 |
 
-- With 26 events, DP synthetic tables give confident wrong answers often: more than half of the draws at epsilon 1, and 20% at epsilon 4, show an effect the real data does not.
+- With 26 events, DP synthetic tables give confident wrong answers often: 45% of the Bayesian network's draws at epsilon 1, and 15% at epsilon 4, show an effect the real data does not.
 - Noise is clipped at zero, which can only raise sparse counts: the epsilon 1 release has 118 events against 26 real ones.
-- The VAE does best: every draw covers the real hazard ratio and none shows a spurious effect.
+- MST at epsilon 4 and the VAE do best: every MST draw and 95% of the VAE's cover the real hazard ratio, and none shows a spurious effect. MST at epsilon 1 is better than the Bayesian network at epsilon 1 (20% spurious against 45%) but not safe. Its event counts stay near the real 26 (36 and 22): its model is fitted to the noisy counts as a whole, not clipped at zero cell by cell.
 - A single release is not enough to judge a method on a cohort this small. The stored epsilon 4 release gives a hazard ratio of 12.22, though 75% of draws at that setting cover the real one.
 - Without real privacy (epsilon 1000), the Bayesian network's median drifts above 1. The spec makes the outcome depend only on arm and follow-up, so propensity weighting has nothing to adjust and the synthetic estimate follows the crude association. This is a structure limit, not a privacy one.
 
@@ -215,7 +240,7 @@ The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.25) fo
 
 **After release.** Each run of `scripts/evaluate_synth.py` rescores every release and lists for review any whose membership inference AUC or nearer-a-member share has moved more than halfway from chance (0.5) toward what a plain copy of the training data shows (0.650 and 62.9% on the person summary, so 0.575 and 56.5%). That is a trigger to investigate and possibly withdraw, not proof of a leak. No current release is flagged.
 
-**On a schedule.** The Compose `monitor` service (`ehr_rwe_eln.synth.monitor`) runs the same privacy check every `MONITOR_INTERVAL_HOURS`, 24 by default. The attacks are seeded, so on unchanged data and code they give the same answer; a release can only drift when its source changes (a rebuild, or the ELN bridge adding lab results) or the code does. Each run therefore fingerprints every spec's source table and the synth code, reruns the attacks only when a fingerprint changed, and records the run, skipped or not, in `synth.monitor_run`. A full check of the 11 releases with a holdout takes about 25 seconds; a skipped one, a few. The `/synth/` page shows the last check and any release it flagged. Trial parity is not rerun on the schedule: it redraws releases, and measures how a synthesizer behaves rather than drift.
+**On a schedule.** The Compose `monitor` service (`ehr_rwe_eln.synth.monitor`) runs the same privacy check every `MONITOR_INTERVAL_HOURS`, 24 by default. The attacks are seeded, so on unchanged data and code they give the same answer; a release can only drift when its source changes (a rebuild, or the ELN bridge adding lab results) or the code does. Each run therefore fingerprints every spec's source table and the synth code, reruns the attacks only when a fingerprint changed, and records the run, skipped or not, in `synth.monitor_run`. A full check of the 11 releases with a holdout took about 25 seconds (before MST's two); a skipped one, a few. The `/synth/` page shows the last check and any release it flagged. Trial parity is not rerun on the schedule: it redraws releases, and measures how a synthesizer behaves rather than drift.
 
 ## 7. Limitations
 
@@ -225,7 +250,8 @@ The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.25) fo
 - The Bayesian network keeps only declared relationships, with at most two parents per column.
 - The VAE's training settings were not tuned. Tuning on a separate public stand-in would likely improve it.
 - The VAE, conditional on age, generates the right number of people 80 and over, but their other columns are still about 0.21 to 0.24 past their noise floor, against 0.005 or less for the Bayesian network at epsilon 4 (release 14). DP-SGD's clipping gives them little pull on training; conditioning does not change that. Use the Bayesian network for analyses of older people.
-- On real data only the Bayesian network can run here: the VAE needs a seed, because secure noise for it is not installable (section 3).
+- On real data only the Bayesian network can run here: the VAE and MST need a seed, because secure noise for them is not available on this stack (section 3).
+- MST's tree keeps one path between any two columns. Relationships off the tree, and small groups' relationships, survive only through it (older Black people at twice their share, section 5).
 - Intersections cover pairs of columns; three-way cells (older Black women, for example) would be smaller still, and most would fall under the 11-person cutoff. Cells under 11 people are listed without numbers.
 - One spec per table kind and one trial protocol; results on other cohorts will differ.
 
@@ -234,6 +260,7 @@ The real analysis gives a weighted hazard ratio of 0.97 (95% CI 0.42 to 2.25) fo
 ```bash
 uv run python scripts/synthesize.py
 uv run python scripts/synthesize.py --spec src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
+uv run python scripts/synthesize.py --method mst   # one method's releases only
 uv run python scripts/evaluate_synth.py
 uv run python scripts/synth_cards.py
 
