@@ -10,11 +10,12 @@ The full method, threat model, and results for reviewers are in [synthetic_data_
 
 A release spec in YAML (`specs/`) names the source table's columns, each column's domain, and the releases to make. Domains are fixed in the spec, never read from the data: a range taken from the data would leak on its own, since the top edge would be the oldest person's age.
 
-Four synthesizers:
+Five synthesizers:
 
 - **Bayesian network** (`bayes_net.py`), on [diffprivlib](https://github.com/IBM/differential-privacy-library). Each column gets a noisy histogram with its declared parents, the privacy budget (epsilon) is split across the histograms, and a budget accountant refuses to overspend. Rows are sampled from the noisy counts.
 - **Variational autoencoder** (VAE, `vae.py`), a small neural network trained with DP-SGD (differentially private stochastic gradient descent) through [Opacus](https://opacus.ai), on the same encoding.
 - **MST** (`mst.py`), the winning method of the 2018 NIST contest, on its authors' `mbi` library. It measures every column's histogram, chooses a tree of column pairs with privacy noise, measures those, and samples from a graphical model fitted to them. Same encoding as the Bayesian network.
+- **AIM** (`aim.py`), MST's successor from the same group, also on `mbi`. It is given a workload, the marginals the trial and cohort analyses read, and spends its budget in rounds, each measuring the marginal the current model fits worst.
 - **Independent columns**, a baseline that keeps each column and loses every relationship between them. A release that scores like this one is useless, which the reports have to be able to show.
 
 Epsilon bounds how much any one person can change what is released. Smaller is more private and noisier.
@@ -66,9 +67,10 @@ From the [methodology](../synthetic_data_methodology.md#5-results):
 
 - The Bayesian network at epsilon 4 matches single columns at the noise floor, and every age, sex, and race group within 0.014 of its own floor. Relationships still fall short of the floor (pair TVD 0.023 against 0.012). Its measurements depend on age as well as their condition; at epsilon 0.25 that structure costs more in noise than it adds, so the spec makes no release there.
 - MST at epsilon 4 is closer still: single columns at 0.001, pairs at 0.021, and the best death prediction of any release (AUC 0.754). It learns pairs the spec left out, but not age by race, so older Black people stay at twice their share, as in the Bayesian network.
+- AIM is best of all at epsilon 4: pairs below the noise floor (0.006 against 0.012) and death prediction within 0.014 AUC of the real data (0.790 against 0.804). Even at epsilon 1 it beats MST at epsilon 4.
 - By subgroup, age is where releases fall short: the VAE has 19 to 28% too few people aged 70 and over and distorts them most. Each data card names any group a release misrepresents.
 - Every release is at chance on every privacy attack; the plain copy of the training data is not, which shows the attacks detect leakage when it exists.
-- On the 26-event trial, DP releases often give confident wrong answers: 45% of the Bayesian network's draws at epsilon 1 and 15% at epsilon 4 show an effect the real data does not. MST at epsilon 4 has none, and covers the real hazard ratio in all 20 draws. These releases are fit for building and testing pipelines, not for reporting estimates.
+- On the 26-event trial, DP releases often give confident wrong answers: 45% of the Bayesian network's draws at epsilon 1 and 15% at epsilon 4 show an effect the real data does not. MST at epsilon 4 has none, and covers the real hazard ratio in all 20 draws. AIM, best on the person summary, is worse here: 10% of its draws are spurious at both epsilons, and its stored epsilon 1 release (23) gives a hazard ratio of 0.14 where the real one is 1.00. These releases are fit for building and testing pipelines, not for reporting estimates.
 
 ## For reviewers
 
