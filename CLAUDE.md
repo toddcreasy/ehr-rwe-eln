@@ -1,13 +1,10 @@
 # CLAUDE.md
 
-Operating file for `ehr-rwe-eln`. The platform is built and deployed; work now is the domain modules
-below. Claude Code loads this file every session.
-
-## How Claude Code must use this file
-
-Follow the operating rules below. The infrastructure history, the build phases that produced it,
-the moves to local-first (2026-10-12) and back to AWS (2026-11-23), and the expected cost table
-live in `docs/SETUP.md`; runbooks are in `docs/INSTALL.md`.
+Operating file for `ehr-rwe-eln`. The platform is built and deployed on AWS; work now is the domain
+modules below. Claude Code loads this file every session. How things got this way is in
+`docs/HISTORY.md` (the reasoning) and `docs/SETUP.md` (the steps, numbers, and cost table); runbooks
+are `docs/INSTALL.md` and `infra/terraform/README.md`. Open items are in
+`notes/TODO_IMPROVEMENTS.md` (`notes/` is gitignored).
 
 ## Project scope
 
@@ -25,13 +22,26 @@ Real world evidence from synthetic EHR data, linked to lab notebook records. Sev
 
 Each module depends on the OMOP tables from module 1.
 
-## Where things run
+## Settled decisions
 
-The app runs on AWS (the `default` profile's account, `us-east-1`) since the move of 2026-11-19 to 2026-11-23; each step, its numbers, and its decisions are in `docs/SETUP.md`, "AWS move". Open items are in `notes/TODO_IMPROVEMENTS.md` (`notes/` is gitignored). Standing decisions from the move:
+Do not re-ask. Rationale in `docs/HISTORY.md`.
+
+| Decision | Value |
+|---|---|
+| AWS account and region | The `default` AWS CLI profile (SSO, AdministratorAccess), `us-east-1` |
+| AWS budget | $100 a month on resources tagged `project = ehr-rwe-eln`, credits excluded; email at 50% and 80% actual and 100% forecast |
+| Public demo | No sign-in. `DAILY_TOKEN_LIMIT` 150,000 a day and 10 calls an hour per address on `/api/agent` (`api/limits.py`); `PUBLIC_DEMO=true` turns off curator decisions; one task; a daily token alarm. See `infra/terraform/README.md`, Public demo limits |
+| `MODEL` | `us.anthropic.claude-opus-4-6-v1` on Bedrock, the newest Claude this account can call (Opus 5.5, 4.8, 4.7 returned AccessDenied on 2026-11-19). Revisit when Opus 5.5 access opens |
+| Python | 3.14, pinned in `.python-version` |
+| Databases | OMOP only in the lake (Iceberg in S3 Tables, read through Redshift Serverless). App state, module schemas, and pgvector in Aurora Serverless v2 PostgreSQL 18.6, which never holds OMOP. Locally (pytest, the ETL's staging OMOP, Compose): PostgreSQL 18 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg18-trixie` |
+| Data database | One: `ehr_rwe_eln`, 23,421 Synthea patients, every module. A second population is a second CDM schema, never a second database. `ehr_rwe_eln_test` is for pytest only |
+| App name | RWE Workbench, for the web app only; the repo and the Python package stay `ehr-rwe-eln` |
+
+## Where things run
 
 - OMOP: the ETL builds in a staging Postgres, `scripts/publish_omop.py` copies it to Iceberg in S3 Tables, and `scripts/reconcile_lake.py` checks every column through Redshift. Readers go through `connect_omop()` (the lake by default, `OMOP_SOURCE=staging` for the staging Postgres), in SQL that runs on both. Writers (ETL, cohorts, ELN bridge) write to staging and republish.
 - Trial emulation: the Python `tte` analysis is the readable version behind `/tte`; CohortMethod (`r/run_cohortmethod.R`) is the OHDSI check, TrialEmulation (`r/run_trialemulation.R`) the per-protocol estimate.
-- Heavy jobs (REGENIE, Exomiser, BIAS-2015, synthetic releases) run as on-demand x86 Fargate tasks, images built by CodeBuild; nothing heavy runs in local Docker.
+- Heavy jobs (REGENIE, Exomiser, LIRICAL, BIAS-2015, synthetic releases) run as on-demand x86 Fargate tasks, images built by CodeBuild; nothing heavy runs in local Docker.
 - OMOP MCP server: local only, over stdio (`agents/mcp_server.py`, `.mcp.json`); `/api/agent` calls the same functions in-process (`agents/omop_tools.py`). Counts are precomputed in Aurora (`omop_stats`), so public calls never reach Redshift; counts under 11 are suppressed and never stored. A Bedrock Guardrail checks every `/api/agent` call.
 - Literature curation runs on LangGraph (`curation/literature_graph.py`), pausing for the curator; Claude through `propose()` and `claude_client()`, not `langchain-aws`.
 
@@ -50,19 +60,36 @@ The app runs on AWS (the `default` profile's account, `us-east-1`) since the mov
 - Every LLM extraction is validated against a typed Pydantic model and scored against a labeled set in `evals/`.
 - Outputs are for research and demonstration. No clinical decision claims in code, docs, or UI.
 
-## Domain stack
+## Stack
 
-Additions to the platform stack below.
+All AWS resources in Terraform. Values that are settled are in the table above; this is what each tool does and why.
 
 | Slot | Tool | Why |
 |---|---|---|
 | Synthetic EHR source | Synthea (CSV output) | Open standard synthetic patient generator. |
-| Common data model | OMOP CDM v5.4 as Apache Iceberg tables in S3 Tables, queried through Redshift Serverless | The model is an OHDSI standard; OHDSI's DatabaseConnector supports Redshift. |
+| Common data model | OMOP CDM v5.4 | OHDSI standard; OHDSI's DatabaseConnector supports Redshift. |
 | Interoperability format | FHIR R4 via `fhir.resources` | Language-level library; no FHIR server needed at this scale. |
 | Causal inference and survival | scikit-learn, statsmodels, lifelines | Language-level libraries. |
 | ELN source | Synthetic entries; eLabFTW API optional | Open-source ELN with a REST API. |
+| Models | Claude on Amazon Bedrock | Model access, permissions, and the bill stay in the AWS account; IAM auth (SSO locally, the task role on ECS), no API key. `anthropic` stays below 2: the 2.x releases send an API version Bedrock accepts only for Claude 4.7 and later. |
+| Agent framework | Anthropic Python SDK, `client.beta.messages.tool_runner`, through `AnthropicBedrock` | Runs the tool loop and returns typed output with no extra framework. LangGraph for literature curation only, for its pause and resume around the curator; no LangChain. |
+| Lake | S3 Tables (Apache Iceberg), AWS Glue Data Catalog, Lake Formation | Open table format any engine reads; Lake Formation controls who reads what. |
+| Warehouse SQL | Redshift Serverless | The AWS engine DatabaseConnector supports; billed per second of compute, capped at 150 RPU-hours a month. An open Data API session is billed as compute until it ends, so `RedshiftSession` ends its session when its block ends. |
+| App database + vector | Aurora Serverless v2 + pgvector | Row-by-row app writes and vector search, which Redshift is not built for. Pauses to 0 when idle. |
+| Secrets and settings | `pydantic-settings`; `.env` locally, Secrets Manager on AWS | One code path; database passwords are managed by RDS and Redshift in Secrets Manager. |
+| App hosting | ECS Express Mode, one x86 task in the public subnets, image in ECR tagged with its git commit | Express Mode builds the load balancer, HTTPS certificate, and URL; the public IP means no NAT gateway or interface endpoints, which would cost more than the whole budget. FastAPI serves the API under `/api` and the static frontend at `/`. Migrations and data copies go through an on-demand bastion task and an SSM tunnel. |
+| Infrastructure as code | Terraform, state in `ehr-rwe-eln-tfstate-<account>` | `bootstrap/` made the state bucket, `foundation/` holds the shared resources, `app/` the rest. |
+| Backend framework | FastAPI + Pydantic | Typed request and response models, OpenAPI for free. |
+| Python toolchain | uv, ruff, pytest | Fast, one tool per job, lockfile pinned. |
+| DB migrations | Alembic | `uv run alembic upgrade head` against the Compose Postgres locally, and against Aurora through the bastion tunnel. |
+| Dev-loop evals | pydantic-evals golden set in pytest | Scores the agent against the real model before a deploy. Run by hand, never in CI (billed, needs Bedrock and local data); all of `evals/` takes about 6 minutes. |
+| Frontend framework | Next.js + React + Tailwind, static export | Builds to plain files, so no Node server at runtime. |
+| Code host + CI runner | GitHub + GitHub Actions | `lint-test` runs ruff and pytest against a Postgres service container. `secrets` runs gitleaks (pinned, checksum verified) over every commit and file for keys, tokens, passwords, usernames, and email addresses, with the rules in `.gitleaks.toml`; the same scan runs in pre-commit. `terraform` checks formatting, validates each stack, and runs tflint and trivy. All three are required to merge. |
+| Containers | Docker + Docker Compose | Open standard; the whole stack starts with one command. |
+| Heavy jobs | On-demand x86 Fargate tasks (`docker/*.Dockerfile`, `infra/terraform/app/`), images built by CodeBuild, started by `scripts/run_*.py` | Long or memory-hungry runs leave the laptop; billed only while a task runs. x86 because REGENIE ships no ARM build. |
+| OHDSI HADES | R 4.6.1 + Java 21 in `docker/hades.Dockerfile`, run with `scripts/hades.py` | OHDSI's reference tools (ETL-Synthea, DataQualityDashboard, CohortMethod) are R; the repo runs them where R is the standard, against the lake. The Python ETL stays: it is verified against ETL-Synthea and fixes two of its bugs. HADES comes from OHDSI's r-universe, which serves only the latest builds, so no renv lockfile: CRAN is pinned by a dated snapshot, installed versions are recorded in `r/installed-versions.txt`, and the image is the artifact. Redshift over JDBC through the bastion tunnel with a temporary IAM password; no stored Redshift password. |
 
-OHDSI reference implementations (ETL-Synthea, DataQualityDashboard, CohortMethod) are R. The repo runs HADES itself where the R tool is the standard (`r/`, in the `hades` container, against the lake through `scripts/hades.py`); the Python ETL stays, since it is verified against ETL-Synthea and fixes two of its bugs.
+Excluded on purpose (wrong scale for a personal project): Kubernetes, A2A, LiteLLM, dedicated vector databases, WAF-heavy perimeter builds, NAT gateways and interface endpoints (cost).
 
 ## Explain before you act
 
@@ -83,13 +110,8 @@ Before doing anything, explain what you are about to do and why.
 Direct. Evidence-first. Skip preamble.
 
 ### Writing style
-- Never use em dashes or en dashes in any written output. Use commas, periods,
-semicolons, or restructure.
-- Write in the maintainer's voice for all prose output. The voice profile is
-`~/.claude/rules/writing-voice.md`. Read it; do not edit it. No generic LLM
-prose.
-- Keep all prose short and direct. State the point; skip "actually matters" style
-framing.
+- Write all prose in the maintainer's voice: `~/.claude/rules/writing-voice.md`. Read it; do not
+edit it. No em dashes or en dashes. Short and direct; skip "actually matters" style framing.
 
 ### Core protocol
 - Evidence: read files before stating facts about them. Verify data claims
@@ -106,7 +128,6 @@ showing a draft and getting explicit approval.
 independent. Delegate mechanical exploration; preserve main context for
 decisions.
 
-
 ### Python
 - Use `uv` for everything: `uv sync`, `uv run <cmd>`, `uv add <pkg>`. Never activate a venv manually; `uv run` handles it. Never use pip with `--break-system-packages`.
 - Always `pyproject.toml`. Always a `.env.example` with every variable the app reads.
@@ -121,67 +142,6 @@ decisions.
 - When editing: match existing style, don't touch adjacent code, remove only what YOUR change made unused. Mention unrelated dead code; don't delete it.
 - No OWASP top 10 vulnerabilities. Fix insecure code you wrote immediately.
 
-## Stack decisions
-
-AWS, from 2026-11-19: OMOP in a lakehouse (S3 Tables, Lake Formation, Redshift Serverless), app data in Aurora, the app on ECS, models on Bedrock, all defined in Terraform.
-
-| Slot | Tool | Why |
-|---|---|---|
-| Models | Claude Opus 4.6 on Amazon Bedrock | Model access, permissions, and the bill stay in the AWS account; IAM auth (SSO locally, the task role on ECS), no API key. `anthropic` stays below 2: the 2.x releases send an API version Bedrock accepts only for Claude 4.7 and later. |
-| Agent framework | Anthropic Python SDK, `client.beta.messages.tool_runner`, through `AnthropicBedrock` | Runs the tool loop and returns typed output with no extra framework. LangGraph for literature curation only (`curation/literature_graph.py`, step 6d), for its pause and resume around the curator; no LangChain. |
-| Lake | S3 Tables (Apache Iceberg), AWS Glue Data Catalog, Lake Formation | Open table format any engine reads; Lake Formation controls who reads what. |
-| Warehouse SQL | Redshift Serverless | The AWS engine OHDSI's DatabaseConnector supports; billed per second of compute, capped at 150 RPU-hours a month (60 until 2026-11-22, 120 until 2026-11-23). An open Data API session is billed as compute until it ends, so `RedshiftSession` ends its session when its block ends (2026-11-23: each session had held 8 RPUs for its hour of keep-alive). |
-| App database + vector | Aurora Serverless v2 PostgreSQL 18.6 + pgvector | Row-by-row app writes and vector search, which Redshift is not built for. Pauses to 0 when idle. Never holds OMOP. |
-| Secrets and settings | `pydantic-settings`; `.env` locally, Secrets Manager on AWS | One code path; database passwords are managed by RDS and Redshift in Secrets Manager. |
-| Auth | None: a public portfolio demo, as glia-nav (decided 2026-11-20) | Bounded instead: `/api/agent` has a daily token limit and 10 calls an hour per address (`api/limits.py`); `PUBLIC_DEMO=true` turns off curator decisions; one task; a daily token alarm. See `infra/terraform/README.md`, Public demo limits. |
-| App hosting | ECS Express Mode, one x86 task in the public subnets (ARM until 2026-11-22; x86 everywhere now, decided 2026-11-22), image in ECR tagged with its git commit | Express Mode builds the load balancer, HTTPS certificate, and URL; the task gets a public IP, so no NAT gateway or interface endpoints, which would cost more than the whole budget. FastAPI serves the API under `/api` and the static frontend at `/`. Migrations and data copies go through an on-demand bastion task and an SSM tunnel. |
-| Infrastructure as code | Terraform, state in `ehr-rwe-eln-tfstate-<account>` | Same tool as methyl-flow's newest infra; `bootstrap/` made the state bucket, `foundation/` holds the shared resources. |
-| Backend framework | FastAPI + Pydantic | Typed request and response models, OpenAPI for free. |
-| Python toolchain | uv, ruff, pytest | Fast, one tool per job, lockfile pinned. |
-| DB migrations | Alembic | Versioned schema changes; `uv run alembic upgrade head` against the Compose Postgres locally, and against Aurora through the bastion tunnel. |
-| Dev-loop evals | pydantic-evals golden set in pytest | Scores the agent against the real model in seconds. |
-| Frontend framework | Next.js + React + Tailwind, static export | Builds to plain files, so no Node server at runtime. |
-| Code host + CI runner | GitHub + GitHub Actions | `lint-test` runs ruff and pytest against a Postgres service container. `secrets` runs gitleaks (pinned, checksum verified) over every commit and file for keys, tokens, passwords, usernames, and email addresses, with the rules in `.gitleaks.toml`; the same scan runs in pre-commit. `terraform` checks formatting, validates each stack, and runs tflint and trivy. All three are required to merge. |
-| Containers | Docker + Docker Compose | Open standard; the whole stack starts with one command. |
-| Heavy jobs | On-demand x86 Fargate tasks (`docker/*.Dockerfile`, `infra/terraform/app/`), images built by CodeBuild, started by `scripts/run_*.py` | Long or memory-hungry runs leave the laptop; billed only while a task runs. x86 because REGENIE ships no ARM build. |
-| OHDSI HADES | R 4.6.1 + Java 21 in `docker/hades.Dockerfile`, run with `scripts/hades.py` | The R tools are OHDSI's standard; a container keeps R, Java, and the JDBC driver identical everywhere. HADES comes from OHDSI's r-universe, which serves only the latest builds, so no renv lockfile: CRAN is pinned by a dated snapshot, installed versions are recorded in `r/installed-versions.txt`, and the image is the artifact. Redshift over JDBC through the bastion tunnel with a temporary IAM password; no stored Redshift password. |
-
-Excluded on purpose (wrong scale for a personal project): Kubernetes, A2A, LiteLLM, dedicated vector databases, WAF-heavy perimeter builds, NAT gateways and interface endpoints (cost).
-
-How each piece was built, verified, and what it costs: see `docs/SETUP.md`.
-
-## Repository layout
-
-```
-.
-├── CLAUDE.md              # this file
-├── pyproject.toml         # project definition; uv.lock pins exact versions
-├── .env.example           # every env var the app reads, no values
-├── src/ehr_rwe_eln/       # application code, the only thing that ships
-│   ├── cohort/            # module 1: Synthea to OMOP, cohort building
-│   ├── eln/               # module 2: ELN extraction to OMOP and FHIR
-│   ├── tte/               # module 3: target trial emulation
-│   ├── dq/                # module 4: data quality checks
-│   ├── genomics/          # module 5: synthetic genotypes and GWAS
-│   ├── curation/          # module 6: variant curation and phenotypes
-│   └── synth/             # module 7: privacy-preserving synthetic data releases
-├── tests/                 # fast tests; local services only (the Compose Postgres), nothing off the machine
-├── migrations/            # Alembic versioned schema changes
-├── infra/terraform/       # bootstrap/ (state bucket), foundation/ (network, lake, Redshift, Aurora, budget), app/ (ECR, ECS, CodeBuild, Fargate tasks, Guardrail, alarms)
-├── r/                     # OHDSI HADES scripts (R), run in the hades container; installed-versions.txt
-├── docker/                # Dockerfiles: hades, hail, and the Fargate tasks (gwas, exomiser, bias, lirical, synth)
-├── frontend/              # Next.js app, static export served by FastAPI
-├── evals/                 # golden set; hits a real model, so slow and costs money
-├── scripts/               # one-shot operational scripts, never imported
-├── data/                  # local synthetic data and vocabularies, gitignored
-├── docs/                  # long-form docs the README links to
-├── notes/                 # personal planning (TODO.md, TODO_IMPROVEMENTS.md, INDUSTRY_COMPARISON.md), gitignored
-└── .github/workflows/     # CI; GitHub reads this exact path only
-```
-
-What each directory is for, which of these are real conventions and which are choices, and why
-`src/` exists at all: see `aws/LAYOUT.md` in [project-template](https://github.com/toddcreasy/project-template/blob/main/aws/LAYOUT.md).
-
 ## Conventions
 
 - AWS resources are Terraform only, never created by hand in the console. Show `terraform plan` and get approval before every `apply`. Every resource carries the `project = ehr-rwe-eln` tag (provider default tags), which the budget filters on.
@@ -189,17 +149,13 @@ What each directory is for, which of these are real conventions and which are ch
 - Any route that writes records or spends money is either bounded (like `/api/agent`) or guarded by `not_in_public_demo` before it ships: the deployed app has no sign-in.
 - One model: every call uses `MODEL`, through `claude_client()`, with `thinking=THINKING` (adaptive; Opus 4.6 does not think unless asked). Prompt caching on for any repeated prefix. Offline jobs run as direct calls a few at a time: Bedrock has no Message Batches API.
 
-## Settled decisions
+## Repository layout
 
-Do not re-ask. Rationale and history in `docs/SETUP.md`.
+Standard `src/` layout ([project-template](https://github.com/toddcreasy/project-template/blob/main/aws/LAYOUT.md) explains it). The parts that are not obvious:
 
-| Decision | Value |
-|---|---|
-| AWS account and region | The `default` AWS CLI profile (SSO, AdministratorAccess), `us-east-1`. Decided 2026-11-19 |
-| AWS budget | $100 a month on resources tagged `project = ehr-rwe-eln`, credits excluded; email at 50% and 80% actual and 100% forecast. Decided 2026-11-19, glia-nav's thresholds 2026-11-20 |
-| Public demo | No sign-in, as glia-nav. `DAILY_TOKEN_LIMIT` 150,000 a day and 10 calls an hour per address on `/api/agent`; curator decisions off. Decided 2026-11-20 |
-| Python | 3.14, pinned in `.python-version` |
-| Database | On AWS: OMOP only in the lake (Iceberg in S3 Tables, read through Redshift Serverless; "lake only", decided 2026-11-19); app state, module schemas, and pgvector in Aurora Serverless v2 PostgreSQL 18.6. Locally (pytest, the ETL's staging OMOP, Compose): PostgreSQL 18 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg18-trixie`, defined in `docker-compose.yml` |
-| App name | RWE Workbench, for the web app only; the repo and the Python package stay `ehr-rwe-eln`. Chosen 2026-11-19 over Counterpart, which collides with Counterpart Health (Clover Health's clinical AI company) |
-| `MODEL` | `us.anthropic.claude-opus-4-6-v1` on Bedrock, the newest Claude this account can call (tested 2026-11-19: Opus 5.5, 4.8, 4.7 return AccessDenied). Revisit when Opus 5.5 access opens. Replaced `claude-opus-5-5` on the Anthropic API 2026-11-20 |
-| Data database | One: `ehr_rwe_eln`, 23,421 Synthea patients, every module. A second population would be a second CDM schema, never a second database. `ehr_rwe_eln_test` is for pytest only. Merged from two databases on 2026-11-18 |
+- `src/ehr_rwe_eln/` is the only code that ships; one package per module.
+- `tests/` use local services only (the Compose Postgres), nothing off the machine. `evals/` hit a real model: slow, billed, never in plain `uv run pytest`.
+- `scripts/` are one-shot operational scripts, never imported.
+- `r/` holds the HADES scripts, run in the `hades` container; `docker/` the Dockerfiles for hades, hail, and the Fargate tasks.
+- `infra/terraform/`: `bootstrap/` (state bucket), `foundation/` (network, lake, Redshift, Aurora, budget), `app/` (ECR, ECS, CodeBuild, Fargate tasks, Guardrail, alarms).
+- `data/` (synthetic data, vocabularies, reference data) and `notes/` (personal planning) are gitignored.

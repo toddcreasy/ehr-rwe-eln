@@ -64,9 +64,14 @@ The service runs the image tag in `app/terraform.tfvars`; tags are immutable, an
 
 ```sh
 git checkout main && git pull
+uv run pytest evals/test_workbench_agent.py   # the agent's golden set on Bedrock; about 45 s and $0.33
 uv run python scripts/build_app_image.py   # a few cents; prints the tag
 # set image_tag = "<TAG>" in infra/terraform/app/terraform.tfvars, then plan and apply app/
 ```
+
+Run the golden set first. CI never runs it, so it is the only check before a deploy that a prompt or tool change still answers correctly. Fix any failing case before building. It needs `aws sso login`, the Compose Postgres up (`docker compose up -d --wait db`), the tte and dq runs loaded, and `omop_stats` built from the staging OMOP with `OMOP_SOURCE=staging uv run python scripts/build_omop_stats.py --target local` (without `OMOP_SOURCE=staging` it reads the lake through Redshift, which bills compute, and the eval's expected counts are the staging data's).
+
+The eval runs the agent in-process with `MODEL` from `.env`, and through the guardrail only when `.env` sets `GUARDRAIL_ID` and `GUARDRAIL_VERSION` (empty in `.env.example`, so skipped by default). The deployed model and guardrail come from Terraform (`app/service.tf:57-58`, `app/guardrail.tf`) and change with `terraform apply`, not with the image. To check a guardrail change, apply it, then set both values in `.env` to the version the task runs and run the eval again.
 
 The runner needs a clean working tree. It uploads `git archive` of HEAD (tracked files only, so never `.env` or `data/`) to `build/app-<commit>.zip` in the genomics bucket and skips the build if ECR already has the tag. Images up to `1b0e4c3` were ARM, built on the laptop with `docker buildx`.
 

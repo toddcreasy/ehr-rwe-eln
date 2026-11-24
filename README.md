@@ -2,6 +2,8 @@
 
 Real world evidence (RWE) from synthetic electronic health records (EHR), linked to electronic lab notebook (ELN) data. Seven modules share one [OMOP CDM v5.4](https://ohdsi.github.io/CommonDataModel/cdm54.html) database: they build it from synthetic patients, check its quality, emulate target trials on it, write lab results into it, release private synthetic copies of it, simulate a genotyping study on its people, and curate the real variants planted in them.
 
+It was built over seven weeks, from 2026-10-07: on AWS first, then on the laptop, then back on AWS. [How it got here](docs/HISTORY.md) is the decision log for that whole stretch. Each choice is there in order, with what it was picked over, what was later reversed, and why.
+
 ELN platforms capture bench data well, and few reach past the lab. Revvity's Signals Translational joins biomarker results to clinical trial data, and LabKey links assay results to study participants, but none of them writes notebook results into OMOP or EHR data. The ELN bridge works in that gap: it reads free-text notebook entries with Claude and writes the results next to the clinical record. [Background on ELN platforms and the gap](docs/modules/eln.md#background-what-eln-platforms-do).
 
 The web app is called **RWE Workbench**, a public demo on AWS with no sign-in (`terraform output app_url` in `infra/terraform/app/` gives its address; locally it runs at http://127.0.0.1:8000). Its home page describes the project and shows the five sections (data quality, trial emulation, lab notebook, variant curation, synthetic data) as tabs, each with a live figure from that section's data.
