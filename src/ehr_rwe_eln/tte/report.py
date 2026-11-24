@@ -68,8 +68,13 @@ def build_report(con, protocol: Protocol, cdm: str = "cdm") -> Report:
 
 def read_trial(con, protocol: Protocol, cdm: str = "cdm"):
     """Every OMOP read a report needs: the analysis table and each negative control's, so a
-    caller can end the Redshift session (billed while open) before the fits and the bootstrap."""
+    caller can end the Redshift session (billed while open) before the fits and the bootstrap.
+    The propensity fit runs here too, so a protocol it cannot fit reads no negative controls."""
     attrition, table = _read(con, protocol, cdm)
+    try:
+        fit_propensity(table, protocol)
+    except NotEstimable:
+        return attrition, table, []
     controls = []
     for outcome in protocol.negative_controls:
         control = _control(protocol, outcome)
