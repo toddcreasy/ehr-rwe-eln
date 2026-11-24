@@ -2,7 +2,7 @@
 
 Usage:
   uv run python scripts/run_lirical.py run [--limit N] [--tasks K]
-  uv run python scripts/run_lirical.py summarize --study <id>   # run.json again, no tasks
+  uv run python scripts/run_lirical.py summarize --study <id>   # fetches late parts, scores again
 
 Run scripts/generate_panel.py and scripts/match_phenotypes.py first (subject_hpo.tsv), and apply
 infra/terraform/app/ (lirical.tf). Builds the lirical image with CodeBuild if ECR has no image with
@@ -27,8 +27,12 @@ for Exomiser's phenotype score: how often a pathogenic carrier's planted gene ra
 the genes the person has a panel variant in, and per gene the AUC for picking out the pathogenic
 carriers among everyone with a panel variant there. Adds both to run.json.
 
-summarize: downloads any part's output not yet on the laptop, then scores the run; stops if a
-part has no results yet.
+run.json (with the task ARNs) is written before the wait, so summarize can pick up a run whose
+wait ended early.
+
+summarize: downloads any part's output not yet on the laptop (only then does it need AWS; files
+already there are kept as they are), then scores the run. Stops, saying why, if a part has no
+results (its task still running, or stopped without uploading) or if anyone in a part failed.
 
 Needs AWS credentials (aws sso login).
 """
@@ -141,11 +145,10 @@ def start_task(app: dict, command: list[str]) -> str:
 
 def wait_tasks(
     app: dict, tasks: list[str], seconds: int
-) -> dict[str, tuple[int | None, str | None]]:
-    """Waits until every task stops (at most 100), or `seconds`; each task's exit code and reason.
-
-    A task still running when the wait ends has no exit code, and the reason says so.
-    """
+) -> dict[str, tuple[str, int | None, str | None]]:
+    """Waits until every task stops (at most 100), or `seconds`; each task's status, exit code,
+    and reason. A task still running has no exit code; a task ECS no longer lists (it keeps a
+    stopped task for about an hour) is MISSING."""
     ecs = boto3.client("ecs")
     try:
         ecs.get_waiter("tasks_stopped").wait(
@@ -158,13 +161,17 @@ def wait_tasks(
         if e.kwargs.get("reason") != "Max attempts exceeded":
             raise
         print(f"stopped waiting after {seconds}s; some tasks still run", flush=True)
-    out = {}
-    for t in ecs.describe_tasks(cluster=app["cluster"], tasks=tasks)["tasks"]:
+    return task_status(ecs, app["cluster"], tasks)
+
+
+def task_status(
+    ecs, cluster: str, tasks: list[str]
+) -> dict[str, tuple[str, int | None, str | None]]:
+    out = {t: ("MISSING", None, "no longer listed by ECS") for t in tasks}
+    for t in ecs.describe_tasks(cluster=cluster, tasks=tasks)["tasks"]:
         container = t["containers"][0]
-        if t["lastStatus"] != "STOPPED":
-            out[t["taskArn"]] = (None, f"still {t['lastStatus']} when the wait ended")
-            continue
         out[t["taskArn"]] = (
+            t["lastStatus"],
             container.get("exitCode"),
             container.get("reason") or t.get("stoppedReason"),
         )
@@ -172,7 +179,8 @@ def wait_tasks(
 
 
 def download(s3, bucket: str, out: Path, k: int) -> None:
-    """Downloads part k's outputs that are not yet in out/part-<k>/."""
+    """Downloads part k's outputs that are not yet in out/part-<k>/; a file already there is kept
+    (only this function writes them). Any S3 error but "not there" stops the script."""
     part = out / f"part-{k}"
     part.mkdir(parents=True, exist_ok=True)
     for name in OUTPUTS:
@@ -181,8 +189,22 @@ def download(s3, bucket: str, out: Path, k: int) -> None:
         key = f"studies/lirical-{out.name}/part-{k}/output/{name}"
         try:
             s3.download_file(bucket, key, str(part / name))
-        except ClientError:
+        except ClientError as e:
+            if e.response["Error"]["Code"] not in ("404", "NoSuchKey"):
+                raise
             print(f"part {k}: no {name} yet")
+
+
+def failed_people(out: Path, k: int) -> int | None:
+    """How many people failed in part k, from the last line of its lirical.log, or None if the
+    log has no such line."""
+    log = out / f"part-{k}" / "lirical.log"
+    if not log.exists():
+        return None
+    lines = log.read_text().splitlines()
+    if not lines or not lines[-1].endswith(" failed"):
+        return None
+    return int(lines[-1].split(", ")[1].split()[0])
 
 
 def people() -> list[dict]:
@@ -256,16 +278,45 @@ def main() -> None:
     if args.command == "summarize":
         out = OUT / args.study
         run = json.loads((out / "run.json").read_text())
-        s3 = boto3.client("s3")
-        bucket = terraform_outputs("app")["gwas_bucket"]
-        for k in range(run["tasks"]):
-            download(s3, bucket, out, k)
-        missing = [
-            k for k in range(run["tasks"]) if not (out / f"part-{k}" / "results.zip").exists()
-        ]
-        if missing:
-            raise SystemExit(f"parts {missing} have no results yet; run summarize again later")
-        keep = ("study", "image", "tasks", "seconds", "people")
+        parts = range(run["tasks"])
+
+        def missing() -> list[int]:
+            return [k for k in parts if not all((out / f"part-{k}" / n).exists() for n in OUTPUTS)]
+
+        if missing():
+            app = terraform_outputs("app")
+            s3 = boto3.client("s3")
+            for k in missing():
+                download(s3, app["gwas_bucket"], out, k)
+        # A part with no results is in missing(), so app is set.
+        if no_results := [k for k in parts if not (out / f"part-{k}" / "results.zip").exists()]:
+            arns = run.get("task_arns", {})
+            known = [arns[str(k)] for k in no_results if str(k) in arns]
+            status = task_status(boto3.client("ecs"), app["cluster"], known) if known else {}
+            why = []
+            for k in no_results:
+                if str(k) not in arns:
+                    why.append(f"part {k}: no results, and run.json has no task ARN to check")
+                    continue
+                state, code, reason = status[arns[str(k)]]
+                if state in ("STOPPED", "MISSING"):
+                    why.append(
+                        f"part {k}: task stopped without uploading (exit {code}, {reason});"
+                        " see CloudWatch /ecs/ehr-rwe-eln, lirical/"
+                    )
+                else:
+                    why.append(f"part {k}: task {state}; run summarize again once it stops")
+            raise SystemExit("; ".join(why))
+        if bad := {k: failed_people(out, k) for k in parts if failed_people(out, k) != 0}:
+            raise SystemExit(
+                "; ".join(
+                    f"part {k}: "
+                    + (f"{n} people failed" if n else "lirical.log has no summary line")
+                    for k, n in bad.items()
+                )
+                + "; see each part's lirical.log"
+            )
+        keep = ("study", "image", "tasks", "seconds", "people", "task_arns")
         summarize(out, {k: v for k, v in run.items() if k in keep})
         return
 
@@ -298,25 +349,38 @@ def main() -> None:
     wait = 2 * largest * SECONDS_PER_PERSON // WORKERS + 1800
     start = time.time()
     task_of = {k: start_task(app, ["run", "--prefix", p]) for k, p in parts.items()}
-    stopped = wait_tasks(app, list(task_of.values()), wait)
-    seconds = time.time() - start
-
     out = OUT / study
-    failed = []
-    for k in parts:
-        download(s3, app["gwas_bucket"], out, k)
-        code, reason = stopped[task_of[k]]
-        if code is None and reason and reason.startswith("still"):
-            failed.append(f"part {k}: {reason}; run summarize --study {study} once it stops")
-        elif code != 0:
-            failed.append(f"part {k}: exit {code}, {reason or 'see lirical.log'}")
+    out.mkdir(parents=True)
     run = {
         "study": study,
         "image": tag,
         "tasks": args.tasks,
-        "seconds": round(seconds),
         "people": len(chosen),
+        "task_arns": {str(k): t for k, t in task_of.items()},
     }
+    (out / "run.json").write_text(json.dumps(run, indent=2) + "\n")
+    try:
+        stopped = wait_tasks(app, list(task_of.values()), wait)
+    except WaiterError as e:
+        raise SystemExit(
+            f"{e}; the tasks keep running: run summarize --study {study} once they stop"
+        ) from e
+    seconds = time.time() - start
+
+    failed = []
+    for k in parts:
+        download(s3, app["gwas_bucket"], out, k)
+        state, code, reason = stopped[task_of[k]]
+        if state == "MISSING":
+            # Stopped over an hour ago, so ECS has dropped it: judge it by its log.
+            n = failed_people(out, k)
+            if n != 0:
+                failed.append(f"part {k}: no longer listed by ECS, {n} failed in lirical.log")
+        elif state != "STOPPED":
+            failed.append(f"part {k}: {state}; run summarize --study {study} once it stops")
+        elif code != 0:
+            failed.append(f"part {k}: exit {code}, {reason or 'see lirical.log'}")
+    run["seconds"] = round(seconds)
     (out / "run.json").write_text(json.dumps(run, indent=2) + "\n")
     print(f"{args.tasks} tasks, {seconds:.0f}s; files in {out.relative_to(ROOT)}")
     if failed:
