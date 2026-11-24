@@ -21,7 +21,7 @@ It runs on AWS, all of it in Terraform: OMOP as Iceberg tables in S3 Tables, rea
 | [Target trial emulation](docs/modules/trial_emulation.md) | Trial protocols in YAML; propensity weighting, survival, a bias report | Weighted hazard ratios with negative controls; says "not estimable" when arms don't overlap |
 | [ELN to EHR bridge](docs/modules/eln.md) | Claude extracts samples and results from notebook text into OMOP and [FHIR R4](https://hl7.org/fhir/R4/) | Precision and recall 1.000 on 300 entries; resists prompt injection |
 | [Synthetic genomics](docs/modules/genomics.md) | A [dbGaP](https://www.ncbi.nlm.nih.gov/gap/)-style genotype study of three populations with a planted effect, and a GWAS (PLINK 2 and REGENIE on AWS); a clinical panel of real ClinVar variants at their GRCh38 positions | Finds the planted effect; calibrated across 16 rebuilt studies |
-| [Variant curation](docs/modules/curation.md) | ACMG/AMP criteria with each gene's [ClinGen](https://clinicalgenome.org) expert panel thresholds, from gnomAD and Ensembl VEP; Claude proposes literature evidence, every quote checked against its paper; HPO, Exomiser, and LIRICAL phenotype rankings as context; a curator decides on `/curation/`, with who and when | On 578 ClinVar expert-panel variants, its pathogenic calls agree 98% of the time and its benign calls 96%; no reversals. Criterion by criterion against 883 Evidence Repository curations, PM2, PVS1, and PS3 match the panel 96% to 97% of the time, against the open BIAS-2015 as a baseline |
+| [Variant curation](docs/modules/curation.md) | ACMG/AMP criteria with each gene's [ClinGen](https://clinicalgenome.org) expert panel thresholds, from gnomAD and Ensembl VEP; Claude proposes literature evidence, every quote checked against its paper; HPO and Exomiser phenotype rankings as context, LIRICAL as an offline comparison; a curator decides on `/curation/`, with who and when | On 578 ClinVar expert-panel variants, its pathogenic calls agree 98% of the time and its benign calls 96%; no reversals. Criterion by criterion against 883 Evidence Repository curations, PM2, PVS1, and PS3 match the panel 96% to 97% of the time. The open BIAS-2015, as a baseline, agrees 87.2% with all its codes and 59.9% without those that read ClinVar |
 | [Synthetic data](docs/modules/synthetic_data.md) | Differentially private releases (Bayesian network, DP-SGD autoencoder, MST, AIM) with fidelity, privacy, and trial parity reports | Every release at chance on every privacy attack; [methodology](docs/synthetic_data_methodology.md) |
 
 The table is in run order: the cohort pipeline builds the OMOP tables every other module reads, and the rest follow.
@@ -34,7 +34,7 @@ Click the diagram for [the interactive version](https://toddcreasy.github.io/ehr
 
 ## Install
 
-[INSTALL.md](docs/INSTALL.md) has every step, from prerequisites to running each module and the app. You need uv, Docker Desktop, Java for Synthea, AWS credentials with Bedrock access and the Terraform stacks applied ([infrastructure README](infra/terraform/README.md)), and a free vocabulary download from [OHDSI Athena](https://athena.ohdsi.org). A full build takes about an hour.
+[INSTALL.md](docs/INSTALL.md) has every step, from prerequisites to running each module and the app. You need uv, Docker Desktop, Java for Synthea, AWS credentials with Bedrock access and the Terraform stacks applied ([infrastructure README](infra/terraform/README.md)), and a free vocabulary download from [OHDSI Athena](https://athena.ohdsi.org). Building the data takes about an hour; the module runs add several more, most of it on Fargate (LIRICAL alone takes about two).
 
 ## Documentation
 
@@ -57,7 +57,7 @@ Click the diagram for [the interactive version](https://toddcreasy.github.io/ehr
 - Synthea output is synthetic and carries no patient privacy risk.
 - OMOP vocabularies come from OHDSI Athena under their own licenses and are never committed.
 - Nothing under `data/` is committed.
-- Public reference data (ClinVar, gnomAD, Ensembl, ClinGen, HPO, LIRICAL, LitVar2 and PubTator3) is used under each source's terms, listed in `CLAUDE.md`, Data rules. This tool includes data from the gnomAD v4 release. LIRICAL is non-commercial and runs unmodified in a private image.
+- Public reference data (ClinVar, gnomAD, Ensembl, ClinGen, HPO, LIRICAL, LitVar2 and PubTator3) is used under each source's terms, listed in `CLAUDE.md`, Data rules. This tool includes data from the gnomAD v4 release. LIRICAL is non-commercial and runs unmodified in a private image. This service/product is using the Human Phenotype Ontology (release 2026-09-01). Find out more at http://www.human-phenotype-ontology.org ([Köhler et al., NAR 2014](https://doi.org/10.1093/nar/gkt1026)).
 
 ## License
 

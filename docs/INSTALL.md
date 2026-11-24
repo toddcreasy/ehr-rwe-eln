@@ -4,7 +4,7 @@ The project runs on AWS, with the laptop building the data and starting every jo
 
 On the laptop, the ETL builds OMOP in a staging Postgres in Docker Compose, which is published to the lake. Heavy jobs (the GWAS, Exomiser, LIRICAL, BIAS-2015, synthetic releases) run as Fargate tasks that a script starts and waits for; nothing heavy runs in local Docker.
 
-Terms are defined in the [glossary](GLOSSARY.md). A full build from a fresh clone takes about an hour, most of it [Synthea](https://github.com/synthetichealth/synthea) and the 20,000-patient load. One step needs you at a browser: the vocabulary download from [OHDSI Athena](https://athena.ohdsi.org).
+Terms are defined in the [glossary](GLOSSARY.md). Building the data from a fresh clone takes about an hour, most of it [Synthea](https://github.com/synthetichealth/synthea) and the 20,000-patient load. The module runs add several hours more, most of it Fargate tasks you only wait for: data quality about 32 minutes, trial emulation 31, Exomiser 75, LIRICAL about two hours. One step needs you at a browser: the vocabulary download from [OHDSI Athena](https://athena.ohdsi.org).
 
 ## Contents
 
@@ -116,10 +116,12 @@ uv run python scripts/export_eln_fhir.py
 # Synthetic genomics
 uv run python scripts/generate_genomics.py
 uv run python scripts/run_regenie.py      # PLINK 2 QC and PCs, then REGENIE, on Fargate
-uv run python scripts/run_gwas.py         # reads REGENIE's results and checks the planted effect
-docker compose run --rm --build hail      # optional: the same GWAS in Hail, a 2.4 GB image
+docker compose run --rm --build hail      # optional: the GWAS in Hail, a 2.4 GB image; before run_gwas
+uv run python scripts/run_gwas.py         # checks the planted effect, and compares with Hail if it ran
 uv run python scripts/generate_panel.py   # clinical panel: downloads ClinVar (200 MB) once
 uv run python scripts/write_panel_omop.py # the panel's carriers as OMOP measurement rows
+uv run python scripts/publish_omop.py --tables specimen measurement fact_relationship
+OMOP_SOURCE=staging uv run python scripts/build_omop_stats.py --target aurora   # counts with the new rows
 
 # Variant curation
 uv run python scripts/curate_variants.py --set panel   # the panel's 48 variants

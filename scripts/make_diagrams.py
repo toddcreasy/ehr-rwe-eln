@@ -323,7 +323,8 @@ s += [
         "hail container",
         "GWAS cross-check",
         "Hail pins pandas below 3, PySpark 3.5, and Java 11, so it has its own image, built only "
-        "on request. Reruns the GWAS and compares it with REGENIE's.",
+        "on request. Reruns the Python score test with REGENIE's principal components, and "
+        "run_gwas.py compares the two variant by variant.",
         REPO + "docker/hail.Dockerfile",
     ),
     arrow(
@@ -522,8 +523,9 @@ s += [
         "Classifies the panel's variants with each gene's ClinGen expert panel thresholds, "
         "from gnomAD v4 frequencies and Ensembl VEP consequences, scored against ClinVar and "
         "ClinGen expert panels, and against BIAS-2015 as a baseline. Claude proposes literature "
-        "evidence, every quote checked in code; HPO, Exomiser, and LIRICAL phenotype rankings "
-        "add context; a curator decides on /curation/. Results in the curation schema.",
+        "evidence, every quote checked in code; HPO and Exomiser phenotype rankings add context, "
+        "and LIRICAL is compared with them offline; a curator decides on /curation/. Results in "
+        "the curation schema.",
         MOD + "curation.md",
     ),
     node(
@@ -582,7 +584,7 @@ s += [
         "REGENIE GWAS",
         "Fargate, Hail cross-check",
         "PLINK 2 QC and principal components, then REGENIE, as the gwas Fargate task. Hail "
-        "reruns it and compares the results variant by variant.",
+        "cross-checks the Python score test, with the same principal components.",
         REPO + "scripts/run_regenie.py",
     ),
     arrow([(C[0] + DW, m[0]), (C[1], m[0])], "CSV", C[0] + DW + 8, m[0] - 6),
@@ -1020,18 +1022,18 @@ for y, (left, right) in [
         828,
         (
             (
-                "synth.monitor_run",
-                "one per privacy check",
-                "Each scheduled privacy check: which releases it reran and what changed. The "
-                "monitor task writes one a day.",
-                MIG + "011_synth_monitor.py",
-            ),
-            (
                 "synth.distribution",
                 "who got each release",
                 "Each release's recipients, its withdrawal, and their confirmations that they "
                 "deleted it.",
                 MIG + "009_synth_withdrawal.py",
+            ),
+            (
+                "synth.monitor_run",
+                "one per privacy check",
+                "Each scheduled privacy check: which releases it reran and what changed. The "
+                "monitor task writes one a day.",
+                MIG + "011_synth_monitor.py",
             ),
         ),
     ),
@@ -1049,8 +1051,7 @@ for y, (left, right) in [
             (
                 "agent.daily_usage",
                 "tokens per day",
-                "Tokens /api/agent spent each day, for the daily limit. The langgraph schema, "
-                "not drawn, holds the literature graph's checkpoints.",
+                "Tokens /api/agent spent each day, for the daily limit.",
                 MIG + "018_agent_daily_usage.py",
             ),
         ),
@@ -1058,6 +1059,9 @@ for y, (left, right) in [
 ]:
     s.append(table(MX[0], y, "module", *left, MW))
     s.append(table(MX[1], y, "module", *right, MW))
+# synth.distribution's release_id, along the panel's left edge to synth.release.
+s.append(arrow([(MX[0], 852), (812, 852), (812, 460), (MX[0], 460)]))
+s.append('<text x="821" y="566" class="e" transform="rotate(-90 821 566)">release_id</text>')
 s.append(arrow([(MX[0] + MW / 2, 660), (MX[0] + MW / 2, 628)]))
 s.append(f'<text x="{MX[0] + MW / 2 + 6}" y="648" class="e">run_id</text>')
 s.append(arrow([(MX[1] + MW / 2, 660), (MX[1] + MW / 2, 628)]))
