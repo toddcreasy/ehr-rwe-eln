@@ -4,6 +4,7 @@ cohort/lake.py, needs the lake dependency group)."""
 
 import contextlib
 import datetime
+import logging
 import time
 from dataclasses import dataclass
 from decimal import Decimal
@@ -12,6 +13,8 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from ehr_rwe_eln.config import DatabaseSettings, LakeSettings
+
+log = logging.getLogger(__name__)
 
 
 def _wait(client, statement_id: str, timeout_s: int) -> dict:
@@ -135,11 +138,16 @@ class RedshiftSession:
     def __exit__(self, *exc):
         # The Data API has no call to end a session, so the session ends its own backend (the
         # statement is not waited on: it fails as its connection closes). A session that has
-        # already expired refuses it, which is just as good.
+        # already expired refuses it, which is just as good; a busy one (a cancel still landing)
+        # refuses it too and stays billed until keep-alive runs out, so that is logged.
         if self.session_id:
-            with contextlib.suppress(ClientError, BotoCoreError):
+            try:
                 self.client.execute_statement(
                     Sql="SELECT pg_terminate_backend(pg_backend_pid())", SessionId=self.session_id
+                )
+            except (ClientError, BotoCoreError) as e:
+                log.warning(
+                    "Redshift session %s not ended, billed until it expires: %s", self.session_id, e
                 )
         self.session_id = None
 
