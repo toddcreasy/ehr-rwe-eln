@@ -89,6 +89,14 @@ Exomiser 15.1.0 (Java 21) runs in its own x86 image, `docker/exomiser.Dockerfile
 - **Fargate task** `ehr-rwe-eln-exomiser`: X86_64, 4 vCPUs, 16 GB (12 GB Java heap), 200 GiB of task disk. Its role reads and writes only `studies/*` and `reference/exomiser/*` in the genomics bucket. Each task copies both zips, checks them against the stored SHA-256, unpacks them (about 15 minutes), then runs Exomiser's batch command on its slice of people, about 4.5 seconds a person.
 - **Parallel runs**: `run --tasks K` splits the people into K slices under `studies/exomiser-<id>/part-<k>/` and runs them at once. Fargate counts vCPUs running at once across the account, so K is capped by that quota: 6 tasks under 30 vCPU. The full run, 5,000 people in 6 tasks, took 75 minutes, about $2. `exomiser.tf` requests 210 vCPU for 50 tasks, about 25 minutes (see [Account limits hit](#account-limits-hit)).
 
+## LIRICAL on AWS
+
+LIRICAL 2.4.2 (Java 21) runs in its own x86 image, `docker/lirical.Dockerfile`, built by the same CodeBuild project into ECR repository `ehr-rwe-eln-lirical` (`app/lirical.tf`). The image tag is a hash of the Dockerfile and `docker/lirical_task.py`, as for the others. LIRICAL is licensed for non-commercial use only and may not be modified: the release zip goes in unchanged, checked against the SHA-256 GitHub lists for it, and the image stays in our private ECR.
+
+- **Data in the image, no fetch step**: about 350 MB, each file checked at build time. HPO `hp.json` and `phenotype.hpoa` at release 2026-09-01 (GitHub's SHA-256); HGNC's 2026-08-04 monthly archive (the 2026-09 and 2026-10 archives give two genes one NCBI Gene ID, and LIRICAL stops on the duplicate); the six Jannovar transcript files LIRICAL requires even without a VCF (Zenodo record 5410367, MD5 from the record). NCBI keeps no archive of `mim2gene_medgen`, so it is whatever NCBI serves at build time. `data/SHA256SUMS` in the image records every file, and each run downloads it.
+- **Fargate task** `ehr-rwe-eln-lirical`: X86_64, 4 vCPUs, 16 GB, default task disk. Its role reads and writes only `studies/*` in the genomics bucket. LIRICAL has no batch mode, so the task runs one Java process per person, 4 at a time with a 3 GB heap each, about 25 to 30 seconds a person, phenotype only.
+- **Parallel runs**: `scripts/run_lirical.py run --tasks K` splits the people into K slices under `studies/lirical-<id>/part-<k>/`. The trial, 6 people in one task, took 121 seconds with the task's start.
+
 ## BIAS on AWS
 
 BIAS-2015 v3.0.0 runs on Ensembl's own VEP 115 image, pinned by digest, in `docker/bias.Dockerfile`; the BIAS source tarball is checked against its SHA-256 at build time. The same CodeBuild project builds it into ECR repository `ehr-rwe-eln-bias` (`app/bias.tf`), and the image tag is a hash of the Dockerfile and `docker/bias_task.py`, as for the others.

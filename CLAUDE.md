@@ -44,6 +44,7 @@ The app runs on AWS (the `default` profile's account, `us-east-1`) since the mov
   - gnomAD (CC0). Attribute it ("includes data from the gnomAD v4 release"), never attempt to reidentify participants, never put "gnomAD" in a tool's name, and skip its SpliceAI annotations (non-commercial license). The API allows about 10 requests a minute; cache every answer.
   - Ensembl VEP and lookup (no restrictions on use), cached per Ensembl release.
   - ClinGen curated content (CC0 1.0; attribute ClinGen with the date accessed): expert panel thresholds, transcribed into `curation/rules.yaml` with each panel's CSpec ID and version; ENIGMA's PVS1 table, generated into `curation/enigma_pvs1.yaml` by `scripts/import_enigma_pvs1.py`; ENIGMA's functional table, into `curation/enigma_functional.tsv` by `scripts/import_enigma_functional.py`; the Evidence Repository export, cached as `data/reference/clingen/erepo_YYYYMMDD.tsv`.
+  - LIRICAL (The Jackson Laboratory; non-commercial use only, no modification, not for diagnosis; read 2026-11-23). Run unmodified, phenotype only, in our private ECR image (`docker/lirical.Dockerfile`); never redistribute the image or claim a clinical result. Its data files are named in the Dockerfile and recorded in each run's `SHA256SUMS`.
   - NCBI LitVar2 and PubTator3, for variant mentions and paper text (at most 3 requests a second). Paper text is the publishers' and authors': cached per variant under `data/reference/pubtator/`, never committed.
   - HPO, the Human Phenotype Ontology (its own license, read 2026-11-19 at human-phenotype-ontology.github.io/license.html; free to use, no commercial restriction). Three conditions: acknowledge and cite the HPO Consortium (Köhler et al., NAR 2014, doi:10.1093/nar/gkt1026); show the release date or version of every HPO file shown publicly; never alter the content or logical relationships of an HPO file (changes go to HPO's issue tracker). Pages and docs that use it say "This service/product is using the Human Phenotype Ontology (release YYYY-MM-DD). Find out more at http://www.human-phenotype-ontology.org". Keep `hp.obo` and the annotation files unmodified in `data/reference/hpo/<release>/`; derived tables (term sets, mappings, scores) are ours and name the release they came from. Not in the loaded Athena vocabularies.
 - Every LLM extraction is validated against a typed Pydantic model and scored against a labeled set in `evals/`.
@@ -168,7 +169,7 @@ How each piece was built, verified, and what it costs: see `docs/SETUP.md`.
 ├── migrations/            # Alembic versioned schema changes
 ├── infra/terraform/       # bootstrap/ (state bucket), foundation/ (network, lake, Redshift, Aurora, budget), app/ (ECR, ECS, CodeBuild, Fargate tasks, Guardrail, alarms)
 ├── r/                     # OHDSI HADES scripts (R), run in the hades container; installed-versions.txt
-├── docker/                # Dockerfiles: hades, hail, and the Fargate tasks (gwas, exomiser, bias, synth)
+├── docker/                # Dockerfiles: hades, hail, and the Fargate tasks (gwas, exomiser, bias, lirical, synth)
 ├── frontend/              # Next.js app, static export served by FastAPI
 ├── evals/                 # golden set; hits a real model, so slow and costs money
 ├── scripts/               # one-shot operational scripts, never imported

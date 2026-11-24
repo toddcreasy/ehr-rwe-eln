@@ -1,0 +1,218 @@
+"""Run LIRICAL on every study subject's HPO terms, phenotype only, as Fargate tasks.
+
+Usage:
+  uv run python scripts/run_lirical.py run [--limit N] [--tasks K]
+
+Run scripts/generate_panel.py and scripts/match_phenotypes.py first (subject_hpo.tsv), and apply
+infra/terraform/app/ (lirical.tf). Builds the lirical image with CodeBuild if ECR has no image with
+the current tag (a hash of docker/lirical.Dockerfile and docker/lirical_task.py); its data is in
+the image, so there is nothing to fetch.
+
+LIRICAL (https://github.com/TheJacksonLaboratory/LIRICAL) ranks diseases by how well a person's
+HPO terms fit them. It runs without a VCF: with one it reads ClinVar through Exomiser's data,
+which already knows which panel variants are pathogenic. Its license is non-commercial use only.
+
+run: splits the people into K slices (--tasks, default 1; --limit N runs the first N people and
+some carriers, to try it), each to studies/lirical-<id>/part-<k>/input/people.json, and runs them
+as tasks, all at once. Downloads each slice's results.zip, lirical.log, and SHA256SUMS (the data
+in the image) into data/genomics/lirical/<id>/part-<k>/, and writes run.json there.
+
+Needs AWS credentials (aws sso login).
+"""
+
+import argparse
+import hashlib
+import io
+import json
+import subprocess
+import time
+import zipfile
+from pathlib import Path
+
+import boto3
+import polars as pl
+from botocore.config import Config
+
+ROOT = Path(__file__).resolve().parent.parent
+STUDY = ROOT / "data" / "genomics"
+OUT = STUDY / "lirical"
+IMAGE_FILES = ["lirical.Dockerfile", "lirical_task.py"]
+
+
+def terraform_outputs(stack: str) -> dict:
+    out = subprocess.run(  # noqa: S603  (fixed command; stack is "app")
+        ["terraform", f"-chdir={ROOT / 'infra' / 'terraform' / stack}", "output", "-json"],  # noqa: S607
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    return {k: v["value"] for k, v in json.loads(out).items()}
+
+
+def image_tag() -> str:
+    """The same hash as lirical.tf's local.lirical_image_tag."""
+    digests = "".join(
+        hashlib.sha256((ROOT / "docker" / f).read_bytes()).hexdigest() for f in IMAGE_FILES
+    )
+    return hashlib.sha256(digests.encode()).hexdigest()[:12]
+
+
+def ensure_image(app: dict, tag: str) -> None:
+    ecr = boto3.client("ecr")
+    try:
+        ecr.describe_images(repositoryName=app["lirical_repository"], imageIds=[{"imageTag": tag}])
+        return
+    except ecr.exceptions.ImageNotFoundException:
+        pass
+    context = io.BytesIO()
+    with zipfile.ZipFile(context, "w") as z:
+        for f in IMAGE_FILES:
+            z.write(ROOT / "docker" / f, f)
+    key = f"build/lirical-{tag}.zip"
+    boto3.client("s3").put_object(Bucket=app["gwas_bucket"], Key=key, Body=context.getvalue())
+    codebuild = boto3.client("codebuild")
+    build = codebuild.start_build(
+        projectName=app["gwas_codebuild_project"],
+        sourceLocationOverride=f"{app['gwas_bucket']}/{key}",
+        environmentVariablesOverride=[
+            {"name": "DOCKERFILE", "value": "lirical.Dockerfile", "type": "PLAINTEXT"},
+            {"name": "REPOSITORY", "value": app["lirical_repository_url"], "type": "PLAINTEXT"},
+            {"name": "TAG", "value": tag, "type": "PLAINTEXT"},
+        ],
+    )["build"]["id"]
+    print(f"building image {tag} ({build})", flush=True)
+    while True:
+        time.sleep(15)
+        status = codebuild.batch_get_builds(ids=[build])["builds"][0]["buildStatus"]
+        if status != "IN_PROGRESS":
+            break
+    if status != "SUCCEEDED":
+        raise SystemExit(f"image build {status}; logs in /codebuild/ehr-rwe-eln-gwas")
+
+
+def start_task(app: dict, command: list[str]) -> str:
+    ecs = boto3.client("ecs", config=Config(retries={"mode": "adaptive", "max_attempts": 10}))
+    task = ecs.run_task(
+        cluster=app["cluster"],
+        taskDefinition=app["lirical_task_definition"],
+        launchType="FARGATE",
+        networkConfiguration={
+            "awsvpcConfiguration": {
+                "subnets": app["public_subnet_ids"],
+                "securityGroups": [app["app_security_group_id"]],
+                "assignPublicIp": "ENABLED",
+            }
+        },
+        overrides={"containerOverrides": [{"name": "lirical", "command": command}]},
+    )["tasks"][0]["taskArn"]
+    print(f"task {task.split('/')[-1]}: {' '.join(command)}; logs: /ecs/ehr-rwe-eln, lirical/")
+    return task
+
+
+def wait_tasks(app: dict, tasks: list[str]) -> dict[str, tuple[int | None, str | None]]:
+    """Waits until every task stops (at most 100, 4 hours); each task's exit code and reason."""
+    ecs = boto3.client("ecs")
+    ecs.get_waiter("tasks_stopped").wait(
+        cluster=app["cluster"], tasks=tasks, WaiterConfig={"Delay": 30, "MaxAttempts": 480}
+    )
+    out = {}
+    for t in ecs.describe_tasks(cluster=app["cluster"], tasks=tasks)["tasks"]:
+        container = t["containers"][0]
+        out[t["taskArn"]] = (
+            container.get("exitCode"),
+            container.get("reason") or t.get("stoppedReason"),
+        )
+    return out
+
+
+def people() -> list[dict]:
+    hpo = pl.read_csv(
+        STUDY / "subject_hpo.tsv", separator="\t", schema_overrides={"hpo_ids": pl.Utf8}
+    )
+    table = (
+        pl.read_csv(STUDY / "subject_sample_mapping.tsv", separator="\t")
+        .join(pl.read_csv(STUDY / "subject_phenotypes.tsv", separator="\t"), on="subject_id")
+        .join(hpo, on="subject_id")
+        .sort("sample_id")
+    )
+    return [
+        {
+            "sample_id": r["sample_id"],
+            "sex": r["sex"],
+            "hpo_ids": r["hpo_ids"].split(",") if r["hpo_ids"] else [],
+        }
+        for r in table.iter_rows(named=True)
+    ]
+
+
+def carriers() -> set[str]:
+    """Sample IDs of the panel's pathogenic carriers, so a trial run includes some."""
+    mapping = dict(pl.read_csv(STUDY / "subject_sample_mapping.tsv", separator="\t").iter_rows())
+    truth = json.loads((STUDY / "panel_truth.json").read_text())["variants"]
+    return {mapping[s] for v in truth if v["role"] == "pathogenic" for s in v["carrier_subjects"]}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", choices=["run"])
+    parser.add_argument("--limit", type=int, help="run the first N people only")
+    parser.add_argument("--tasks", type=int, default=1, help="split the people across K tasks")
+    args = parser.parse_args()
+
+    app = terraform_outputs("app")
+    tag = image_tag()
+    if tag != app["lirical_image_tag"]:
+        raise SystemExit(
+            f"image files changed ({tag}, Terraform has {app['lirical_image_tag']}):"
+            " plan and apply infra/terraform/app first"
+        )
+    ensure_image(app, tag)
+
+    chosen = [p for p in people() if p["hpo_ids"]]
+    if args.limit:
+        first = {p["sample_id"] for p in chosen[: args.limit]}
+        first |= set(sorted(carriers())[: max(1, args.limit // 10)])
+        chosen = [p for p in chosen if p["sample_id"] in first]
+    study = time.strftime("%Y%m%d-%H%M%S")
+    s3 = boto3.client("s3")
+    parts = {}
+    for k in range(args.tasks):
+        prefix = f"studies/lirical-{study}/part-{k}"
+        body = json.dumps(chosen[k :: args.tasks]).encode()
+        s3.put_object(Bucket=app["gwas_bucket"], Key=f"{prefix}/input/people.json", Body=body)
+        parts[k] = prefix
+    print(f"{len(chosen)} people in {args.tasks} tasks")
+
+    start = time.time()
+    task_of = {k: start_task(app, ["run", "--prefix", p]) for k, p in parts.items()}
+    stopped = wait_tasks(app, list(task_of.values()))
+    seconds = time.time() - start
+
+    out = OUT / study
+    failed = []
+    for k, prefix in parts.items():
+        part = out / f"part-{k}"
+        part.mkdir(parents=True)
+        for name in ("results.zip", "lirical.log", "SHA256SUMS"):
+            try:
+                s3.download_file(app["gwas_bucket"], f"{prefix}/output/{name}", str(part / name))
+            except s3.exceptions.ClientError:
+                print(f"part {k}: no {name}")
+        code, reason = stopped[task_of[k]]
+        if code != 0:
+            failed.append(f"part {k}: exit {code}, {reason or 'see lirical.log'}")
+    run = {
+        "study": study,
+        "image": tag,
+        "tasks": args.tasks,
+        "seconds": round(seconds),
+        "people": len(chosen),
+    }
+    (out / "run.json").write_text(json.dumps(run, indent=2) + "\n")
+    print(f"{args.tasks} tasks, {seconds:.0f}s; files in {out.relative_to(ROOT)}")
+    if failed:
+        raise SystemExit("; ".join(failed))
+
+
+if __name__ == "__main__":
+    main()
