@@ -6,7 +6,8 @@ below. Claude Code loads this file every session.
 ## How Claude Code must use this file
 
 Follow the operating rules below. The infrastructure history, the build phases that produced it,
-and the expected cost table live in `docs/SETUP.md`; runbooks are in `docs/INSTALL.md`.
+the moves to local-first (2026-10-12) and back to AWS (2026-11-23), and the expected cost table
+live in `docs/SETUP.md`; runbooks are in `docs/INSTALL.md`.
 
 ## Project scope
 
@@ -17,49 +18,25 @@ Real world evidence from synthetic EHR data, linked to lab notebook records. Sev
 | 1. EHR to RWE cohort pipeline | `ehr_rwe_eln.cohort` | Synthea patients to OMOP CDM v5.4; cohort definitions as YAML; analysis-ready cohort tables |
 | 2. ELN to EHR bridge | `ehr_rwe_eln.eln` | LLM extraction of samples, assays, biomarkers, and results from ELN entries into typed models, then OMOP `specimen` and `measurement` rows plus FHIR `Specimen` and `Observation` resources |
 | 3. Target trial emulation toolkit | `ehr_rwe_eln.tte` | Protocol spec in YAML (eligibility, strategies, time zero, outcomes) to cohort SQL, propensity score analysis, survival estimates, and a bias diagnostics report |
-| 4. RWE data quality dashboard | `ehr_rwe_eln.dq` | Conformance, completeness, and plausibility checks (Kahn framework) over the OMOP tables, scored and shown in the frontend |
+| 4. RWE data quality dashboard | `ehr_rwe_eln.dq` | OHDSI DataQualityDashboard 2.9.1 (R): conformance, completeness, and plausibility checks (Kahn framework) over the OMOP tables in the lake, loaded into the `dq` schema and shown in the frontend |
 | 5. Synthetic genomics | `ehr_rwe_eln.genomics` | A dbGaP-style genotyping study simulated with stdpopsim (three populations, out of Africa, each person's from their OMOP race) for OMOP persons (VCF, PLINK, phenotype and sample tables), a planted genetic effect, and a GWAS checked against it; a clinical panel of real ClinVar variants at their GRCh38 positions, planted in the same synthetic people |
 | 6. Variant curation | `ehr_rwe_eln.curation` | ACMG/AMP criteria that data alone decides, with each gene's ClinGen expert panel thresholds, from gnomAD v4 frequencies and Ensembl VEP consequences; Bayesian points to a class; scored against ClinVar expert-panel classifications it never reads. Claude proposes literature evidence (PS3, BS3, PS4, PP1) from LitVar2 and PubTator3 text, each claim's PMID and quote verified in code; proposals never change a class. A curator accepts proposals and records the class, with who and when, on `/curation/`. Each study subject's conditions as HPO terms, scored against the panel genes and checked against the planted carriers |
 | 7. Synthetic data | `ehr_rwe_eln.synth` | Differentially private synthetic releases of the OMOP data (statistical and generative synthesizers), with fidelity, utility, and privacy risk reports and a provenance record per release |
 
-Build order after the platform: 1, then 4, then 3, then 2. Each module depends on the OMOP tables from module 1.
+Each module depends on the OMOP tables from module 1.
 
-### In progress since 2026-11-19: move to AWS
+## Where things run
 
-Decided 2026-11-19, reversing the local-first move below: the app runs on AWS (the `default` profile's account, `us-east-1`), with OMOP in a lakehouse. The plan, open items, and reasons are in `notes/TODO_IMPROVEMENTS.md` (`notes/` is gitignored: personal planning, `TODO.md`, the industry comparison). Six steps, one PR each; until a step lands, the local Docker Compose stack keeps running that part:
+The app runs on AWS (the `default` profile's account, `us-east-1`) since the move of 2026-11-19 to 2026-11-23; each step, its numbers, and its decisions are in `docs/SETUP.md`, "AWS move". Open items are in `notes/TODO_IMPROVEMENTS.md` (`notes/` is gitignored). Standing decisions from the move:
 
-- [x] 1. `CLAUDE.md` and the Terraform foundation (`infra/terraform/`): VPC, S3 Tables lake, Lake Formation and Glue catalog, Redshift Serverless, Aurora Serverless v2, budget
-- [x] 2. OMOP in the lake: the ETL still builds in a staging Postgres (decided 2026-11-19, stage then publish); `scripts/publish_omop.py` copies all 39 tables (60,890,645 rows) to Iceberg in S3 Tables, and `scripts/reconcile_lake.py` checks every column of every table through Redshift (1,038 checks, cohorts 550 and 885)
-- [x] 3. OMOP readers on Redshift: trial emulation, synthetic data sources, and the genomics, curation, and ELN scripts read the lake through `connect_omop()` (Redshift Data API, `OMOP_SOURCE=staging` for the staging Postgres), in SQL that runs unchanged on both. `scripts/compare_omop_sources.py`: identical tables for 4 protocols, 14 negative controls, 2 synthetic specs. Decided 2026-11-19: OMOP writers (ETL, cohorts, ELN bridge) stay on staging and republish; data quality stays on staging until DQD in R (step 6)
-- [x] 4. App on ECS Express Mode (`infra/terraform/app/`), a public demo with no sign-in (decided 2026-11-20, as glia-nav): `/api/agent` bounded by a daily token limit and a per-address limit, curator decisions off (`PUBLIC_DEMO`). Module data in Aurora (migrations and a data-only copy through the bastion tunnel, row counts identical). The privacy monitor runs daily as a scheduled ECS task on the lake
-- [x] 5. Bedrock (Claude Opus 4.6, `us.anthropic.claude-opus-4-6-v1`) replaces the Anthropic API through `AnthropicBedrock` and `claude_client()` (`agents/config.py`); every call sets adaptive thinking. ELN extraction runs as direct calls (Bedrock has no Message Batches API; decided 2026-11-20). Every eval re-ran on Opus 4.6 and matched Opus 5.5: ELN extraction 1.000 on the default, hard, and adversarial sets; literature precision 83%
-- [ ] 6. R and HADES, LangGraph for literature curation, then the genomics, curation, and synthetic data items in `notes/TODO_IMPROVEMENTS.md`. One PR each:
-  - [x] 6a. R and HADES foundation: `docker/hades.Dockerfile` (R 4.6.1, Java 21, HADES from OHDSI's r-universe and a dated CRAN snapshot; versions in `r/installed-versions.txt`), `r/`, and `scripts/hades.py` (bastion tunnel to Redshift, temporary IAM login). Smoke tests pass on Eunomia and on the lake (23,421 persons)
-  - [x] 6b. DataQualityDashboard 2.9.1 (R) on the lake: `r/run_dqd.R`, loaded into the `dq` schema by `scripts/load_dqd.py` (Aurora through the RDS Data API). Same 2,384 checks and the same 14 failures as the Python port, which was removed 2026-11-20; 32 minutes, about 4.5 RPU-hours
-  - [x] 6c. CohortMethod and TrialEmulation (2026-11-21). CohortMethod 6.0.3: `r/run_cohortmethod.R` on the two lisinopril protocols from `results.cohort` in Redshift (`scripts/write_cohorts.py`), 12 negative controls each, large-scale propensity score, IPTW, Cox, empirical calibration; every OHDSI diagnostic passes (balance by the sample-size test, `sdmAlpha` 0.05). Covariates end the day before time zero, in R and Python (a panel drawn on the start day had failed balance). TrialEmulation 0.0.5: `r/run_trialemulation.R` on person-periods from `tte/per_protocol.py`, per-protocol (strict: stopping or adding the other drug ends follow-up; lenient: stopping only) with switch weights, CKD protocol. Decided 2026-11-21: the Python `tte` analysis stays as the readable version behind `/tte`; CohortMethod is the OHDSI check, TrialEmulation the per-protocol estimate
-  - [x] 6c+. OMOP MCP server (added 2026-11-20, done 2026-11-21): bounded tools over the lake (vocabulary concept search, patient counts for a concept set with small counts suppressed, trial emulation and data quality results), used by `/api/agent` and by Claude Code; no free-form SQL on the public demo. A Bedrock Guardrail on `/api/agent` (content filters and prompt-attack detection; the token limits cap cost, not content). Agent stays in the ECS app, not AgentCore Runtime (decided 2026-11-20: short stateless calls, no sign-in, already on ECS). Decided 2026-11-21: counts precomputed in Aurora (`omop_stats`, built by `scripts/build_omop_stats.py`; public tool calls never reach Redshift); one concept at a time, rolled up through descendants; counts under 11 suppressed and never stored; MCP only locally, over stdio (`agents/mcp_server.py`, `.mcp.json`; no port, nothing public), `/api/agent` calls the same functions in-process. Three PRs: (1) `omop_stats` and the four tool functions (`agents/omop_tools.py`) [done], (2) the agent on them (`agents/workbench.py`), evals (`evals/test_workbench_agent.py`), the stdio MCP server [done], (3) the Guardrail [done]: `infra/terraform/app/guardrail.tf`, prompt checked first with ApplyGuardrail, every model call through it with only the visitor's text tagged (untagged, the system prompt reads as a prompt attack), IAM requires it on InvokeModel, alarm at 20 interventions an hour
-  - [x] 6d. LangGraph for literature curation (2026-11-21): `curation/literature_graph.py` runs the existing steps as nodes (retrieve, propose, verify, store), then pauses at a curator node with `interrupt()`; the decisions route resumes it, and it pauses again, since decisions keep history. Checkpoints in the app database's `langgraph` schema (migration 021, the library's own tables); one thread per literature run and variant. Decided 2026-11-21: Claude through `propose()` and `claude_client()`, not `langchain-aws`; a straight port, no retry on rejected claims. On the same 6 variants the graph scores as the direct calls (5 agreed, 1 extra, 3 missed; every claim verified); pilot run 14, 10 variants, precision 69%, recall 64%, $0.74
-  - [x] 6e. stdpopsim, PLINK 2, REGENIE, panel variants into OMOP (2026-11-21). Three PRs: (1) stdpopsim's `OutOfAfrica_3G09` in `genomics/simulate.py`, each person's population from their OMOP race (decided 2026-11-21: a simulation convention that ties ancestry to hypertension, so the GWAS has confounding to correct) [done: the uncorrected score test gives lambda 4.0 and 12 false loci], (2) PLINK 2 QC and principal components, REGENIE, on AWS: CodeBuild builds the x86 image, an on-demand x86 Fargate task runs it (`infra/terraform/app/gwas.tf`, `scripts/run_regenie.py`; decided 2026-11-21: REGENIE ships no ARM build, and nothing runs in local Docker). The score test stays as the readable check, with the same PCs, and its null runs calibrate REGENIE [done: lambda 0.98 with REGENIE and 0.95 with the score test, the planted variant found at p 1.5e-11, no other loci], (3) panel carriers as `measurement` rows with OMOP Genomic concepts (vocabulary downloaded from Athena into `data/vocab_genomic/`; decided 2026-11-21: carriers only, dated at each person's observation period end; the most specific concept, else the gene's) [done: 46,596 rows matching every carrier; 6 of 48 variants have a concept of their own]
-  - [x] 6f. Exomiser and BIAS-2015 (2026-11-22). Three PRs: (1) Exomiser 15.1.0 on Fargate (`infra/terraform/app/exomiser.tf`, `scripts/run_exomiser.py`, `curation/exomiser.py`; decided 2026-11-22: data release 2609 in S3, unpacked on each task's disk; REVEL, MVP, AlphaMissense, no SpliceAI (non-commercial), CADD, or REMM; split across parallel tasks, capped by the Fargate vCPU quota) [done: 5,000 subjects in 6 tasks, 75 minutes; the variant score puts every planted gene first, since Exomiser's data includes ClinVar; the phenotype score 36 of 123 (chance about 15%), AUC 0.97 on MSH2 and 0.55 on LDLR, against 0.88 and 0.69 for our Resnik score], (2) Exomiser's rank on `/curation/` as context, not PP4 (`curation.exomiser`, migration 022; the phenotype rank only, since the variant score includes ClinVar) [done], (3) BIAS-2015 as a baseline on the Evidence Repository variants, with and without its ClinVar-based criteria (`infra/terraform/app/bias.tf`, `scripts/run_bias.py`, `curation/bias.py`; decided 2026-11-22: VEP 115, the release BIAS's tables were built for, on Fargate; three runs: all codes, without the per-variant ClinVar codes, without any ClinVar-derived code) [done: 883 of 883 variants back; agreement 87.2% with all codes (PP5 and PS4 read ClinVar), 59.9% without ClinVar, against 56.9% for the rules; without ClinVar BIAS finds 130 of 385 pathogenic variants against our 50, but its P/LP calls are right 76% of the time against our 94%, with 3 reversals against none]
-  - [x] 6g. MST and AIM, two PRs: (1) MST (`synth/mst.py`; decided 2026-11-22: `mbi` 2.1.0, private-pgm's library, with the authors' MST adapted, since dpmm needs Python below 3.12 and SmartNoise needs opacus below 0.15; seeded sources only, as the VAE) [done: releases 19 to 22; at epsilon 4 column TVD 0.001, pair TVD 0.021, TSTR AUC 0.754, best of every release; trial draws 100% cover, 0% spurious], (2) AIM with a workload from the trial emulation and cohort queries (`synth/aim.py`; decided 2026-11-23: the authors' AIM adapted on `mbi`, workload in each spec at weight 5 plus every pair at 1; releases made and scored on Fargate, `scripts/run_synth.py`) [done: releases 23, 24, 56, 57; on the person summary at epsilon 4 pair TVD 0.006, under the noise floor, TSTR AUC 0.790 against 0.804 real, best of every release; on the trial worse than MST, 10% of draws spurious at both epsilons, and release 23 gives HR 0.14 against the real 1.00, kept as the example]
+- OMOP: the ETL builds in a staging Postgres, `scripts/publish_omop.py` copies it to Iceberg in S3 Tables, and `scripts/reconcile_lake.py` checks every column through Redshift. Readers go through `connect_omop()` (the lake by default, `OMOP_SOURCE=staging` for the staging Postgres), in SQL that runs on both. Writers (ETL, cohorts, ELN bridge) write to staging and republish.
+- Trial emulation: the Python `tte` analysis is the readable version behind `/tte`; CohortMethod (`r/run_cohortmethod.R`) is the OHDSI check, TrialEmulation (`r/run_trialemulation.R`) the per-protocol estimate.
+- Heavy jobs (REGENIE, Exomiser, BIAS-2015, synthetic releases) run as on-demand x86 Fargate tasks, images built by CodeBuild; nothing heavy runs in local Docker.
+- OMOP MCP server: local only, over stdio (`agents/mcp_server.py`, `.mcp.json`); `/api/agent` calls the same functions in-process (`agents/omop_tools.py`). Counts are precomputed in Aurora (`omop_stats`), so public calls never reach Redshift; counts under 11 are suppressed and never stored. A Bedrock Guardrail checks every `/api/agent` call.
+- Literature curation runs on LangGraph (`curation/literature_graph.py`), pausing for the curator; Claude through `propose()` and `claude_client()`, not `langchain-aws`.
 
-### Done 2026-10-12: run locally, no AWS (superseded 2026-11-19)
+## Data rules
 
-Goal: anyone can clone the repo, install it, and run every module on their own machine without an AWS account. It came before module 4 and changed the platform the remaining modules build on.
-
-Decided 2026-10-12: PostgreSQL with pgvector replaces both DuckDB and Aurora (17 at first, to match Aurora; 18 since 2026-10-13). The app will have concurrent writers and large vector search (RAG), which DuckDB's single-writer file does not fit. It runs locally from `docker-compose.yml`, and tests run against that database.
-
-- [x] `docker-compose.yml` with the database service
-- [x] Port module 1 from DuckDB to Postgres. The 1,325,353-row reconciliation, the counts in `docs/etl_synthea_comparison.md`, and both cohorts reproduce exactly
-- [x] CI runs the tests against a Postgres service container
-- [x] Plan the move (agreed 2026-10-12): Anthropic API replaces Bedrock (each user brings `ANTHROPIC_API_KEY`); no auth, the app binds to 127.0.0.1; everything runs in Docker Compose (`db` plus one `app` container serving the API, agent, and static frontend). Dropped: Guardrail, AgentCore (Runtime, Gateway, Observability, Evaluations), S3, Secrets Manager, Cognito, Budgets, CDK. Work in four PRs:
-  - [x] 1. Agent on the Anthropic API, served at `POST /agent`; evals run against it
-  - [x] 2. Remove auth; FastAPI serves the frontend; `app` service in Compose
-  - [x] 3. Delete `infra/`, the AWS scripts and dependencies; migrations run with plain Alembic
-- [x] Rewrite "Stack decisions", "Conventions", and the README install steps for the local stack
-- [x] Tear down the deployed AWS stacks (2026-10-12). `deploy.yml` and the `cdk-diff` CI job are gone; `lint-test` is the only required check
-
-Data rules:
 - Synthetic or openly licensed de-identified data only: Synthea output, the MIMIC-IV demo, and synthetic ELN entries generated in this repo. No real patient data, ever.
 - OMOP vocabularies come from OHDSI Athena under their own licenses. Never commit vocabulary files or patient-level data; `data/` is gitignored.
 - Public reference data is allowed: summary-level knowledge about variants and phenotypes, never individual-level data. Kept in `data/reference/`, never committed, each release named so a run can be repeated:
@@ -72,17 +49,19 @@ Data rules:
 - Every LLM extraction is validated against a typed Pydantic model and scored against a labeled set in `evals/`.
 - Outputs are for research and demonstration. No clinical decision claims in code, docs, or UI.
 
-Domain stack (additions to the platform stack below):
+## Domain stack
+
+Additions to the platform stack below.
 
 | Slot | Tool | Why |
 |---|---|---|
 | Synthetic EHR source | Synthea (CSV output) | Open standard synthetic patient generator. |
-| Common data model | OMOP CDM v5.4 as Apache Iceberg tables in S3 Tables, queried through Redshift Serverless | The model is an OHDSI standard; OHDSI's DatabaseConnector supports Redshift. Postgres in Docker Compose until steps 2 and 3 land. |
+| Common data model | OMOP CDM v5.4 as Apache Iceberg tables in S3 Tables, queried through Redshift Serverless | The model is an OHDSI standard; OHDSI's DatabaseConnector supports Redshift. |
 | Interoperability format | FHIR R4 via `fhir.resources` | Language-level library; no FHIR server needed at this scale. |
 | Causal inference and survival | scikit-learn, statsmodels, lifelines | Language-level libraries. |
 | ELN source | Synthetic entries; eLabFTW API optional | Open-source ELN with a REST API. |
 
-OHDSI reference implementations (ETL-Synthea, DataQualityDashboard, CohortMethod) are R. Since step 6 the repo runs HADES itself where the R tool is the standard (`r/`, in the `hades` container, against the lake through `scripts/hades.py`); the Python ETL stays, since it is verified against ETL-Synthea and fixes two of its bugs.
+OHDSI reference implementations (ETL-Synthea, DataQualityDashboard, CohortMethod) are R. The repo runs HADES itself where the R tool is the standard (`r/`, in the `hades` container, against the lake through `scripts/hades.py`); the Python ETL stays, since it is verified against ETL-Synthea and fixes two of its bugs.
 
 ## Explain before you act
 
@@ -143,7 +122,7 @@ decisions.
 
 ## Stack decisions
 
-AWS, from 2026-11-19: OMOP in a lakehouse (S3 Tables, Lake Formation, Redshift Serverless), app data in Aurora, the app on ECS, models on Bedrock, all defined in Terraform. Rows marked "until step N" describe what still runs locally until that step lands.
+AWS, from 2026-11-19: OMOP in a lakehouse (S3 Tables, Lake Formation, Redshift Serverless), app data in Aurora, the app on ECS, models on Bedrock, all defined in Terraform.
 
 | Slot | Tool | Why |
 |---|---|---|
@@ -151,18 +130,19 @@ AWS, from 2026-11-19: OMOP in a lakehouse (S3 Tables, Lake Formation, Redshift S
 | Agent framework | Anthropic Python SDK, `client.beta.messages.tool_runner`, through `AnthropicBedrock` | Runs the tool loop and returns typed output with no extra framework. LangGraph for literature curation only (`curation/literature_graph.py`, step 6d), for its pause and resume around the curator; no LangChain. |
 | Lake | S3 Tables (Apache Iceberg), AWS Glue Data Catalog, Lake Formation | Open table format any engine reads; Lake Formation controls who reads what. |
 | Warehouse SQL | Redshift Serverless | The AWS engine OHDSI's DatabaseConnector supports; billed per second of compute, capped at 150 RPU-hours a month (60 until 2026-11-22, 120 until 2026-11-23). An open Data API session is billed as compute until it ends, so `RedshiftSession` ends its session when its block ends (2026-11-23: each session had held 8 RPUs for its hour of keep-alive). |
-| App database + vector | Aurora Serverless v2 PostgreSQL 18.6 + pgvector | Row-by-row app writes and vector search, which Redshift is not built for. Pauses to 0 when idle. Never holds OMOP. Compose Postgres until steps 2 to 4. |
+| App database + vector | Aurora Serverless v2 PostgreSQL 18.6 + pgvector | Row-by-row app writes and vector search, which Redshift is not built for. Pauses to 0 when idle. Never holds OMOP. |
 | Secrets and settings | `pydantic-settings`; `.env` locally, Secrets Manager on AWS | One code path; database passwords are managed by RDS and Redshift in Secrets Manager. |
 | Auth | None: a public portfolio demo, as glia-nav (decided 2026-11-20) | Bounded instead: `/api/agent` has a daily token limit and 10 calls an hour per address (`api/limits.py`); `PUBLIC_DEMO=true` turns off curator decisions; one task; a daily token alarm. See `infra/terraform/README.md`, Public demo limits. |
 | App hosting | ECS Express Mode, one x86 task in the public subnets (ARM until 2026-11-22; x86 everywhere now, decided 2026-11-22), image in ECR tagged with its git commit | Express Mode builds the load balancer, HTTPS certificate, and URL; the task gets a public IP, so no NAT gateway or interface endpoints, which would cost more than the whole budget. FastAPI serves the API under `/api` and the static frontend at `/`. Migrations and data copies go through an on-demand bastion task and an SSM tunnel. |
 | Infrastructure as code | Terraform, state in `ehr-rwe-eln-tfstate-<account>` | Same tool as methyl-flow's newest infra; `bootstrap/` made the state bucket, `foundation/` holds the shared resources. |
 | Backend framework | FastAPI + Pydantic | Typed request and response models, OpenAPI for free. |
 | Python toolchain | uv, ruff, pytest | Fast, one tool per job, lockfile pinned. |
-| DB migrations | Alembic | Versioned schema changes; `uv run alembic upgrade head` against the Compose Postgres. |
+| DB migrations | Alembic | Versioned schema changes; `uv run alembic upgrade head` against the Compose Postgres locally, and against Aurora through the bastion tunnel. |
 | Dev-loop evals | pydantic-evals golden set in pytest | Scores the agent against the real model in seconds. |
 | Frontend framework | Next.js + React + Tailwind, static export | Builds to plain files, so no Node server at runtime. |
-| Code host + CI runner | GitHub + GitHub Actions | `lint-test` runs ruff and pytest against a Postgres service container. `secrets` runs gitleaks (pinned, checksum verified) over every commit and file for keys, tokens, passwords, usernames, and email addresses, with the rules in `.gitleaks.toml`. Both are required to merge; the same scan runs in pre-commit. |
+| Code host + CI runner | GitHub + GitHub Actions | `lint-test` runs ruff and pytest against a Postgres service container. `secrets` runs gitleaks (pinned, checksum verified) over every commit and file for keys, tokens, passwords, usernames, and email addresses, with the rules in `.gitleaks.toml`; the same scan runs in pre-commit. `terraform` checks formatting, validates each stack, and runs tflint and trivy. All three are required to merge. |
 | Containers | Docker + Docker Compose | Open standard; the whole stack starts with one command. |
+| Heavy jobs | On-demand x86 Fargate tasks (`docker/*.Dockerfile`, `infra/terraform/app/`), images built by CodeBuild, started by `scripts/run_*.py` | Long or memory-hungry runs leave the laptop; billed only while a task runs. x86 because REGENIE ships no ARM build. |
 | OHDSI HADES | R 4.6.1 + Java 21 in `docker/hades.Dockerfile`, run with `scripts/hades.py` | The R tools are OHDSI's standard; a container keeps R, Java, and the JDBC driver identical everywhere. HADES comes from OHDSI's r-universe, which serves only the latest builds, so no renv lockfile: CRAN is pinned by a dated snapshot, installed versions are recorded in `r/installed-versions.txt`, and the image is the artifact. Redshift over JDBC through the bastion tunnel with a temporary IAM password; no stored Redshift password. |
 
 Excluded on purpose (wrong scale for a personal project): Kubernetes, A2A, LiteLLM, dedicated vector databases, WAF-heavy perimeter builds, NAT gateways and interface endpoints (cost).
@@ -186,9 +166,9 @@ How each piece was built, verified, and what it costs: see `docs/SETUP.md`.
 │   └── synth/             # module 7: privacy-preserving synthetic data releases
 ├── tests/                 # fast tests; local services only (the Compose Postgres), nothing off the machine
 ├── migrations/            # Alembic versioned schema changes
-├── infra/terraform/       # bootstrap/ (state bucket), foundation/ (network, lake, Redshift, Aurora, budget), app/ (ECR, ECS, monitor, alarm)
+├── infra/terraform/       # bootstrap/ (state bucket), foundation/ (network, lake, Redshift, Aurora, budget), app/ (ECR, ECS, CodeBuild, Fargate tasks, Guardrail, alarms)
 ├── r/                     # OHDSI HADES scripts (R), run in the hades container; installed-versions.txt
-├── docker/                # hades.Dockerfile, hail.Dockerfile
+├── docker/                # Dockerfiles: hades, hail, and the Fargate tasks (gwas, exomiser, bias, synth)
 ├── frontend/              # Next.js app, static export served by FastAPI
 ├── evals/                 # golden set; hits a real model, so slow and costs money
 ├── scripts/               # one-shot operational scripts, never imported
@@ -218,7 +198,7 @@ Do not re-ask. Rationale and history in `docs/SETUP.md`.
 | AWS budget | $100 a month on resources tagged `project = ehr-rwe-eln`, credits excluded; email at 50% and 80% actual and 100% forecast. Decided 2026-11-19, glia-nav's thresholds 2026-11-20 |
 | Public demo | No sign-in, as glia-nav. `DAILY_TOKEN_LIMIT` 150,000 a day and 10 calls an hour per address on `/api/agent`; curator decisions off. Decided 2026-11-20 |
 | Python | 3.14, pinned in `.python-version` |
-| Database | On AWS: OMOP only in the lake (Iceberg in S3 Tables, read through Redshift Serverless; "lake only", decided 2026-11-19); app state, module schemas, and pgvector in Aurora Serverless v2 PostgreSQL 18.6. Locally until steps 2 to 4: PostgreSQL 18 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg18-trixie`, defined in `docker-compose.yml` |
+| Database | On AWS: OMOP only in the lake (Iceberg in S3 Tables, read through Redshift Serverless; "lake only", decided 2026-11-19); app state, module schemas, and pgvector in Aurora Serverless v2 PostgreSQL 18.6. Locally (pytest, the ETL's staging OMOP, Compose): PostgreSQL 18 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg18-trixie`, defined in `docker-compose.yml` |
 | App name | RWE Workbench, for the web app only; the repo and the Python package stay `ehr-rwe-eln`. Chosen 2026-11-19 over Counterpart, which collides with Counterpart Health (Clover Health's clinical AI company) |
 | `MODEL` | `us.anthropic.claude-opus-4-6-v1` on Bedrock, the newest Claude this account can call (tested 2026-11-19: Opus 5.5, 4.8, 4.7 return AccessDenied). Revisit when Opus 5.5 access opens. Replaced `claude-opus-5-5` on the Anthropic API 2026-11-20 |
 | Data database | One: `ehr_rwe_eln`, 23,421 Synthea patients, every module. A second population would be a second CDM schema, never a second database. `ehr_rwe_eln_test` is for pytest only. Merged from two databases on 2026-11-18 |
