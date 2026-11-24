@@ -165,7 +165,7 @@ data "aws_iam_policy_document" "gwas_build" {
       "ecr:PutImage",
       "ecr:UploadLayerPart",
     ]
-    resources = [aws_ecr_repository.gwas.arn, aws_ecr_repository.exomiser.arn, aws_ecr_repository.bias.arn, aws_ecr_repository.synth.arn]
+    resources = [aws_ecr_repository.gwas.arn, aws_ecr_repository.exomiser.arn, aws_ecr_repository.bias.arn, aws_ecr_repository.synth.arn, aws_ecr_repository.lirical.arn]
   }
 }
 

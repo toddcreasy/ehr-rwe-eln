@@ -98,3 +98,19 @@ output "synth_image_tag" {
 output "synth_task_definition" {
   value = aws_ecs_task_definition.synth.arn_without_revision
 }
+
+output "lirical_repository" {
+  value = aws_ecr_repository.lirical.name
+}
+
+output "lirical_repository_url" {
+  value = aws_ecr_repository.lirical.repository_url
+}
+
+output "lirical_image_tag" {
+  value = local.lirical_image_tag
+}
+
+output "lirical_task_definition" {
+  value = aws_ecs_task_definition.lirical.arn_without_revision
+}
