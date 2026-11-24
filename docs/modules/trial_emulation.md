@@ -42,7 +42,21 @@ The full file adds the covariates to adjust for (conditions and the latest measu
 uv run python scripts/run_tte.py
 ```
 
-It needs the full 23,421-person build; 1,172 people give too few outcome events for an estimate. It takes about a minute, prints each protocol's bias report, and stores the run in the `tte` schema. The page at http://127.0.0.1:8000/tte/ shows it. OMOP is read from the lake through Redshift; `OMOP_SOURCE=staging` reads the staging Postgres instead (see [Who reads the lake](cohort.md#who-reads-the-lake)).
+It needs the full 23,421-person build; 1,172 people give too few outcome events for an estimate. It reads every table it needs from the lake first, so the billed Redshift session ends before the propensity fits and the 500-replicate bootstrap run on the laptop. A run on the lake took 31 minutes (2026-11-23), matched the previous run on all four protocols, printed each protocol's bias report, and stored the run in the `tte` schema. The page at http://127.0.0.1:8000/tte/ shows it. OMOP is read from the lake through Redshift; `OMOP_SOURCE=staging` reads the staging Postgres instead (see [Who reads the lake](cohort.md#who-reads-the-lake)).
+
+### OHDSI's own tools, as checks
+
+The Python analysis is the readable version behind `/tte/`. Two OHDSI R packages run on the same protocols in the `hades` container ([decided 2026-11-21](../SETUP.md)):
+
+- **CohortMethod** 6.0.3 (`r/run_cohortmethod.R`), the OHDSI check, on the two lisinopril protocols: large-scale propensity scores, inverse probability weighting, Cox, 12 negative controls each, and empirical calibration; every OHDSI diagnostic passes.
+- **TrialEmulation** 0.0.5 (`r/run_trialemulation.R`), the per-protocol estimate for the CKD protocol: follow-up ends at the first deviation from the assigned drug, and the people who stay are weighted by their probability of staying.
+
+```bash
+uv run python scripts/write_cohorts.py                            # arms, outcomes, negative controls
+uv run python scripts/hades.py run_cohortmethod.R                 # through the bastion tunnel
+OMOP_SOURCE=staging uv run python scripts/write_person_periods.py
+uv run python scripts/hades.py --local run_trialemulation.R       # no database
+```
 
 ## Results
 

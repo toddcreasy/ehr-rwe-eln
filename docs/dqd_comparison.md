@@ -75,12 +75,12 @@ for any missing field, on empty and populated tables alike.
 
 Ours does not stop there: an unknown denominator counts as "not empty", the reading DQD's own
 `coalesce(..., FALSE)` gives it, and the field's checks are scored not applicable because
-`cdmField` failed. That path is covered by `tests/test_dq.py`, but it cannot be checked against
+`cdmField` failed. That path was covered by `tests/test_dq.py`, removed with the port, but it cannot be checked against
 DQD, so the planted CDM leaves the column in place.
 
 ## To rerun
 
-From the repo root, with the Compose database running and `JAVA_HOME` set as in the R script's
+These commands ran the comparison and no longer run on `main`: the three scripts are in git history before 2026-11-20. From the repo root, with the Compose database running and `JAVA_HOME` set as in the R script's
 header:
 
 ```bash

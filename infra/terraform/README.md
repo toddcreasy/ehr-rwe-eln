@@ -6,11 +6,11 @@ Three stacks, each with its own state file in one S3 bucket, `ehr-rwe-eln-tfstat
 |---|---|---|
 | `bootstrap/` | The state bucket itself (versioned, encrypted, private, old versions expire after 90 days) | `bootstrap/terraform.tfstate` |
 | `foundation/` | VPC, S3 Tables lake with Lake Formation and the Glue catalog, Redshift Serverless, Aurora Serverless v2, the $100 budget, the CloudTrail trail | `foundation/terraform.tfstate` |
-| `app/` | ECR, the public ECS Express Mode service, the bastion and monitor task definitions, the daily monitor schedule, the alarms, Bedrock invocation logging, and their IAM roles. Reads `foundation/` outputs through `terraform_remote_state` | `app/terraform.tfstate` |
+| `app/` | ECR, the public ECS Express Mode service, the two CodeBuild projects (the app image, and every task image), the Fargate task definitions (bastion, monitor, gwas, exomiser, lirical, bias, synth), the daily monitor schedule, the Fargate vCPU quota, the Bedrock Guardrail, the alarms, Bedrock invocation logging, and their IAM roles. Reads `foundation/` outputs through `terraform_remote_state` | `app/terraform.tfstate` |
 
 Two of these cover the whole account, not just this project: the CloudTrail trail (`foundation/audit.tf`, every Region, a year in `ehr-rwe-eln-cloudtrail-<account ID>`) and Bedrock invocation logging (`app/bedrock_logging.tf`, every Bedrock call in us-east-1, prompts and responses as text, 30 days in `/bedrock/invocations`). Each is one setting per account, so no other repo should manage them.
 
-Alarms, all to the `ehr-rwe-eln-alerts` SNS topic: daily tokens past 80% of the limit, 3 or more app 5xx responses in 5 minutes, 3 or more Bedrock throttles or server errors on `MODEL` in 5 minutes.
+Alarms, all to the `ehr-rwe-eln-alerts` SNS topic: daily tokens past 80% of the limit, 3 or more app 5xx responses in 5 minutes, 3 or more Bedrock throttles or server errors on `MODEL` in 5 minutes, and 20 or more Guardrail interventions on `/api/agent` in an hour.
 
 Every resource is tagged `project = ehr-rwe-eln`; the budget counts only those.
 
@@ -76,7 +76,7 @@ The first deploy took about 25 minutes: Express Mode builds the load balancer an
 
 PLINK 2 and REGENIE run in an x86 image (`docker/gwas.Dockerfile`); REGENIE ships no ARM build, so nothing is built or run on the laptop (`app/gwas.tf`):
 
-- **AWS CodeBuild**: a build service that runs commands on a short-lived AWS host, billed per minute. Project `ehr-rwe-eln-gwas` builds an image on x86 from `build/<name>-<tag>.zip` in the bucket and pushes it to ECR; the runner names the Dockerfile and repository, so the same project builds the GWAS and Exomiser images.
+- **AWS CodeBuild**: a build service that runs commands on a short-lived AWS host, billed per minute. Project `ehr-rwe-eln-gwas` builds an image on x86 from `build/<name>-<tag>.zip` in the bucket and pushes it to ECR; the runner names the Dockerfile and repository, so the same project builds the GWAS, Exomiser, LIRICAL, BIAS, and synth images.
 - **Fargate task** `ehr-rwe-eln-gwas`: X86_64, 2 vCPUs, 8 GB, on demand in the app cluster. Its role reads and writes only `studies/*` in bucket `ehr-rwe-eln-genomics-<account>`, which is private and TLS only. Objects under `studies/` and `build/` expire after 30 days; `reference/` (Exomiser's data) is kept.
 
 The image tag is a hash of `docker/gwas.Dockerfile` and `docker/gwas_task.py`, computed the same way in Terraform and in `scripts/run_regenie.py`; changing either file means plan and apply `app/` first. The runner builds the image if ECR lacks the tag (about 5 minutes), uploads the study, runs the task, and downloads the results. A run on 5,000 people and 26,361 variants took 201 seconds, a few cents.
@@ -87,7 +87,7 @@ Exomiser 15.1.0 (Java 21) runs in its own x86 image, `docker/exomiser.Dockerfile
 
 - **Data, once per release**: `run_exomiser.py fetch` runs a task that downloads release 2609 (hg38 20.0 GB, phenotype 13.3 GB) from the address in Exomiser's release notes into `reference/exomiser/2609/`. The host publishes no checksums, so the task checks each zip's size against the server's and tests the archive, then stores its SHA-256 in the object's metadata. 38 minutes, nothing through the laptop.
 - **Fargate task** `ehr-rwe-eln-exomiser`: X86_64, 4 vCPUs, 16 GB (12 GB Java heap), 200 GiB of task disk. Its role reads and writes only `studies/*` and `reference/exomiser/*` in the genomics bucket. Each task copies both zips, checks them against the stored SHA-256, unpacks them (about 15 minutes), then runs Exomiser's batch command on its slice of people, about 4.5 seconds a person.
-- **Parallel runs**: `run --tasks K` splits the people into K slices under `studies/exomiser-<id>/part-<k>/` and runs them at once. Fargate counts vCPUs running at once across the account, so K is capped by that quota: 6 tasks under 30 vCPU. The full run, 5,000 people in 6 tasks, took 75 minutes, about $2. `exomiser.tf` requests 210 vCPU for 50 tasks, about 25 minutes (see [Account limits hit](#account-limits-hit)).
+- **Parallel runs**: `run --tasks K` splits the people into K slices under `studies/exomiser-<id>/part-<k>/` and runs them at once. Fargate counts vCPUs running at once across the account, so K is capped by that quota: 6 tasks fitted the first quota of 30 vCPU. The full run, 5,000 people in 6 tasks, took 75 minutes, about $2. `exomiser.tf` raised the quota to 210 vCPU, enough for 50 tasks, about 25 minutes (see [Account limits hit](#account-limits-hit)).
 
 ## LIRICAL on AWS
 

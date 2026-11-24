@@ -85,7 +85,7 @@ Subject codes (`HTN-0001` and on) are assigned in a random order, so a code says
 
 ## Results
 
-On Claude Opus 5.5, 2026-11-18, all 300 default entries extracted with none failed:
+On Claude Opus 5.5, 2026-11-18, all 300 default entries extracted with none failed. The evals reran on Opus 4.6 on Bedrock on 2026-11-20 and matched: 1.000 on the default, hard, and adversarial sets.
 
 | | Expected | Extracted | Precision | Recall |
 |---|---:|---:|---:|---:|

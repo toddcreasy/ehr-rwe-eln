@@ -49,7 +49,7 @@ export SPEC=src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
 uv run python scripts/run_synth.py synthesize.py
 uv run python scripts/run_synth.py synthesize.py --spec $SPEC --method mst
 uv run python scripts/run_synth.py evaluate_synth.py
-uv run python scripts/synth_cards.py
+uv run python scripts/synth_cards.py   # these four read the database in .env: point it at Aurora's tunnel
 
 # Hand a release to someone, and withdraw one later
 uv run python scripts/export_release.py --release 3 --recipient "Pipeline team" --contact team@example.org --purpose "testing the cohort pipeline"
@@ -57,9 +57,9 @@ uv run python scripts/withdraw_release.py --release 3 --reason "what is wrong wi
 uv run python scripts/confirm_deletion.py --export 7 --evidence "Dana's reply, 2026-11-20"
 ```
 
-Exports go to `data/synth/exports/` with the release's data card, and each is recorded with its recipient. A withdrawal marks the release, stops further exports, rewrites its card, and drafts a notice per recipient in `data/synth/withdrawals/` for you to send. Record each recipient's reply that they deleted it with `scripts/confirm_deletion.py`; with no arguments it lists who has not replied. Each evaluation run lists any release whose privacy checks have drifted toward leakage, and the Compose `monitor` service runs that check every 24 hours when a source or the synth code has changed; the `/synth/` page shows the last check.
+Exports go to `data/synth/exports/` with the release's data card, and each is recorded with its recipient. A withdrawal marks the release, stops further exports, rewrites its card, and drafts a notice per recipient in `data/synth/withdrawals/` for you to send. Record each recipient's reply that they deleted it with `scripts/confirm_deletion.py`; with no arguments it lists who has not replied. Each evaluation run lists any release whose privacy checks have drifted toward leakage, and the monitor runs that check when a source or the synth code has changed: on AWS a Fargate task every day at 11:00 UTC, started by EventBridge Scheduler; locally the Compose `monitor` service every 24 hours. The `/synth/` page shows the last check.
 
-Synthesis takes under a minute and evaluation about a minute. Data cards go to `data/synth/cards/`. The page at http://127.0.0.1:8000/synth/ compares the releases and shows each card.
+The Bayesian network synthesizes in under a minute; MST, AIM, and the trial redraws take minutes to hours, and an evaluation of every release took 21 minutes on Fargate. Data cards go to `data/synth/cards/`. The page at http://127.0.0.1:8000/synth/ compares the releases and shows each card.
 
 ## Results in brief
 
@@ -68,7 +68,7 @@ From the [methodology](../synthetic_data_methodology.md#5-results):
 - The Bayesian network at epsilon 4 matches single columns at the noise floor, and every age, sex, and race group within 0.014 of its own floor. Relationships still fall short of the floor (pair TVD 0.023 against 0.012). Its measurements depend on age as well as their condition; at epsilon 0.25 that structure costs more in noise than it adds, so the spec makes no release there.
 - MST at epsilon 4 is closer still: single columns at 0.001, pairs at 0.021, and the best death prediction of any release (AUC 0.754). It learns pairs the spec left out, but not age by race, so older Black people stay at twice their share, as in the Bayesian network.
 - AIM is best of all at epsilon 4: pairs below the noise floor (0.006 against 0.012) and death prediction within 0.014 AUC of the real data (0.790 against 0.804). Even at epsilon 1 it beats MST at epsilon 4 on pairs, correlations, and death prediction.
-- By subgroup, age is where releases fall short: the VAE has 19 to 28% too few people aged 70 and over and distorts them most. Each data card names any group a release misrepresents.
+- By subgroup, age is where releases fall short. The VAE, conditional on age, now has every age band within 11% of its real share, but people 80 and over are still far from real in their other columns; use the Bayesian network for analyses of older people. Each data card names any group a release misrepresents.
 - Every release is at chance on every privacy attack; the plain copy of the training data is not, which shows the attacks detect leakage when it exists.
 - On the 26-event trial, DP releases often give confident wrong answers: 45% of the Bayesian network's draws at epsilon 1 and 15% at epsilon 4 show an effect the real data does not. MST at epsilon 4 has none, and covers the real hazard ratio in all 20 draws. AIM, best on the person summary, is worse here: 10% of its draws are spurious at both epsilons, and its stored epsilon 1 release (23) gives a hazard ratio of 0.14 where the real one is 1.00. These releases are fit for building and testing pipelines, not for reporting estimates.
 

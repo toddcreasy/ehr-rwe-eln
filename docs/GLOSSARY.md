@@ -12,6 +12,7 @@ The acronyms, standards, methods, and services these docs use. Each entry says w
 6. [Genomics](#genomics)
 7. [Models and Amazon Bedrock](#models-and-amazon-bedrock)
 8. [Software and services](#software-and-services)
+9. [AWS](#aws)
 
 ## Health data and standards
 
@@ -69,7 +70,11 @@ Health Level Seven International, the standards body behind FHIR and the older H
 
 ### DQD
 
-DataQualityDashboard, OHDSI's data quality tool for OMOP databases, written in R. It runs about 2,400 checks at table, field, and concept level and scores each against a threshold. The data quality module reimplements every check in Python and matches DQD v2.9.0 on all 2,384 of them ([comparison](dqd_comparison.md)). [DataQualityDashboard](https://github.com/OHDSI/DataQualityDashboard)
+DataQualityDashboard, OHDSI's data quality tool for OMOP databases, written in R. It runs about 2,400 checks at table, field, and concept level and scores each against a threshold. The data quality module runs DQD 2.9.1 itself, in R, against the lake: 2,384 checks. Until 2026-11-20 it was a Python port, which matched DQD check for check ([comparison](dqd_comparison.md)). [DataQualityDashboard](https://github.com/OHDSI/DataQualityDashboard)
+
+### HADES, CohortMethod, and TrialEmulation
+
+HADES is OHDSI's collection of R packages for analyses on OMOP. Here they run in the `hades` container: DQD for data quality, CohortMethod (new-user cohort studies with large-scale propensity scores and empirical calibration against negative controls) as the check on the trial emulation, and TrialEmulation (per-protocol effects with time-varying weights) for the per-protocol estimate. [HADES](https://ohdsi.github.io/Hades/), [CohortMethod](https://ohdsi.github.io/CohortMethod/), [TrialEmulation](https://causal-lda.github.io/TrialEmulation/)
 
 ### Kahn framework
 
@@ -227,6 +232,10 @@ A model of a table as a set of columns, each depending on a few parent columns: 
 
 Variational autoencoder: a neural network that compresses each record into a few numbers and learns to rebuild it. Drawing new numbers and decoding them gives new records. Trained here with DP-SGD as a second synthesizer.
 
+### MST and AIM
+
+Two differentially private synthesizers from the same research group, both on its `mbi` library. MST, the winner of NIST's 2018 differential privacy synthetic data contest, measures every column's histogram, picks a tree of column pairs with privacy noise, measures those, and samples from a graphical model fitted to them. AIM is its successor: given a workload (the column combinations the analyses will read), it spends its budget in rounds, each measuring the combination the current model fits worst. [MST, McKenna et al. 2021](https://arxiv.org/abs/2108.04978), [AIM, McKenna et al. 2022](https://arxiv.org/abs/2201.12677)
+
 ### TVD
 
 Total variation distance: how far apart two distributions are, from 0 (identical) to 1 (no overlap). Fidelity reports it per column and per pair of columns.
@@ -365,6 +374,14 @@ How telling an HPO term is: minus the log of the share of genes annotated with i
 
 Exomiser ranks the genes a person carries variants in, for rare disease diagnosis. Each gene gets a variant score (rarity from gnomAD and UK10K, damage from missense predictors and ClinVar), a phenotype score, and a combined score from both. hiPhive is its phenotype scorer: it matches the person's HPO terms against what is known of each gene in human disease, mouse and zebrafish models, and genes nearby in protein interaction networks. Here it ranks the panel genes for every study subject and is checked against the planted carriers. AGPL. [Exomiser](https://github.com/exomiser/Exomiser), [Smedley et al. 2015](https://doi.org/10.1038/nprot.2015.124)
 
+### LIRICAL and likelihood ratio
+
+A likelihood ratio says how many times more likely an observation is under one explanation than under another: here, how much more likely a person's HPO terms are if they have a given disease than by chance. LIRICAL, from The Jackson Laboratory, combines one ratio per term into a score for each of about 8,500 diseases and ranks them. Here it runs phenotype only and its disease ranks are mapped to the panel genes, as a comparison with Exomiser and the Resnik score. Non-commercial use only, run unmodified. [LIRICAL](https://github.com/TheJacksonLaboratory/LIRICAL), [Robinson et al. 2020](https://doi.org/10.1016/j.ajhg.2020.06.021)
+
+### ENIGMA
+
+The ClinGen expert panel for BRCA1 and BRCA2. Its specifications include a table of how strongly each kind of loss-of-function variant counts (PVS1) and a table of functional assay results (PS3, BS3), which the rules read. [ENIGMA](https://enigmaconsortium.org)
+
 ### BIAS-2015
 
 Bitscopic's open classifier that applies 19 ACMG/AMP criteria automatically to a VCF annotated by VEP, from its own tables (gene constraint, domains, literature mining, ClinVar summaries) and the annotations' frequencies and missense scores. Each criterion it meets comes with a strength and a reason. Here it is a baseline for the rules on the Evidence Repository variants, run with and without its ClinVar-based criteria, since the panels' answers are in ClinVar. AGPL, for non-commercial academic use. [BIAS-2015](https://github.com/bitscopic/BIAS-2015)
@@ -427,15 +444,27 @@ Text inside the data that tries to give the model instructions, such as a notebo
 
 Tests that run against the real model on cases with known answers, scoring the output. Slow and billed, so they run by hand, not in CI.
 
+### Bedrock Guardrails
+
+A Bedrock feature that screens a model's inputs and outputs against set policies (harmful content, prompt attacks, topics to refuse). Here one guardrail checks every `/api/agent` call, and an alarm fires when it steps in often. [Guardrails for Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html)
+
+### LangGraph
+
+A library for running a model workflow as a graph of steps that can pause and resume, saving its state as checkpoints. Here the literature curation steps run as one, pausing for the curator; the rest of the project calls Claude directly. [LangGraph](https://langchain-ai.github.io/langgraph/)
+
+### MCP
+
+Model Context Protocol, an open standard for giving a model tools. Here a local MCP server gives Claude Code the agent's four read-only OMOP tools. [MCP](https://modelcontextprotocol.io)
+
 ## Software and services
 
 ### PostgreSQL and pgvector
 
-PostgreSQL (Postgres) is the open-source relational database holding everything here, version 18. pgvector adds a vector column type and similarity search, for retrieval later. [postgresql.org](https://www.postgresql.org), [pgvector](https://github.com/pgvector/pgvector)
+PostgreSQL (Postgres) is the open-source relational database. Here it is Aurora on AWS (module results and app state) and a Compose container on the laptop (the ETL's staging OMOP and the tests), both version 18. pgvector adds a vector column type and similarity search. [postgresql.org](https://www.postgresql.org), [pgvector](https://github.com/pgvector/pgvector)
 
 ### Docker Compose
 
-Defines and runs multi-container setups from one file, `docker-compose.yml`: here the database, the app, and Hail. [Docker Compose](https://docs.docker.com/compose/)
+Defines and runs multi-container setups from one file, `docker-compose.yml`: here the staging database, the app and its monitor for local runs, and, on request, the Hail and HADES containers. [Docker Compose](https://docs.docker.com/compose/)
 
 ### Alembic
 
@@ -455,8 +484,50 @@ The Python toolchain. [uv](https://docs.astral.sh/uv/) installs Python and the l
 
 ### CI and GitHub Actions
 
-Continuous integration: every pull request runs the checks automatically. Here GitHub Actions runs `lint-test`, ruff and pytest against a Postgres service, and `main` accepts only pull requests that pass it. [GitHub Actions](https://docs.github.com/en/actions)
+Continuous integration: every pull request runs the checks automatically. Here GitHub Actions runs three checks, and `main` accepts only pull requests that pass all of them: `lint-test` (ruff and pytest against a Postgres service), `secrets` (gitleaks), and `terraform` (formatting, validation, tflint, trivy). [GitHub Actions](https://docs.github.com/en/actions)
 
 ### scikit-learn, statsmodels, lifelines
 
 Python libraries for the statistics: [scikit-learn](https://scikit-learn.org) for machine learning models, [statsmodels](https://www.statsmodels.org) for the propensity score regression, [lifelines](https://lifelines.readthedocs.io) for survival analysis.
+
+## AWS
+
+### Terraform
+
+Infrastructure as code: every AWS resource here is written in Terraform files, and `terraform plan` shows what a change would do before `terraform apply` makes it. [Terraform](https://developer.hashicorp.com/terraform)
+
+### S3 Tables and Apache Iceberg
+
+Apache Iceberg is an open table format: a table is data files plus metadata files that any engine can read. S3 Tables is an S3 bucket type that stores Iceberg tables and maintains them. The OMOP tables live here. [S3 Tables](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-tables.html), [Iceberg](https://iceberg.apache.org)
+
+### Glue Data Catalog and Lake Formation
+
+The Glue Data Catalog lists the lake's tables so query engines can find them; Lake Formation grants each role the tables and columns it may read. [Lake Formation](https://docs.aws.amazon.com/lake-formation/latest/dg/what-is-lake-formation.html)
+
+### Redshift Serverless
+
+AWS's data warehouse, without servers to manage, billed per second of compute in RPUs (Redshift Processing Units). Every OMOP reader here queries the lake through it, through the Data API (SQL over HTTPS) or JDBC. [Redshift Serverless](https://docs.aws.amazon.com/redshift/latest/mgmt/serverless-workgroup-namespace.html)
+
+### Aurora Serverless v2
+
+AWS's managed PostgreSQL that scales with load and pauses to zero when idle. It holds the module results and the app's state, never OMOP. [Aurora Serverless v2](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html)
+
+### ECS, Fargate, and ECS Express Mode
+
+ECS (Elastic Container Service) runs containers. Fargate runs each one as a task on AWS-managed hosts, billed only while it runs; the heavy jobs here are Fargate tasks. Express Mode is an ECS setup that also builds a service's load balancer, HTTPS certificate, and URL; the app runs on it. [ECS](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/Welcome.html), [Fargate](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html)
+
+### CodeBuild and ECR
+
+CodeBuild runs a build on a short-lived AWS host, billed per minute; here it builds every container image. ECR (Elastic Container Registry) stores the images. [CodeBuild](https://docs.aws.amazon.com/codebuild/latest/userguide/welcome.html), [ECR](https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html)
+
+### EventBridge Scheduler
+
+Starts a target on a schedule; here, the privacy monitor task every day at 11:00 UTC. [EventBridge Scheduler](https://docs.aws.amazon.com/scheduler/latest/UserGuide/what-is-scheduler.html)
+
+### Systems Manager tunnel
+
+Session Manager, part of AWS Systems Manager, forwards a local port through a running task to a private database, with no port open to the internet. Here the bastion task carries the tunnels to Redshift and Aurora. [Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html)
+
+### CloudWatch, CloudTrail, and AWS Budgets
+
+CloudWatch collects logs and metrics and raises alarms; CloudTrail records every API call in the account; AWS Budgets emails when spending passes a threshold. [CloudWatch](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/WhatIsCloudWatch.html), [CloudTrail](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-user-guide.html), [Budgets](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html)
