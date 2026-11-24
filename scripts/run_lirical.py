@@ -18,14 +18,17 @@ some carriers, to try it), each to studies/lirical-<id>/part-<k>/input/people.js
 as tasks, all at once. Downloads each slice's results.zip, lirical.log, and SHA256SUMS (the data
 in the image) into data/genomics/lirical/<id>/part-<k>/, and writes run.json there.
 Waits twice the expected time (about 30 s a person, 4 at a time); if a task is still running
-then, it downloads what is there and names the parts still running, whose output reaches S3 when
-they finish.
+then, it downloads what is there and names the parts still running; summarize fetches their
+output from S3 once they stop.
 
 Then, as summarize does: reads each person's disease ranking back as panel gene scores
 (curation/lirical.py), and checks them against the panel's answer key, as run_exomiser.py does
 for Exomiser's phenotype score: how often a pathogenic carrier's planted gene ranks first among
 the genes the person has a panel variant in, and per gene the AUC for picking out the pathogenic
 carriers among everyone with a panel variant there. Adds both to run.json.
+
+summarize: downloads any part's output not yet on the laptop, then scores the run; stops if a
+part has no results yet.
 
 Needs AWS credentials (aws sso login).
 """
@@ -44,7 +47,7 @@ import boto3
 import numpy as np
 import polars as pl
 from botocore.config import Config
-from botocore.exceptions import WaiterError
+from botocore.exceptions import ClientError, WaiterError
 
 from ehr_rwe_eln.curation.lirical import (
     check_planted,
@@ -60,6 +63,7 @@ OUT = STUDY / "lirical"
 # The HPO release subject_hpo.tsv uses (scripts/match_phenotypes.py).
 HPO = ROOT / "data" / "reference" / "hpo" / "2026-09-01"
 IMAGE_FILES = ["lirical.Dockerfile", "lirical_task.py"]
+OUTPUTS = ("results.zip", "lirical.log", "SHA256SUMS")
 # The trial took about 30 s a person, 4 at a time (LIRICAL_WORKERS in lirical.tf).
 SECONDS_PER_PERSON = 30
 WORKERS = 4
@@ -149,7 +153,10 @@ def wait_tasks(
             tasks=tasks,
             WaiterConfig={"Delay": 30, "MaxAttempts": math.ceil(seconds / 30)},
         )
-    except WaiterError:
+    except WaiterError as e:
+        # Only running out of attempts is a timeout; throttling or expired credentials are not.
+        if e.kwargs.get("reason") != "Max attempts exceeded":
+            raise
         print(f"stopped waiting after {seconds}s; some tasks still run", flush=True)
     out = {}
     for t in ecs.describe_tasks(cluster=app["cluster"], tasks=tasks)["tasks"]:
@@ -162,6 +169,20 @@ def wait_tasks(
             container.get("reason") or t.get("stoppedReason"),
         )
     return out
+
+
+def download(s3, bucket: str, out: Path, k: int) -> None:
+    """Downloads part k's outputs that are not yet in out/part-<k>/."""
+    part = out / f"part-{k}"
+    part.mkdir(parents=True, exist_ok=True)
+    for name in OUTPUTS:
+        if (part / name).exists():
+            continue
+        key = f"studies/lirical-{out.name}/part-{k}/output/{name}"
+        try:
+            s3.download_file(bucket, key, str(part / name))
+        except ClientError:
+            print(f"part {k}: no {name} yet")
 
 
 def people() -> list[dict]:
@@ -235,6 +256,15 @@ def main() -> None:
     if args.command == "summarize":
         out = OUT / args.study
         run = json.loads((out / "run.json").read_text())
+        s3 = boto3.client("s3")
+        bucket = terraform_outputs("app")["gwas_bucket"]
+        for k in range(run["tasks"]):
+            download(s3, bucket, out, k)
+        missing = [
+            k for k in range(run["tasks"]) if not (out / f"part-{k}" / "results.zip").exists()
+        ]
+        if missing:
+            raise SystemExit(f"parts {missing} have no results yet; run summarize again later")
         keep = ("study", "image", "tasks", "seconds", "people")
         summarize(out, {k: v for k, v in run.items() if k in keep})
         return
@@ -273,16 +303,12 @@ def main() -> None:
 
     out = OUT / study
     failed = []
-    for k, prefix in parts.items():
-        part = out / f"part-{k}"
-        part.mkdir(parents=True)
-        for name in ("results.zip", "lirical.log", "SHA256SUMS"):
-            try:
-                s3.download_file(app["gwas_bucket"], f"{prefix}/output/{name}", str(part / name))
-            except s3.exceptions.ClientError:
-                print(f"part {k}: no {name}")
+    for k in parts:
+        download(s3, app["gwas_bucket"], out, k)
         code, reason = stopped[task_of[k]]
-        if code != 0:
+        if code is None and reason and reason.startswith("still"):
+            failed.append(f"part {k}: {reason}; run summarize --study {study} once it stops")
+        elif code != 0:
             failed.append(f"part {k}: exit {code}, {reason or 'see lirical.log'}")
     run = {
         "study": study,

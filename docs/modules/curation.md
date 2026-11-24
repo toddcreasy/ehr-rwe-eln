@@ -66,7 +66,7 @@ uv run python scripts/run_exomiser.py fetch            # Exomiser's data release
 uv run python scripts/run_exomiser.py run --tasks 6    # Exomiser on all 5,000 subjects on Fargate, 75 min, about $2
 uv run python scripts/run_exomiser.py summarize --study <id>   # its checks again, from the downloaded results
 uv run python scripts/run_lirical.py run --tasks 6     # LIRICAL on all 5,000 subjects on Fargate, 113 min, about $2.60
-uv run python scripts/run_lirical.py summarize --study <id>    # its checks again, from the downloaded results
+uv run python scripts/run_lirical.py summarize --study <id>    # its checks again; fetches any part still in S3
 uv run python scripts/run_bias.py fetch                # VEP 115 cache, FASTA, and BIAS-2015 tables into S3, once
 uv run python scripts/run_bias.py run                  # BIAS-2015 three ways on the 883 erepo variants, 16 min
 uv run python scripts/run_bias.py summarize --study <id>       # its scores again, no task
