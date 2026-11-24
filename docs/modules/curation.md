@@ -4,7 +4,7 @@ Package: `ehr_rwe_eln.curation`. Back to the [README](../../README.md). Terms ar
 
 Classifies variants the way a clinical lab starts to: it applies the [ACMG/AMP](https://doi.org/10.1038/gim.2015.30) criteria that data alone can decide, with each gene's thresholds from its [ClinGen](https://clinicalgenome.org) expert panel, adds them up on the Bayesian points scale, and says what it could not decide and why. It curates the [clinical panel](genomics.md#clinical-panel) planted in the synthetic study, and is scored against ClinVar's expert-panel classifications, which it never reads.
 
-It also matches each study subject's conditions against the panel genes with the [Human Phenotype Ontology](#phenotype-matching) (HPO), and checks whether that finds the planted carriers, both with its own score and with [Exomiser](#exomiser).
+It also matches each study subject's conditions against the panel genes with the [Human Phenotype Ontology](#phenotype-matching) (HPO), and checks whether that finds the planted carriers, with its own score, with [Exomiser](#exomiser), and with [LIRICAL](#lirical).
 
 ## Who decides what
 
@@ -14,6 +14,7 @@ It also matches each study subject's conditions against the panel genes with the
 | Claude (`literature.py`) | Nothing. It proposes PS3, BS3, PS4, or PP1 from passages that name the variant; code rejects any claim whose PMID was not sent or whose quote is not in the passage | `curation.proposal` | No |
 | HPO phenotype (`phenotype.py`) | Nothing. Where the variant's carriers fall on a phenotype score for the gene's group | `curation.phenotype` | No: context, not PP4 |
 | Exomiser (`exomiser.py`) | Nothing. Where Exomiser's phenotype score ranks the variant's gene for each carrier | `curation.exomiser` | No: context, not PP4 |
+| LIRICAL (`lirical.py`) | Nothing. A second phenotype ranking, scored in the eval only | `data/genomics/lirical/<run>/run.json` | No |
 | The curator (`/curation/`) | The class. Accepts the verified proposals they agree with, sees the rescored points, records a class with their name and the time; a class other than the score needs a note | `curation.decision`, added to and never changed | Yes, and only a decision is final |
 
 The rules' points and class stand until a curator decides. Nothing Claude writes reaches a class without a person accepting it.
@@ -64,6 +65,8 @@ uv run python scripts/match_phenotypes.py              # HPO phenotype scores an
 uv run python scripts/run_exomiser.py fetch            # Exomiser's data release into S3, once, 38 min
 uv run python scripts/run_exomiser.py run --tasks 6    # Exomiser on all 5,000 subjects on Fargate, 75 min, about $2
 uv run python scripts/run_exomiser.py summarize --study <id>   # its checks again, from the downloaded results
+uv run python scripts/run_lirical.py run --tasks 6     # LIRICAL on all 5,000 subjects on Fargate, 113 min, about $2.60
+uv run python scripts/run_lirical.py summarize --study <id>    # its checks again, from the downloaded results
 uv run python scripts/run_bias.py fetch                # VEP 115 cache, FASTA, and BIAS-2015 tables into S3, once
 uv run python scripts/run_bias.py run                  # BIAS-2015 three ways on the 883 erepo variants, 16 min
 uv run python scripts/run_bias.py summarize --study <id>       # its scores again, no task
@@ -170,6 +173,32 @@ hiPhive is better on MSH2 and no better than chance on LDLR, the gene with most 
 
 **Context for the curator, not evidence.** `summarize` stores in `curation.exomiser`, for each panel variant, where the phenotype score ranks the variant's gene for each carrier (carriers from `panel.vcf.gz`, not the answer key), how many genes each carrier has, and the gene's AUC above, with no subject IDs. `/curation/` shows it under the HPO match: how many carriers have the gene first, the median rank, and the AUC, so a curator sees how little to read into it. Only the phenotype score: the variant score includes ClinVar, which would show the curator ClinVar's answer under another name. Not scored as PP4, for the same reasons as the HPO score.
 
+## LIRICAL
+
+`lirical.py`, `scripts/run_lirical.py`, `docker/lirical_task.py`. [LIRICAL](https://github.com/TheJacksonLaboratory/LIRICAL) 2.4.2 (The Jackson Laboratory) ranks diseases by a likelihood ratio: how much more likely a person's HPO terms are under each disease than by chance ([Robinson et al., AJHG 2020](https://doi.org/10.1016/j.ajhg.2020.06.021)). It runs on AWS with its data in the image ([infra](../../infra/terraform/README.md#lirical-on-aws)).
+
+**License.** LIRICAL is for non-commercial use only, may not be modified, and is not for diagnosis. It runs unmodified from the release zip, in an image that stays in our private ECR; its results here are a research comparison, never a clinical finding.
+
+1. **Phenotype only.** Each person's sex and HPO terms from [phenotype matching](#phenotype-matching), no VCF. With a VCF, LIRICAL reads ClinVar through Exomiser's data, which already knows which panel variants are pathogenic, the same leak as Exomiser's variant score. LIRICAL has no batch mode, so each person is one Java run, 4 at a time per task, about 32 seconds each.
+2. **Diseases to genes.** Phenotype only, LIRICAL ranks all 8,525 OMIM diseases it knows and names no gene. Each disease's genes come from the `disease_id` column of HPO's `genes_to_phenotype.txt`, release 2026-09-01, the release the terms come from. HPO takes that link from NCBI's `mim2gene_medgen`, the file LIRICAL itself reads; NCBI keeps no archive of it, and it changed between the image build and this run.
+3. **Score.** A gene's score for a person is the rank of its best disease in the person's list. Not the likelihood ratio itself: it is a sum over the person's terms, and each term a disease does not explain lowers it, so a person with more terms scores lower for every disease. Carriers have more terms (median 12, against 10), and on the raw ratio BRCA2's AUC was 0.12, carriers ranked below everyone else. The rank compares across people, and within one person it orders the genes the same way.
+4. **Check against the answer key**, as for Exomiser's phenotype score: how often a carrier's planted gene ranks first among the genes the person has a panel variant in, and per gene the AUC for picking out the pathogenic carriers among everyone with a panel variant there.
+
+2026-11-24, 5,000 subjects in 6 tasks, none failed. The planted gene ranks first for 15 of 123 carriers (12%); picking one of the person's genes at random would put about 23 first. BRCA1 or APC ranks first for 4,455 of the 5,000 people, and LDLR, the gene of 74 of the 123 carriers, for 160.
+
+| Gene | Pathogenic carriers | LIRICAL AUC (95% interval) | Exomiser phenotype AUC | Resnik AUC |
+|---|---|---|---|---|
+| MSH2 | 13 | 0.96 (0.94 to 0.98) | 0.97 | 0.88 |
+| BRCA2 | 10 | 0.66 (0.43 to 0.87) | 0.74 | 0.73 |
+| APC | 8 | 0.55 (0.34 to 0.79) | 0.53 | 0.50 |
+| LDLR | 74 | 0.53 (0.46 to 0.60) | 0.55 | 0.69 |
+| MLH1 | 8 | 0.53 (0.36 to 0.73) | 0.37 | 0.39 |
+| BRCA1 | 11 | 0.51 (0.31 to 0.70) | 0.65 | 0.72 |
+
+The Exomiser and Resnik columns are from the [table above](#exomiser). LIRICAL's people are everyone with a panel variant in the gene, from the genotypes; Exomiser scored fewer for MLH1 (2,424 of 4,256) and APC (4,946 of 4,991), and on Exomiser's people LIRICAL's AUCs are the same to two decimals.
+
+LIRICAL agrees with Exomiser on MSH2 and, like it, does no better than chance on LDLR, where our study-standardized score reaches 0.69. Both tools compare a person's terms with what is known of each disease, and the common cardiovascular terms that come with hyperlipidemia fit many diseases; standardizing per gene over the study, as our score does, removes what everyone has. Of the three, LIRICAL is the least useful here: it ranks one gene first less often than chance, because a few cancer syndromes with many annotations (BRCA1's and APC's) fit almost anyone's long list of conditions. Not shown on `/curation/`.
+
 ## BIAS-2015 baseline
 
 `bias.py`, `scripts/run_bias.py`, `docker/bias_task.py`. [BIAS-2015](https://github.com/bitscopic/BIAS-2015) v3.0.0 (Bitscopic) applies 19 ACMG/AMP criteria automatically from a VEP-annotated VCF and its own data tables ([glossary](../GLOSSARY.md#bias-2015)). It is the open baseline to compare the rules with: same 883 Evidence Repository variants, same expert panel classes and criteria as the answer key, same points scale. It runs on AWS ([infra](../../infra/terraform/README.md#bias-on-aws)): Ensembl VEP 115 with the GRCh38 cache, gnomAD v4.1 exomes and the same dated ClinVar VCF as the rules as custom annotations, and REVEL and AlphaMissense as plugins; then BIAS's tables of 2026-03-01.
@@ -220,6 +249,7 @@ Two differences in inputs. The rules used Ensembl 116 through the REST API and g
 - PVS1 from RNA evidence for variants outside the canonical sites (the panels' "PVS1 (RNA)"), and initiation codon (start-loss) variants, are not applied: they need lab data the rules do not have.
 - Thresholds are read on gnomAD v4 joined. ENIGMA's are defined on gnomAD v2.1 and v3.1 non-cancer subsets, and PM2 for BRCA1 and BRCA2 also requires read depth of at least 25, not checked. Founder variants, which InSiGHT excludes from BA1 and BS1, are not excepted.
 - Phenotype matching is checked only against carriers planted by condition, so it can show that a score finds the right group of genes, not that it tells genes apart. Synthea records diseases, rarely the findings (polyp counts, age at diagnosis, family history) that separate Lynch syndrome from FAP or BRCA1 from BRCA2. The condition mapping is hand-checked for 17 concepts only; the rest rely on name matches and OMOP ancestors.
+- LIRICAL ran phenotype only and ranks diseases; its genes come from HPO's disease links, not from the `mim2gene_medgen` in its image, which NCBI does not archive.
 - Exomiser ran on panel variants only, so each person has 3 to 8 genes to rank, not a whole exome, and its ranks are not comparable with published exome or genome benchmarks.
 - The curator's name is what they type: the app has no sign-in, so a decision records who said they made it, not a verified identity.
 - This tool includes data from the gnomAD v4 release. For research and demonstration; not for clinical use.
