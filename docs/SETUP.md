@@ -295,7 +295,7 @@ Decided 2026-11-19, reversing the local-first move below: the app runs on AWS (t
 
 Goal: anyone can clone the repo, install it, and run every module on their own machine without an AWS account. It came before module 4 and changed the platform the remaining modules build on.
 
-Decided 2026-10-12: PostgreSQL with pgvector replaces both DuckDB and Aurora (17 at first, to match Aurora; 18 since 2026-10-13). The app will have concurrent writers and large vector search (RAG), which DuckDB's single-writer file does not fit. It runs locally from `docker-compose.yml`, and tests run against that database.
+Decided 2026-10-12: PostgreSQL with pgvector replaces both DuckDB and Aurora (17 at first, to match Aurora; 18 later the same day). The app will have concurrent writers and large vector search (RAG), which DuckDB's single-writer file does not fit. It runs locally from `docker-compose.yml`, and tests run against that database.
 
 - [x] `docker-compose.yml` with the database service
 - [x] Port module 1 from DuckDB to Postgres. The 1,325,353-row reconciliation, the counts in `docs/etl_synthea_comparison.md`, and both cohorts reproduce exactly
