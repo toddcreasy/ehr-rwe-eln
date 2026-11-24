@@ -7,10 +7,11 @@ Reads free-text electronic lab notebook (ELN) entries, extracts the samples and 
 ## Contents
 
 1. [Background: what ELN platforms do](#background-what-eln-platforms-do)
-2. [What it does](#what-it-does)
-3. [The test entries](#the-test-entries)
-4. [Run it](#run-it)
-5. [Results](#results)
+2. [Which notebooks this covers](#which-notebooks-this-covers)
+3. [What it does](#what-it-does)
+4. [The test entries](#the-test-entries)
+5. [Run it](#run-it)
+6. [Results](#results)
 
 ## Background: what ELN platforms do
 
@@ -38,6 +39,16 @@ Outside the ELN category, a few systems do link lab results to patients, each by
 Getting lab and specimen data into OMOP is itself an open problem. [Michael et al. (2020)](https://pubmed.ncbi.nlm.nih.gov/32477663/) found no earlier study that had populated the OMOP `specimen` table from a biobank, and mapped only 26% of their own records. In eMERGE, laboratory data was the hardest part of moving EHR-linked biobanks to OMOP ([Hripcsak et al. 2019](https://doi.org/10.1016/j.jbi.2019.103253)). As of November 2026, searches of PubMed, arXiv, and GitHub turned up no project that extracts free-text notebook entries with a language model and writes them into OMOP.
 
 Joining notebook results to the clinical record is the gap this module works in. Take a translational question such as "do patients with high baseline IL-6 respond worse to this drug?" Answering it means joining bench biomarker results to clinical outcomes, and today that join is often done by hand: export the notebooks, clean them in a spreadsheet, map sample IDs to subjects, and send a file to the real world evidence team. Again for every question.
+
+## Which notebooks this covers
+
+Most ELN entries never involve a patient. They record work on cell lines, animals, and compounds, and there is nobody to link them to. This module leaves routine R&D (research and development) notebooks alone.
+
+It models the narrower case: results on human specimens, as a biobank or a translational medicine group records them. Those samples arrive coded. A study subject ID such as `HTN-0007` stands in for the person, the donor consented to research use, and an ethics board approved the study. The key from code to person sits with the biobank or an honest broker, never in the notebook. The repo keeps that split. Entries name only subject codes, and the code-to-person map is held apart, in `data/registry/eln_subjects.csv` and the `eln.subject` table (`eln/synthetic.py: subject_registry`), the way genomics keeps its registry outside the study folder.
+
+Clinical trial lab results take another route: central labs send them into CDISC (Clinical Data Interchange Standards Consortium) lab datasets, not through an ELN. That is out of scope here.
+
+All of it is synthetic: generated entries on Synthea patients.
 
 ## What it does
 
@@ -68,7 +79,7 @@ uv run python scripts/export_eln_fhir.py
 uv run pytest evals                       # hard and adversarial sets, billed
 ```
 
-`generate_eln.py` picks its subjects from OMOP: oMOP is read from the lake through Redshift; `OMOP_SOURCE=staging` reads the staging Postgres instead (see [Who reads the lake](cohort.md#who-reads-the-lake)). `write_eln_omop.py` writes to the staging Postgres; republish `specimen`, `measurement`, and `fact_relationship` afterwards.
+`generate_eln.py` picks its subjects from OMOP, which is read from the lake through Redshift; `OMOP_SOURCE=staging` reads the staging Postgres instead (see [Who reads the lake](cohort.md#who-reads-the-lake)). `write_eln_omop.py` writes to the staging Postgres; republish `specimen`, `measurement`, and `fact_relationship` afterwards.
 
 Subject codes (`HTN-0001` and on) are assigned in a random order, so a code says nothing about the person behind it. The page at http://127.0.0.1:8000/eln/ shows each entry beside what was extracted from it.
 
