@@ -84,11 +84,10 @@ resource "aws_iam_role" "app" {
 
 # MODEL is a cross-region inference profile: a call goes to the profile, which routes it to the
 # model in one of its regions, so both the profile and each region's model must be allowed.
-# Every model call must go through the agent's guardrail at its pinned version: a call without
-# it is denied, so a code change can't quietly drop it.
-locals {
-  guardrail_pinned = "${aws_bedrock_guardrail.agent.guardrail_arn}:${aws_bedrock_guardrail_version.agent.version}"
-}
+# Every model call must go through the agent's guardrail at a published version: a call without
+# it, or through the editable DRAFT, is denied, so a code change can't quietly drop it. Any
+# published version, not only the newest, so the running task keeps working while ECS moves it
+# to a new one.
 
 data "aws_iam_policy_document" "app_bedrock" {
   statement {
@@ -98,9 +97,14 @@ data "aws_iam_policy_document" "app_bedrock" {
       [for r in var.model_regions : "arn:aws:bedrock:${r}::foundation-model/${trimprefix(var.model, "us.")}"],
     )
     condition {
-      test     = "StringEquals"
+      test     = "StringLike"
       variable = "bedrock:GuardrailIdentifier"
-      values   = [local.guardrail_pinned]
+      values   = ["${aws_bedrock_guardrail.agent.guardrail_arn}:*"]
+    }
+    condition {
+      test     = "StringNotEquals"
+      variable = "bedrock:GuardrailIdentifier"
+      values   = ["${aws_bedrock_guardrail.agent.guardrail_arn}:DRAFT"]
     }
   }
   # Checking a prompt before the model (guardrail_check), and the guardrail on each model call.

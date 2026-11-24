@@ -64,4 +64,21 @@ resource "aws_bedrock_guardrail" "agent" {
 resource "aws_bedrock_guardrail_version" "agent" {
   guardrail_arn = aws_bedrock_guardrail.agent.guardrail_arn
   description   = "Initial settings, 2026-11-21"
+
+  # Any change to the guardrail publishes a new version and the task moves to it. Old versions
+  # stay in AWS (skip_destroy), so a task still running the old one keeps working until ECS
+  # replaces it.
+  skip_destroy = true
+
+  lifecycle {
+    create_before_destroy = true
+    replace_triggered_by  = [terraform_data.guardrail_updated]
+  }
+}
+
+# The guardrail's last update time, kept apart from the guardrail. A targeted apply of the
+# guardrail alone (the DRAFT check in the runbook) leaves this behind, so the next full apply
+# still sees the change and publishes a version.
+resource "terraform_data" "guardrail_updated" {
+  input = aws_bedrock_guardrail.agent.updated_at
 }

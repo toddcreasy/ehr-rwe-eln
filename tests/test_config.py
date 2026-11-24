@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from ehr_rwe_eln.agents.config import AgentSettings
 from ehr_rwe_eln.config import Settings
 
@@ -16,6 +19,11 @@ def test_blank_values_copied_from_env_example_fall_back_to_defaults(tmp_path, mo
     assert settings.log_level == "INFO"
     assert settings.frontend_dir == "frontend/out"
     assert AgentSettings().model == "us.anthropic.claude-opus-4-6-v1"
+
+
+def test_guardrail_id_without_a_version_is_rejected():
+    with pytest.raises(ValidationError, match="GUARDRAIL_VERSION"):
+        AgentSettings(guardrail_id="abc123", _env_file=None)
 
 
 def test_iam_auth_signs_in_with_a_token_over_tls(monkeypatch):
