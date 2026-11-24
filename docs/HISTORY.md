@@ -2,7 +2,7 @@
 
 The decisions behind `ehr-rwe-eln` (electronic health records, real world evidence, electronic lab notebooks), in the order they were made: what was chosen, what it was chosen over, and what later changed and why. Back to the [README](../README.md). The step-by-step record (checklists, commands, numbers) is in [SETUP.md](SETUP.md); this page is the reasoning. Terms are defined in the [glossary](GLOSSARY.md).
 
-The project went from AWS (Amazon Web Services) to the laptop and back in seven weeks. Neither move undid the work in between: the modules built locally run on AWS today, mostly unchanged, because the second move kept the code paths and swapped what sits under them.
+The project went from AWS (Amazon Web Services) to the laptop and back in seven weeks. The move back did not undo the work done locally: the modules built locally run on AWS today, mostly unchanged, because the second move kept the code paths and swapped what sits under them.
 
 ## Contents
 
@@ -19,7 +19,7 @@ The project went from AWS (Amazon Web Services) to the laptop and back in seven 
 
 ## October 7: a platform from a template, on AWS
 
-The project started from the `aws/BUILD.md` template in [project-template](https://github.com/toddcreasy/project-template/tree/main/aws): ten phases, each with a checklist and a STOP gate that had to pass before the next began. Infrastructure first, domain work after.
+The project started from the `aws/BUILD.md` template in [project-template](https://github.com/toddcreasy/project-template/tree/main/aws): eleven phases (0 to 10), each with a checklist and a STOP gate that had to pass before the next began. Infrastructure first, domain work after.
 
 | Slot | Chosen | Over | Why |
 |---|---|---|---|
@@ -79,7 +79,7 @@ The deciding fact was OHDSI's own tooling. HADES (Health Analytics Data-to-Evide
 | How OMOP gets there | Build in a staging Postgres, publish, reconcile every column | Writing Iceberg from the ETL | The checked ETL stays as it is; the lake is always a copy of a verified build |
 | Infrastructure as code | Terraform | CDK again | The tool of the maintainer's newer projects (methyl-flow) |
 | Model | Claude Opus 4.6 on Bedrock | Opus 5.5 on the Anthropic API | IAM (Identity and Access Management) auth and one bill; Opus 5.5, 4.8, and 4.7 returned AccessDenied for this account. Every eval reran on 4.6 and matched |
-| Data | Stay with Synthea | MIMIC-IV (Medical Information Mart for Intensive Care, version IV) | The repo's data rule, PhysioNet's limits on sending data to LLM (large language model) APIs, and no outpatient follow-up |
+| Data | Stay with Synthea | Full MIMIC-IV (Medical Information Mart for Intensive Care, version IV); the open demo is allowed | The repo's data rule, PhysioNet's limits on sending data to LLM (large language model) APIs, and no outpatient follow-up |
 | Agent framework | The SDK's tool runner, LangGraph only for literature curation | LangChain throughout | Literature curation is the one flow shaped like a graph, pausing for a curator |
 | Budget | $100 a month | The first build's $50 | Redshift, a lake, and on-demand jobs |
 
@@ -104,7 +104,7 @@ Two platform changes came out of this step. **x86 everywhere** (2026-11-22): REG
 
 ## November 23 to 24: cost fixes and the last comparison
 
-- **Redshift's cap: 60, 120, then 150 RPU-hours (Redshift Processing Unit hours) a month.** November's 60 ran out during the synthesizer work and stopped every lake reader, including the daily privacy monitor.
+- **Redshift's cap: 60, 120 (2026-11-22), then 150 (2026-11-23) RPU-hours (Redshift Processing Unit hours) a month.** November's 60 ran out during the synthesizer work and stopped every lake reader, including the daily privacy monitor.
 - **Ending Redshift sessions.** A Data API session is billed until it ends, and each one held 8 RPUs for its hour of keep-alive. `RedshiftSession` now ends its session when its block ends, and `run_tte.py` reads every table first so the session closes before the fits and the bootstrap.
 - **LIRICAL (Likelihood Ratio Interpretation of Clinical Abnormalities)**, the last comparison (2026-11-23 to 24). Run phenotype only, since with a VCF (Variant Call Format) file it reads ClinVar the same way Exomiser does. Its raw likelihood ratio falls with every extra HPO term, and carriers have more terms, so it ranked carriers below everyone else (AUC, area under the curve, 0.12 on BRCA2); each gene is scored by its disease's rank in the person's own list instead. It agrees with Exomiser on MSH2 and is the weakest of the three phenotype rankings here. Its license is non-commercial, so it runs unmodified in a private image and stays out of `/curation/`.
 
@@ -138,7 +138,7 @@ Two platform changes came out of this step. **x86 everywhere** (2026-11-22): REG
 | Athena for HADES | Warehouse SQL | DatabaseConnector does not support it |
 | MIMIC-IV, full | Real-world data | The data rule, PhysioNet's LLM limits, no outpatient follow-up |
 | Aetion | Trial emulation | Commercial, no public access |
-| SAIGE (Scalable and Accurate Implementation of Generalized mixed model) as the main GWAS | Genomics | REGENIE is the industry standard; SAIGE pays off for rare binary outcomes (still optional) |
+| SAIGE (Scalable and Accurate Implementation of Generalized mixed model) as the main GWAS | Genomics | REGENIE is the common choice in pharma; SAIGE pays off for rare binary outcomes (still optional) |
 | LD (linkage disequilibrium) score regression | Genomics | Needs genome-wide SNPs (single nucleotide polymorphisms) and a reference panel; 9 Mb (megabases) of simulated genome is too small |
 | ClinGen VCI (Variant Curation Interface), Franklin, VarSome | Variant curation | A curation web app, and two commercial tools whose terms block bulk use |
 | InterVar | A curation baseline | Needs ANNOVAR's non-commercial terms; BIAS-2015 is free and benchmarked on the same Evidence Repository |
