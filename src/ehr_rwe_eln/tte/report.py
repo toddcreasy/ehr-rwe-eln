@@ -63,7 +63,27 @@ class Report:
 
 def build_report(con, protocol: Protocol, cdm: str = "cdm") -> Report:
     """con is a psycopg connection or a lake.RedshiftSession; cdm is the OMOP tables' prefix."""
-    attrition, table = build_analysis_table(con, protocol, cdm)
+    return report_from(protocol, *read_trial(con, protocol, cdm))
+
+
+def read_trial(con, protocol: Protocol, cdm: str = "cdm"):
+    """Every OMOP read a report needs: the analysis table and each negative control's, so a
+    caller can end the Redshift session (billed while open) before the fits and the bootstrap.
+    The propensity fit runs here too, so a protocol it cannot fit reads no negative controls."""
+    attrition, table = _read(con, protocol, cdm)
+    try:
+        fit_propensity(table, protocol)
+    except NotEstimable:
+        return attrition, table, []
+    controls = []
+    for outcome in protocol.negative_controls:
+        control = _control(protocol, outcome)
+        controls.append((control, _read(con, control, cdm)[1]))
+    return attrition, table, controls
+
+
+def report_from(protocol: Protocol, attrition, table: pd.DataFrame, controls) -> Report:
+    """The report from read_trial's tables; reads nothing."""
     strategies = protocol.strategies
     arms = [
         Arm(
@@ -75,16 +95,13 @@ def build_report(con, protocol: Protocol, cdm: str = "cdm") -> Report:
         for arm, strategy in ((1, strategies.treatment), (0, strategies.comparator))
     ]
     report = Report(protocol, attrition, arms)
-    table = add_covariates(con, protocol, table, cdm)
     try:
         report.propensity = fit_propensity(table, protocol)
     except NotEstimable as exc:
         report.not_estimable = str(exc)
         return report
     report.survival = analyze(table, protocol)
-    report.negative_controls = [
-        negative_control(con, protocol, outcome, cdm) for outcome in protocol.negative_controls
-    ]
+    report.negative_controls = [_control_result(c, t) for c, t in controls]
     return report
 
 
@@ -93,15 +110,26 @@ def negative_control(
 ) -> NegativeControl:
     """The protocol rerun with this outcome: its own eligibility (no prior outcome), propensity
     weights, and weighted Cox model. No bootstrap; the robust interval is enough to flag it."""
-    control = protocol.model_copy(
+    control = _control(protocol, outcome)
+    return _control_result(control, _read(con, control, cdm)[1])
+
+
+def _read(con, protocol: Protocol, cdm: str):
+    attrition, table = build_analysis_table(con, protocol, cdm)
+    return attrition, add_covariates(con, protocol, table, cdm)
+
+
+def _control(protocol: Protocol, outcome: Outcome) -> Protocol:
+    return protocol.model_copy(
         update={
             "outcome": outcome,
             "analysis": protocol.analysis.model_copy(update={"bootstrap_replicates": 0}),
         }
     )
-    _, table = build_analysis_table(con, control, cdm)
-    table = add_covariates(con, control, table, cdm)
-    result = NegativeControl(outcome.name, len(table), int(table.event.sum()))
+
+
+def _control_result(control: Protocol, table: pd.DataFrame) -> NegativeControl:
+    result = NegativeControl(control.outcome.name, len(table), int(table.event.sum()))
     try:
         survival = analyze(table, control)
     except NotEstimable as exc:

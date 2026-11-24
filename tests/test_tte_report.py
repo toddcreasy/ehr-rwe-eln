@@ -34,6 +34,7 @@ def test_the_report_stops_at_not_estimable(con, monkeypatch):  # noqa: F811
     assert result.attrition[-1] == ("no outcome on or before time zero", 4)
     assert [(a.name, a.persons, a.events) for a in result.arms] == [("a", 2, 1), ("b", 2, 0)]
     assert result.survival is None and result.negative_controls == []
+    assert report.read_trial(con, protocol)[2] == []
 
 
 @pytest.mark.parametrize(
