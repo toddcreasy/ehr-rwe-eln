@@ -33,7 +33,7 @@ Do not re-ask. Rationale in `docs/HISTORY.md`.
 | Public demo | No sign-in. `DAILY_TOKEN_LIMIT` 150,000 a day and 10 calls an hour per address on `/api/agent` (`api/limits.py`); `PUBLIC_DEMO=true` turns off curator decisions; one task; a daily token alarm. See `infra/terraform/README.md`, Public demo limits |
 | `MODEL` | `us.anthropic.claude-opus-4-6-v1` on Bedrock, the newest Claude this account can call (Opus 5.5, 4.8, 4.7 returned AccessDenied on 2026-11-19). Revisit when Opus 5.5 access opens |
 | Python | 3.14, pinned in `.python-version` |
-| Databases | OMOP only in the lake (Iceberg in S3 Tables, read through Redshift Serverless). App state, module schemas, and pgvector in Aurora Serverless v2 PostgreSQL 18.6, which never holds OMOP. Locally (pytest, the ETL's staging OMOP, Compose): PostgreSQL 18 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg18-trixie` |
+| Databases | OMOP only in the lake (Iceberg in S3 Tables, read through Redshift Serverless). App state, module schemas, and pgvector in Aurora Serverless v2 PostgreSQL 18.6, which never holds OMOP. Locally (pytest, the ETL's staging OMOP, Compose): PostgreSQL 18 + pgvector 0.8.7, image `pgvector/pgvector:0.8.7-pg18-trixie`, defined in `docker-compose.yml` |
 | Data database | One: `ehr_rwe_eln`, 23,421 Synthea patients, every module. A second population is a second CDM schema, never a second database. `ehr_rwe_eln_test` is for pytest only |
 | App name | RWE Workbench, for the web app only; the repo and the Python package stay `ehr-rwe-eln` |
 
@@ -67,7 +67,7 @@ All AWS resources in Terraform. Values that are settled are in the table above; 
 | Slot | Tool | Why |
 |---|---|---|
 | Synthetic EHR source | Synthea (CSV output) | Open standard synthetic patient generator. |
-| Common data model | OMOP CDM v5.4 | OHDSI standard; OHDSI's DatabaseConnector supports Redshift. |
+| Common data model | OMOP CDM v5.4 | The OHDSI standard every module reads. |
 | Interoperability format | FHIR R4 via `fhir.resources` | Language-level library; no FHIR server needed at this scale. |
 | Causal inference and survival | scikit-learn, statsmodels, lifelines | Language-level libraries. |
 | ELN source | Synthetic entries; eLabFTW API optional | Open-source ELN with a REST API. |
@@ -87,7 +87,7 @@ All AWS resources in Terraform. Values that are settled are in the table above; 
 | Code host + CI runner | GitHub + GitHub Actions | `lint-test` runs ruff and pytest against a Postgres service container. `secrets` runs gitleaks (pinned, checksum verified) over every commit and file for keys, tokens, passwords, usernames, and email addresses, with the rules in `.gitleaks.toml`; the same scan runs in pre-commit. `terraform` checks formatting, validates each stack, and runs tflint and trivy. All three are required to merge. |
 | Containers | Docker + Docker Compose | Open standard; the whole stack starts with one command. |
 | Heavy jobs | On-demand x86 Fargate tasks (`docker/*.Dockerfile`, `infra/terraform/app/`), images built by CodeBuild, started by `scripts/run_*.py` | Long or memory-hungry runs leave the laptop; billed only while a task runs. x86 because REGENIE ships no ARM build. |
-| OHDSI HADES | R 4.6.1 + Java 21 in `docker/hades.Dockerfile`, run with `scripts/hades.py` | OHDSI's reference tools (ETL-Synthea, DataQualityDashboard, CohortMethod) are R; the repo runs them where R is the standard, against the lake. The Python ETL stays: it is verified against ETL-Synthea and fixes two of its bugs. HADES comes from OHDSI's r-universe, which serves only the latest builds, so no renv lockfile: CRAN is pinned by a dated snapshot, installed versions are recorded in `r/installed-versions.txt`, and the image is the artifact. Redshift over JDBC through the bastion tunnel with a temporary IAM password; no stored Redshift password. |
+| OHDSI HADES | R 4.6.1 + Java 21 in `docker/hades.Dockerfile`, run with `scripts/hades.py` | OHDSI's reference tools (ETL-Synthea, DataQualityDashboard, CohortMethod) are R; the repo runs them where R is the standard, against the lake. A container keeps R, Java, and the JDBC driver identical everywhere. The Python ETL stays: it is verified against ETL-Synthea and fixes two of its bugs. HADES comes from OHDSI's r-universe, which serves only the latest builds, so no renv lockfile: CRAN is pinned by a dated snapshot, installed versions are recorded in `r/installed-versions.txt`, and the image is the artifact. Redshift over JDBC through the bastion tunnel with a temporary IAM password; no stored Redshift password. |
 
 Excluded on purpose (wrong scale for a personal project): Kubernetes, A2A, LiteLLM, dedicated vector databases, WAF-heavy perimeter builds, NAT gateways and interface endpoints (cost).
 
@@ -156,6 +156,8 @@ Standard `src/` layout ([project-template](https://github.com/toddcreasy/project
 - `src/ehr_rwe_eln/` is the only code that ships; one package per module.
 - `tests/` use local services only (the Compose Postgres), nothing off the machine. `evals/` hit a real model: slow, billed, never in plain `uv run pytest`.
 - `scripts/` are one-shot operational scripts, never imported.
+- `migrations/` holds the Alembic versions; `frontend/` the Next.js app, served by FastAPI as a static export; `docs/` the long-form docs the README links to.
+- `.github/workflows/` holds CI; GitHub reads that exact path only.
 - `r/` holds the HADES scripts, run in the `hades` container; `docker/` the Dockerfiles for hades, hail, and the Fargate tasks.
 - `infra/terraform/`: `bootstrap/` (state bucket), `foundation/` (network, lake, Redshift, Aurora, budget), `app/` (ECR, ECS, CodeBuild, Fargate tasks, Guardrail, alarms).
 - `data/` (synthetic data, vocabularies, reference data) and `notes/` (personal planning) are gitignored.

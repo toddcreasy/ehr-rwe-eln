@@ -1,8 +1,8 @@
 """Golden set for the RWE Workbench agent (agents/workbench.py). Calls Claude on Bedrock: about
 45 s and $0.33 (2026-11-24: 15 cases, 47,000 tokens). The tools read the database .env points
-at, which needs omop_stats built (OMOP_SOURCE=staging scripts/build_omop_stats.py --target
-local) and the tte and dq runs loaded. The guardrail runs only if .env sets GUARDRAIL_ID and
-GUARDRAIL_VERSION.
+at, which needs omop_stats built (OMOP_SOURCE=staging uv run python
+scripts/build_omop_stats.py --target local) and the tte and dq runs loaded. The guardrail runs
+only if .env sets GUARDRAIL_ID, and then GUARDRAIL_VERSION must be set too.
 
     uv run pytest evals/test_workbench_agent.py   # plain `uv run pytest` never collects evals
 
