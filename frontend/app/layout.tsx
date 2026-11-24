@@ -25,8 +25,9 @@ export const metadata: Metadata = {
   description: "Real world evidence from one synthetic patient population",
 };
 
-// Runs before first paint: the saved choice, else the system setting.
-const THEME = `try{var t=localStorage.getItem("theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}`;
+// Runs before first paint: the saved choice, else the system setting. Help on the page is on
+// unless the visitor turned it off, and its buttons pulse until the first note is opened.
+const THEME = `try{var t=localStorage.getItem("theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark");if(localStorage.getItem("docs")==="off")document.documentElement.classList.add("docs-off");if(!localStorage.getItem("help-seen"))document.documentElement.classList.add("help-new")}catch(e){}`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

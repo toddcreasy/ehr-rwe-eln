@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Spinner from "../spinner";
+import { BodyHelp, EntriesHelp, EntryHelp, ExtractedHelp, PageHelp, ResultsHelp, SamplesHelp, TilesHelp } from "./help";
 
 type Summary = {
   subjects: number;
@@ -56,10 +57,10 @@ function StatTile({ label, value, note }: { label: string; value: string; note?:
 function EntryDetail({ entry }: { entry: Entry }) {
   const linked = new Map(entry.subjects.map((s) => [s.subject_id, s.linked]));
   return (
-    <article className="flex flex-col gap-4 rounded-lg border-[1.5px] border-grid p-6">
+    <article data-help className="flex flex-col gap-4 rounded-lg border-[1.5px] border-grid p-6">
       <header>
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          {entry.entry_id}: {entry.title}
+          {entry.entry_id}: {entry.title} <EntryHelp entry={entry} />
         </h2>
         <p className={`text-sm ${muted}`}>
           {entry.author}, {entry.created}
@@ -68,63 +69,77 @@ function EntryDetail({ entry }: { entry: Entry }) {
       </header>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="flex flex-col gap-2">
-          <h3 className="font-medium text-zinc-900 dark:text-zinc-100">Entry as written</h3>
+        <section data-help className="flex flex-col gap-2">
+          <h3 className="flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-100">
+            Entry as written <BodyHelp />
+          </h3>
           <pre className="whitespace-pre-wrap rounded bg-zinc-100 p-4 font-mono text-sm dark:bg-zinc-900">{entry.body}</pre>
         </section>
 
-        <section className="flex flex-col gap-4">
-          <h3 className="font-medium text-zinc-900 dark:text-zinc-100">Extracted</h3>
+        <section data-help className="flex flex-col gap-4">
+          <h3 className="flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-100">
+            Extracted <ExtractedHelp entry={entry} />
+          </h3>
           {entry.error && <p className="text-sm">Extraction failed: {entry.error}</p>}
           {!entry.extraction && !entry.error && <p className={`text-sm ${muted}`}>Not extracted yet.</p>}
           {entry.extraction && (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm tabular-nums">
-                  <thead className={`text-left ${muted}`}>
-                    <tr>
-                      <th className={th}>Sample</th>
-                      <th className={th}>Subject</th>
-                      <th className={th}>Specimen</th>
-                      <th className="py-1 font-normal">Collected</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entry.extraction.samples.map((s) => (
-                      <tr key={s.sample_id} className={row}>
-                        <td className="py-1 pr-4">{s.sample_id}</td>
-                        <td className="py-1 pr-4">
-                          {s.subject_id}
-                          <span className={muted}>{linked.get(s.subject_id) ? " (linked)" : " (no OMOP person)"}</span>
-                        </td>
-                        <td className="py-1 pr-4">{s.specimen_type.replaceAll("_", " ")}</td>
-                        <td className="py-1">{s.collection_date ?? <span className={muted}>not stated</span>}</td>
+              <div data-help className="relative">
+                <div className="absolute top-0 right-0">
+                  <SamplesHelp samples={entry.extraction.samples} linked={entry.subjects.filter((s) => s.linked).length} />
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm tabular-nums">
+                    <thead className={`text-left ${muted}`}>
+                      <tr>
+                        <th className={th}>Sample</th>
+                        <th className={th}>Subject</th>
+                        <th className={th}>Specimen</th>
+                        <th className="py-1 font-normal">Collected</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {entry.extraction.samples.map((s) => (
+                        <tr key={s.sample_id} className={row}>
+                          <td className="py-1 pr-4">{s.sample_id}</td>
+                          <td className="py-1 pr-4">
+                            {s.subject_id}
+                            <span className={muted}>{linked.get(s.subject_id) ? " (linked)" : " (no OMOP person)"}</span>
+                          </td>
+                          <td className="py-1 pr-4">{s.specimen_type.replaceAll("_", " ")}</td>
+                          <td className="py-1">{s.collection_date ?? <span className={muted}>not stated</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm tabular-nums">
-                  <thead className={`text-left ${muted}`}>
-                    <tr>
-                      <th className={th}>Sample</th>
-                      <th className={th}>Analyte</th>
-                      <th className={`${th} text-right`}>Value</th>
-                      <th className="py-1 font-normal">Unit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entry.extraction.results.map((r) => (
-                      <tr key={`${r.sample_id} ${r.analyte}`} className={row}>
-                        <td className="py-1 pr-4">{r.sample_id}</td>
-                        <td className="py-1 pr-4">{r.analyte.replaceAll("_", " ")}</td>
-                        <td className="py-1 pr-4 text-right">{r.value}</td>
-                        <td className="py-1">{r.unit}</td>
+              <div data-help className="relative">
+                <div className="absolute top-0 right-0">
+                  <ResultsHelp count={entry.extraction.results.length} />
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm tabular-nums">
+                    <thead className={`text-left ${muted}`}>
+                      <tr>
+                        <th className={th}>Sample</th>
+                        <th className={th}>Analyte</th>
+                        <th className={`${th} text-right`}>Value</th>
+                        <th className="py-1 font-normal">Unit</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {entry.extraction.results.map((r) => (
+                        <tr key={`${r.sample_id} ${r.analyte}`} className={row}>
+                          <td className="py-1 pr-4">{r.sample_id}</td>
+                          <td className="py-1 pr-4">{r.analyte.replaceAll("_", " ")}</td>
+                          <td className="py-1 pr-4 text-right">{r.value}</td>
+                          <td className="py-1">{r.unit}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </>
           )}
@@ -164,8 +179,10 @@ export default function LabNotebook() {
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-12">
-      <div>
-        <h1 className="text-2xl font-semibold">Lab notebook extraction</h1>
+      <div data-help>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold">
+          Lab notebook extraction <PageHelp />
+        </h1>
         <p className={`text-sm ${muted}`}>
           Synthetic ELN entries, and the samples and results Claude extracted from each, checked against a typed model
           before they are written to OMOP and FHIR.
@@ -181,7 +198,10 @@ export default function LabNotebook() {
       {!error && (summary === null || entries === null || loading) && <Spinner />}
 
       {summary && (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div data-help className="relative grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="absolute -top-2.5 -right-2.5 rounded-full bg-card">
+            <TilesHelp summary={summary} />
+          </div>
           <StatTile label="Entries" value={fmt(summary.entries)} note={`${fmt(summary.subjects)} study subjects`} />
           <StatTile
             label="Extracted"
@@ -202,23 +222,28 @@ export default function LabNotebook() {
 
       {entries && entries.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-[18rem_1fr]">
-          <div className="max-h-[70vh] overflow-y-auto rounded-lg border-[1.5px] border-grid">
-            <ul>
-              {entries.map((e) => (
-                <li key={e.entry_id}>
-                  <button
-                    onClick={() => loadEntry(e.entry_id)}
-                    className={`flex w-full flex-col items-start gap-0.5 border-b border-zinc-200 px-3 py-2 text-left text-sm dark:border-zinc-800 ${entry?.entry_id === e.entry_id ? "bg-zinc-100 dark:bg-zinc-900" : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
-                  >
-                    <span className="font-medium">{e.entry_id}</span>
-                    <span className={muted}>{e.title}</span>
-                    <span className="text-xs text-zinc-500">
-                      {e.status === "extracted" ? `${e.samples} samples, ${e.results} results` : e.status}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+          <div data-help className="relative">
+            <div className="absolute -top-2.5 -right-2.5 z-10 rounded-full bg-card">
+              <EntriesHelp entries={entries} />
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto rounded-lg border-[1.5px] border-grid">
+              <ul>
+                {entries.map((e) => (
+                  <li key={e.entry_id}>
+                    <button
+                      onClick={() => loadEntry(e.entry_id)}
+                      className={`flex w-full flex-col items-start gap-0.5 border-b border-zinc-200 px-3 py-2 text-left text-sm dark:border-zinc-800 ${entry?.entry_id === e.entry_id ? "bg-zinc-100 dark:bg-zinc-900" : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+                    >
+                      <span className="font-medium">{e.entry_id}</span>
+                      <span className={muted}>{e.title}</span>
+                      <span className="text-xs text-zinc-500">
+                        {e.status === "extracted" ? `${e.samples} samples, ${e.results} results` : e.status}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
           <div className={`transition-opacity ${loading ? "opacity-50" : ""}`}>{entry && <EntryDetail entry={entry} />}</div>
         </div>

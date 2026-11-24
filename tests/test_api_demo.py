@@ -82,6 +82,7 @@ def test_public_demo_blocks_curator_decisions(monkeypatch):
     response = TestClient(app).post("/api/curation/decisions", json={})
     assert response.status_code == 403
     assert "public demo" in response.json()["detail"]
+    assert TestClient(app).get("/api/curation/decisions/enabled").json() is False
 
 
 def test_without_public_demo_decisions_get_past_the_guard(monkeypatch):
@@ -90,3 +91,4 @@ def test_without_public_demo_decisions_get_past_the_guard(monkeypatch):
 
     # The empty body fails validation (422), which proves the request got past the guard.
     assert TestClient(app).post("/api/curation/decisions", json={}).status_code == 422
+    assert TestClient(app).get("/api/curation/decisions/enabled").json() is True

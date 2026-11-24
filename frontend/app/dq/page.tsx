@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { type CheckResult, STATUSES, STATUS_META, type Status, StatusBadge, statusOf } from "./status";
 import Spinner from "../spinner";
+import { ChartHelp, PageHelp, TableHelp, TilesHelp } from "./help";
 
 type Overview = {
   countTotal: number;
@@ -39,15 +40,18 @@ function CategoryBreakdown({ counts }: { counts: Counts }) {
   const [showTable, setShowTable] = useState(false);
 
   return (
-    <figure className="rounded-lg border-[1.5px] border-grid p-4">
+    <figure data-help className="rounded-lg border-[1.5px] border-grid p-4">
       <div className="flex items-start justify-between gap-4">
         <figcaption>
           <div className="font-medium text-zinc-900 dark:text-zinc-100">Checks by Kahn category</div>
           <div className="text-sm text-zinc-600 dark:text-zinc-400">Share of checks in each category, by status</div>
         </figcaption>
-        <button onClick={() => setShowTable(!showTable)} className="text-sm text-accent underline underline-offset-2 hover:opacity-80">
-          {showTable ? "Show chart" : "Show table"}
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setShowTable(!showTable)} className="text-sm text-accent underline underline-offset-2 hover:opacity-80">
+            {showTable ? "Show chart" : "Show table"}
+          </button>
+          <ChartHelp counts={counts} />
+        </div>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-4 text-sm">
@@ -135,7 +139,7 @@ function CategoryBreakdown({ counts }: { counts: Counts }) {
   );
 }
 
-function ResultsTable({ results }: { results: CheckResult[] }) {
+function ResultsTable({ results, failed }: { results: CheckResult[]; failed: number }) {
   const [status, setStatus] = useState<"problems" | "all" | Status>("problems");
   const [category, setCategory] = useState("all");
   const [table, setTable] = useState("all");
@@ -158,8 +162,10 @@ function ResultsTable({ results }: { results: CheckResult[] }) {
 
   const select = "rounded border border-zinc-300 bg-transparent px-2 py-1 text-sm dark:border-zinc-700";
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="font-medium text-zinc-900 dark:text-zinc-100">Checks</h2>
+    <section data-help className="flex flex-col gap-3">
+      <h2 className="flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-100">
+        Checks <TableHelp failed={failed} />
+      </h2>
       <div className="flex flex-wrap items-center gap-2">
         <select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className={select}>
           <option value="problems">Failed and errors</option>
@@ -276,10 +282,12 @@ export default function DataQuality() {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-12">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Data quality</h1>
+        <div data-help>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold">
+            Data quality <PageHelp />
+          </h1>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            OHDSI DataQualityDashboard v2.9.0 checks on the OMOP CDM.
+            OHDSI (Observational Health Data Sciences and Informatics) DataQualityDashboard v2.9.1 checks on the OMOP (Observational Medical Outcomes Partnership) Common Data Model (CDM).
           </p>
         </div>
         {runs && runs.length > 0 && (
@@ -312,7 +320,10 @@ export default function DataQuality() {
           <div className="text-sm text-zinc-600 dark:text-zinc-400">
             {detail.run.cdm_source_name ?? "Unknown source"}, vocabulary {detail.run.vocabulary_version ?? "unknown"}
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div data-help className="relative grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="absolute -top-2.5 -right-2.5 rounded-full bg-card">
+              <TilesHelp totals={totals} />
+            </div>
             <StatTile
               label="Pass rate"
               value={detail.run.overview.strictPercentPassed === null ? "n/a" : `${detail.run.overview.strictPercentPassed}%`}
@@ -325,7 +336,7 @@ export default function DataQuality() {
             <StatTile label="Not applicable" value={fmt(totals.na)} note="Mostly empty tables" />
           </div>
           <CategoryBreakdown counts={counts} />
-          <ResultsTable results={detail.results} />
+          <ResultsTable results={detail.results} failed={totals.fail} />
         </div>
       )}
     </main>

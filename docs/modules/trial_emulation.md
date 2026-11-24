@@ -26,7 +26,7 @@ follow_up: {max_days: 1825}
 causal_contrast: intention_to_treat
 ```
 
-The full file adds the covariates to adjust for (conditions and the latest measurements before time zero) and four negative control outcomes. There are four protocols: lisinopril against amlodipine and metformin against insulin, each with CKD and with myocardial infarction (MI) as the outcome.
+The full file adds the covariates to adjust for (conditions and the latest measurements before time zero) and its negative control outcomes (12 for the lisinopril protocols, 3 for metformin). There are four protocols: lisinopril against amlodipine and metformin against insulin, each with CKD and with myocardial infarction (MI) as the outcome.
 
 ## The analysis
 
@@ -62,12 +62,12 @@ uv run python scripts/hades.py --local run_trialemulation.R       # no database
 
 | Protocol | Persons (treatment / comparator) | Events | Hazard ratio, weighted (95% CI) |
 |---|---|---|---|
-| Lisinopril vs amlodipine, CKD | 1,214 / 676 | 18 / 8 | 0.97 (0.42 to 2.25) |
-| Lisinopril vs amlodipine, MI | 1,223 / 676 | 10 / 9 | 0.58 (0.23 to 1.44) |
+| Lisinopril vs amlodipine, CKD | 1,214 / 676 | 18 / 8 | 1.00 (0.43 to 2.32) |
+| Lisinopril vs amlodipine, MI | 1,223 / 676 | 10 / 9 | 0.57 (0.23 to 1.40) |
 | Metformin vs insulin, CKD | 219 / 612 | 1 / 102 | Not estimable |
 | Metformin vs insulin, MI | 215 / 579 | 11 / 16 | Not estimable |
 
-For lisinopril against amlodipine, weighting brings every covariate's standardized mean difference (SMD) under 0.1, the usual threshold for balanced, and no one has a propensity score outside 0.05 to 0.95. All four negative controls have intervals that include 1. Both estimates are uncertain; with 26 and 19 events, the intervals are wide.
+For lisinopril against amlodipine, weighting brings every covariate's standardized mean difference (SMD) under 0.1, the usual threshold for balanced, and no one has a propensity score outside 0.05 to 0.95. In each, 11 of the 12 negative controls have intervals that include 1 ; at 95%, about one in 20 should miss by chance. Both estimates are uncertain; with 26 and 19 events, the intervals are wide.
 
 The metformin protocols are not estimable. In [Synthea](https://github.com/synthetichealth/synthea), diabetes treatment follows fixed rules, so the covariates almost decide who gets insulin, and no weighting can make the arms comparable. The module reporting that instead of a number is the bias check doing its job.
 
