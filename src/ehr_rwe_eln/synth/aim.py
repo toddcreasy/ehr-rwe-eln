@@ -160,18 +160,24 @@ def synthesize(table: pd.DataFrame, spec: Spec, release: Release) -> tuple[pd.Da
         spend.append({"mechanism": "exponential and gaussian", "of": f"round {len(spend)}",
                       "pairs": [list(cl)], "rho": epsilon**2 / 8 + 0.5 / sigma**2,
                       "sigma": sigma})  # fmt: skip
-        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (
-            2**30 if sys.platform == "darwin" else 2**20
-        )
-        size = junction_tree.hypothetical_model_size(domain, list(model.cliques))
-        print(f"    round {len(spend) - 1}: {', '.join(cl)}; model {size:.1f} MB,"
-              f" peak memory {peak:.1f} GB", flush=True)  # fmt: skip
+        # Every 10th round: the trial's redraws fit AIM 40 times in one evaluation.
+        if (len(spend) - 1) % 10 == 0:
+            peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (
+                2**30 if sys.platform == "darwin" else 2**20
+            )
+            size = junction_tree.hypothetical_model_size(domain, list(model.cliques))
+            print(f"    round {len(spend) - 1}: {', '.join(cl)}; model {size:.1f} MB,"
+                  f" peak memory {peak:.1f} GB", flush=True)  # fmt: skip
         after = _marginal(model, cl)
         if np.linalg.norm(after - before, 1) <= sigma * math.sqrt(2 / math.pi) * domain.size(cl):
             sigma /= 2
             epsilon *= 2
 
     model = md.estimate(domain, measurements, iters=settings.iters, warm_start=model.potentials)
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (
+        2**30 if sys.platform == "darwin" else 2**20
+    )
+    print(f"    final fit after {len(spend) - 1} rounds: peak memory {peak:.1f} GB", flush=True)
     # mbi samples with numpy's global generator; seeding it makes the release repeatable.
     np.random.seed(spec.seed)
     sampled = model.synthetic_data()

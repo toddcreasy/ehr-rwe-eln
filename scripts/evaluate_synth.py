@@ -13,7 +13,9 @@ subgroup columns also get fidelity within each group (race, sex, age bins), stor
 in the fidelity report. Releases with a holdout also get a privacy report: three attacks, read
 against the same attacks on a plain copy of the training data. Releases of a module 3 trial's
 analysis table also get a trial report: the trial rerun on the release, and on 20 more draws
-of its method and epsilon (a few minutes for the VAE).
+of its method and epsilon (a few minutes for the VAE). For an AIM release each draw is a full
+AIM fit, 20 per release, so run AIM evaluations on Fargate with scripts/run_synth.py, not
+locally.
 """
 
 from ehr_rwe_eln.config import DatabaseSettings

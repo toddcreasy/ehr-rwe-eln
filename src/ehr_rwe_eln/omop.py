@@ -106,7 +106,19 @@ class RedshiftSession:
                 SessionKeepAliveSeconds=self.keep_alive_s,
             )
             self.session_id = statement["SessionId"]
-        status = _wait(self.client, statement["Id"], self.timeout_s)
+        try:
+            status = _wait(self.client, statement["Id"], self.timeout_s)
+        except BaseException:
+            # A timeout or Ctrl-C leaves the statement running, and a busy session refuses the
+            # terminate in __exit__: cancel it and give the cancel time to land.
+            with contextlib.suppress(Exception):
+                self.client.cancel_statement(Id=statement["Id"])
+                for _ in range(30):
+                    state = self.client.describe_statement(Id=statement["Id"])["Status"]
+                    if state not in ("SUBMITTED", "PICKED", "STARTED"):
+                        break
+                    time.sleep(1)
+            raise
         if not status.get("HasResultSet"):
             return RedshiftCursor([], [])
         meta, raw = _results(self.client, statement["Id"])

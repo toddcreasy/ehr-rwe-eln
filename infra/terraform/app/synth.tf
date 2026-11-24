@@ -99,7 +99,7 @@ resource "aws_lakeformation_permissions" "synth_link" {
 }
 
 # 4 vCPU and 30 GB, the most Fargate gives 4 vCPUs: AIM on the person summary ran out of 16 GB
-# (its model grows each round; aim.py logs the peak per round).
+# (its model grows each round; aim.py logs the peak every 10th round and after the final fit).
 resource "aws_ecs_task_definition" "synth" {
   family                   = "${local.name}-synth"
   requires_compatibilities = ["FARGATE"]

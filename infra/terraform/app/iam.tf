@@ -132,10 +132,15 @@ data "aws_iam_policy_document" "monitor" {
     actions   = ["redshift-data:ExecuteStatement", "redshift-serverless:GetCredentials"]
     resources = [local.foundation.redshift_workgroup_arn]
   }
-  # These two take a statement ID, not a workgroup, so they can't be scoped by resource; the
-  # condition limits them to statements this role ran.
+  # These take a statement ID, not a workgroup, so they can't be scoped by resource; the
+  # condition limits them to statements this role ran. CancelStatement lets RedshiftSession stop
+  # a statement that timed out, so the session can end.
   statement {
-    actions   = ["redshift-data:DescribeStatement", "redshift-data:GetStatementResult"]
+    actions = [
+      "redshift-data:CancelStatement",
+      "redshift-data:DescribeStatement",
+      "redshift-data:GetStatementResult",
+    ]
     resources = ["*"]
     condition {
       test     = "StringEquals"
