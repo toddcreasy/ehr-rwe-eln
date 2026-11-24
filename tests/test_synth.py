@@ -37,7 +37,7 @@ def spec(*columns, seed=0, releases=None) -> Spec:
 def test_the_shipped_spec_loads():
     s = load_spec(SPECS / "person_summary.yaml")
     assert len(s.columns) == 21
-    assert {r.method for r in s.releases} == {"bayes_net", "independent", "vae", "mst"}
+    assert {r.method for r in s.releases} == {"bayes_net", "independent", "vae", "mst", "aim"}
 
 
 @pytest.mark.parametrize(

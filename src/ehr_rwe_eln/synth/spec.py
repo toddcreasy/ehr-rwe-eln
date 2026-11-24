@@ -87,10 +87,12 @@ class Release(Strict):
     # bayes_net measures each column with its parents; independent measures each column alone,
     # a baseline that keeps every marginal and loses every relationship between columns. vae
     # trains a variational autoencoder with DP-SGD. mst picks its own pairs of columns and fits
-    # a graphical model to their noisy histograms (synth/mst.py); it ignores parents.
-    method: Literal["bayes_net", "independent", "vae", "mst"]
+    # a graphical model to their noisy histograms (synth/mst.py); it ignores parents. aim does
+    # the same in rounds, aimed at the spec's workload (synth/aim.py).
+    method: Literal["bayes_net", "independent", "vae", "mst", "aim"]
     # The total privacy budget for this release: split evenly across the histograms, or for
-    # vae, 1% to the noisy row count and the rest to training; for mst, with pgm.delta.
+    # vae, 1% to the noisy row count and the rest to training; for mst and aim, with
+    # pgm.delta.
     epsilon: float = Field(gt=0)
 
 
@@ -115,13 +117,30 @@ class VaeSettings(Strict):
 
 
 class PgmSettings(Strict):
-    """Settings for mst releases (private-pgm's mechanisms). Fixed in the spec, not tuned."""
+    """Settings for mst and aim releases (private-pgm's mechanisms). Fixed in the spec, not
+    tuned."""
 
     # MST's guarantee is (epsilon, delta), like DP-SGD's. The authors' default; far below one
     # over the number of people.
     delta: float = Field(default=1e-9, gt=0, lt=1)
     # Mirror descent steps for fitting the final model. More fits the noisy histograms closer.
     iters: int = Field(default=10_000, gt=0)
+    # aim only. The rounds it plans for, which set each round's share of the budget (the
+    # authors' default, 16 per column, when unset); halving the noise uses them up sooner.
+    rounds: int | None = Field(default=None, gt=0)
+    # Mirror descent steps for the refit after each round (the authors' 1,000).
+    round_iters: int = Field(default=1000, gt=0)
+    # The largest model, in megabytes, a round may grow it to; the limit rises from 0 to this
+    # as the budget is spent. The authors' default.
+    max_model_size: float = Field(default=80, gt=0)
+
+
+class Query(Strict):
+    """A marginal an analyst will ask for: the counts of every combination of these columns."""
+
+    columns: list[str] = Field(min_length=1, max_length=3)
+    # How much aim favors getting it right; every pair of columns not listed has weight 1.
+    weight: float = Field(default=1, gt=0)
 
 
 class Spec(Strict):
@@ -153,6 +172,9 @@ class Spec(Strict):
     releases: list[Release] = Field(min_length=1)
     vae: VaeSettings = VaeSettings()
     pgm: PgmSettings = PgmSettings()
+    # The marginals aim releases are aimed at: the queries the trial emulation and the cohorts
+    # will run on the release. Other methods ignore it.
+    workload: list[Query] = []
     # The share of people kept out of every release, to evaluate against: real people the
     # synthesizer never saw (utility tests, and non-members for membership inference).
     # 0 keeps no holdout: for a spec judged against the data it learned from (trial parity).
@@ -178,14 +200,30 @@ class Spec(Strict):
                 if parent not in seen:
                     raise ValueError(f"{column.name}: parent {parent} must be listed before it")
             seen.add(column.name)
+        if self.pgm.rounds is not None and self.pgm.rounds < len(self.columns):
+            # AIM's one-way histograms cost a round's share each; fewer rounds than columns
+            # would spend more than the whole budget on them.
+            raise ValueError(f"pgm.rounds must be at least the {len(self.columns)} columns")
         if self.vae.condition is not None and self.vae.condition not in seen:
             raise ValueError(f"vae.condition {self.vae.condition} is not a column")
-        if self.seed is None and any(r.method == "mst" for r in self.releases):
-            # mst's Gaussian noise comes from numpy, which is not safe for real data: floating
-            # point noise can leak the value it hides. Refuse rather than release with it.
-            raise ValueError(
-                "mst releases need a seed: their noise is numpy's, not secure noise for real data"
-            )
+        for method in ("mst", "aim"):
+            if self.seed is None and any(r.method == method for r in self.releases):
+                # Their Gaussian noise comes from numpy, which is not safe for real data:
+                # floating point noise can leak the value it hides. Refuse rather than release.
+                raise ValueError(
+                    f"{method} releases need a seed: their noise is numpy's, not secure noise"
+                    " for real data"
+                )
+        queried: set[frozenset[str]] = set()
+        for query in self.workload:
+            if len(set(query.columns)) != len(query.columns):
+                raise ValueError(f"workload query {query.columns} repeats a column")
+            if frozenset(query.columns) in queried:
+                raise ValueError(f"workload query {query.columns} is listed twice")
+            queried.add(frozenset(query.columns))
+            for name in query.columns:
+                if name not in seen:
+                    raise ValueError(f"workload column {name} is not a column")
         if self.seed is None and any(r.method == "vae" for r in self.releases):
             # Unseeded means real data, which needs Opacus's secure noise. That needs
             # torchcsprng, last released in 2021 for torch 1.8 and Python 3.9: not installable

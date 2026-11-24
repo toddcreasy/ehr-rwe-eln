@@ -26,8 +26,40 @@ releases:
   - {method: vae, epsilon: 4}
   - {method: mst, epsilon: 1}
   - {method: mst, epsilon: 4}
+  - {method: aim, epsilon: 1}
+  - {method: aim, epsilon: 4}
 # 1,890 people: batches of 128 give the VAE more steps per epoch than the default 512.
 vae: {batch_size: 128}
+# What aim releases are aimed at (every other pair of columns has weight 1): what the
+# propensity-weighted Cox analysis reads. Arm with follow-up and outcome; arm with each
+# covariate (the propensity model); each covariate with the outcome (confounding).
+# Weights fixed before any release.
+workload:
+  - {columns: [arm, days, event], weight: 5}
+  - {columns: [arm, age], weight: 5}
+  - {columns: [arm, male], weight: 5}
+  - {columns: [arm, obesity], weight: 5}
+  - {columns: [arm, diabetes], weight: 5}
+  - {columns: [arm, hyperlipidemia], weight: 5}
+  - {columns: [arm, ischemic_heart_disease], weight: 5}
+  - {columns: [arm, ckd_stage_1_or_2], weight: 5}
+  - {columns: [arm, heart_failure], weight: 5}
+  - {columns: [arm, systolic_bp], weight: 5}
+  - {columns: [arm, egfr], weight: 5}
+  - {columns: [arm, bmi], weight: 5}
+  - {columns: [arm, hba1c], weight: 5}
+  - {columns: [age, event], weight: 5}
+  - {columns: [male, event], weight: 5}
+  - {columns: [obesity, event], weight: 5}
+  - {columns: [diabetes, event], weight: 5}
+  - {columns: [hyperlipidemia, event], weight: 5}
+  - {columns: [ischemic_heart_disease, event], weight: 5}
+  - {columns: [ckd_stage_1_or_2, event], weight: 5}
+  - {columns: [heart_failure, event], weight: 5}
+  - {columns: [systolic_bp, event], weight: 5}
+  - {columns: [egfr, event], weight: 5}
+  - {columns: [bmi, event], weight: 5}
+  - {columns: [hba1c, event], weight: 5}
 columns:
   - {name: age, analysis: age, numeric: {low: 0, high: 100, bins: 10, integer: true, open_top: true}}
   - {name: male, analysis: male, categories: [0, 1]}

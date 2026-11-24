@@ -58,8 +58,10 @@ lake = [
     "pyarrow>=26.0.1",
     "pyiceberg[pyarrow]>=0.12.0",
 ]
-# Synthesizers beyond the Bayes net: the VAE (Opacus, torch) and MST (mbi); not needed by the app.
+# Synthesizers beyond the Bayes net: the VAE (Opacus, torch), MST and AIM (mbi, and jax for its
+# compile cache); not needed by the app.
 synth = [
+    "jax>=0.12.1",
     "mbi==2.1.0",
     "opacus>=1.6.0",
     "torch>=2.14.1",

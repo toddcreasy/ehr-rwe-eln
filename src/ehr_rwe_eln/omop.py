@@ -2,14 +2,19 @@
 Postgres. Needs only boto3 and psycopg, so it runs in the app image (publishing to the lake, in
 cohort/lake.py, needs the lake dependency group)."""
 
+import contextlib
 import datetime
+import logging
 import time
 from dataclasses import dataclass
 from decimal import Decimal
 
 import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 
 from ehr_rwe_eln.config import DatabaseSettings, LakeSettings
+
+log = logging.getLogger(__name__)
 
 
 def _wait(client, statement_id: str, timeout_s: int) -> dict:
@@ -84,7 +89,8 @@ class RedshiftSession:
 
     # keep_alive_s: how long the session (and its temp tables) outlives its last statement.
     # Callers do long local work between statements; run_tte.py's 500 bootstrap replicates went
-    # past 15 minutes on 2026-11-21 and the session expired. An idle session runs no query.
+    # past 15 minutes on 2026-11-21 and the session expired. An idle session is still billed
+    # as compute until it ends (8 RPUs for the hour, 2026-11-23), so leaving the block ends it.
     def __init__(self, settings: LakeSettings, keep_alive_s: int = 3600, timeout_s: int = 900):
         self.settings = settings
         self.keep_alive_s = keep_alive_s
@@ -103,7 +109,19 @@ class RedshiftSession:
                 SessionKeepAliveSeconds=self.keep_alive_s,
             )
             self.session_id = statement["SessionId"]
-        status = _wait(self.client, statement["Id"], self.timeout_s)
+        try:
+            status = _wait(self.client, statement["Id"], self.timeout_s)
+        except BaseException:
+            # A timeout or Ctrl-C leaves the statement running, and a busy session refuses the
+            # terminate in __exit__: cancel it and give the cancel time to land.
+            with contextlib.suppress(Exception):
+                self.client.cancel_statement(Id=statement["Id"])
+                for _ in range(30):
+                    state = self.client.describe_statement(Id=statement["Id"])["Status"]
+                    if state not in ("SUBMITTED", "PICKED", "STARTED"):
+                        break
+                    time.sleep(1)
+            raise
         if not status.get("HasResultSet"):
             return RedshiftCursor([], [])
         meta, raw = _results(self.client, statement["Id"])
@@ -118,7 +136,19 @@ class RedshiftSession:
         return self
 
     def __exit__(self, *exc):
-        # The Data API has no call to end a session; it expires keep_alive_s after the last use.
+        # The Data API has no call to end a session, so the session ends its own backend (the
+        # statement is not waited on: it fails as its connection closes). A session that has
+        # already expired refuses it, which is just as good; a busy one (a cancel still landing)
+        # refuses it too and stays billed until keep-alive runs out, so that is logged.
+        if self.session_id:
+            try:
+                self.client.execute_statement(
+                    Sql="SELECT pg_terminate_backend(pg_backend_pid())", SessionId=self.session_id
+                )
+            except (ClientError, BotoCoreError) as e:
+                log.warning(
+                    "Redshift session %s not ended, billed until it expires: %s", self.session_id, e
+                )
         self.session_id = None
 
 

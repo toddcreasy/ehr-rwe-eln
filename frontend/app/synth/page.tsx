@@ -55,6 +55,7 @@ const METHODS: Record<string, string> = {
   independent: "Independent columns",
   vae: "Variational autoencoder",
   mst: "MST",
+  aim: "AIM",
 };
 
 const fmt = (n: number) => n.toLocaleString("en-US");

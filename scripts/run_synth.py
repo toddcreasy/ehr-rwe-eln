@@ -9,7 +9,7 @@ Needs a clean working tree (the commit is what runs, and what each release recor
 infra/terraform/app/ applied. Builds the image first if ECR lacks it; if the dependencies
 changed since the last apply, says to plan and apply app/. Uploads `git archive` of HEAD to
 build/source-<commit>.zip in the genomics bucket (only tracked files: never .env or data/).
-The task costs about 25 cents an hour (4 vCPU, 16 GB, x86 Fargate).
+The task costs about 30 cents an hour (4 vCPU, 30 GB, x86 Fargate).
 
 Needs AWS credentials (aws sso login).
 """

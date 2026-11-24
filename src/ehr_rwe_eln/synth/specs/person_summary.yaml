@@ -25,6 +25,8 @@ releases:
   # MST (synth/mst.py) chooses its own column pairs; at the Bayes net's budgets, to compare.
   - {method: mst, epsilon: 1}
   - {method: mst, epsilon: 4}
+  - {method: aim, epsilon: 1}
+  - {method: aim, epsilon: 4}
 # 30% of people are kept out of every release, to evaluate against.
 holdout_fraction: 0.3
 # The utility test predicts death from the other columns.
@@ -37,6 +39,22 @@ subgroups: [race, ethnicity, sex, age, [age, race], [age, sex], [race, sex]]
 # budget) and the decoder is told each row's age. Releases 5 and 6, without it, had 19% to 28%
 # too few people aged 70 and over, and those they had were far from real older patients.
 vae: {hidden: 128, latent: 16, epochs: 20, batch_size: 512, learning_rate: 0.001, max_grad_norm: 1.0, delta: 0.00001, condition: age}
+# What aim releases are aimed at (every other pair of columns has weight 1). The four module 3
+# protocols as this table can ask them: eligibility with both arms, and both arms with each
+# outcome. The two cohorts' entry columns with age (both are adults only). The intersections
+# the evaluation reports, where small groups go wrong. Weights fixed before any release.
+workload:
+  - {columns: [hypertension, lisinopril, amlodipine], weight: 5}
+  - {columns: [lisinopril, amlodipine, chronic_kidney_disease], weight: 5}
+  - {columns: [lisinopril, amlodipine, myocardial_infarction], weight: 5}
+  - {columns: [diabetes, metformin, insulin], weight: 5}
+  - {columns: [metformin, insulin, chronic_kidney_disease], weight: 5}
+  - {columns: [metformin, insulin, myocardial_infarction], weight: 5}
+  - {columns: [diabetes, age], weight: 5}
+  - {columns: [metformin, age], weight: 5}
+  - {columns: [age, race], weight: 5}
+  - {columns: [age, sex], weight: 5}
+  - {columns: [race, sex], weight: 5}
 columns:
   # Demographics. Age is at the end of the person's observation period.
   - {name: age, demographic: age, numeric: {low: 0, high: 100, bins: 10, integer: true, open_top: true}}

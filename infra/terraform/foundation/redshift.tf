@@ -73,11 +73,11 @@ resource "aws_redshiftserverless_workgroup" "main" {
   publicly_accessible = false
 }
 
-# Hard cap: past 120 RPU-hours in a month the workgroup stops taking queries.
+# Hard cap: past 150 RPU-hours in a month the workgroup stops taking queries.
 resource "aws_redshiftserverless_usage_limit" "monthly" {
   resource_arn  = aws_redshiftserverless_workgroup.main.arn
   usage_type    = "serverless-compute"
-  amount        = 120
+  amount        = 150
   period        = "monthly"
   breach_action = "deactivate"
 }

@@ -13,12 +13,14 @@ subgroup columns also get fidelity within each group (race, sex, age bins), stor
 in the fidelity report. Releases with a holdout also get a privacy report: three attacks, read
 against the same attacks on a plain copy of the training data. Releases of a module 3 trial's
 analysis table also get a trial report: the trial rerun on the release, and on 20 more draws
-of its method and epsilon (a few minutes for the VAE).
+of its method and epsilon (a few minutes for the VAE). For an AIM release each draw is a full
+AIM fit, 20 per release, so run AIM evaluations on Fargate with scripts/run_synth.py, not
+locally.
 """
 
 from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.omop import connect_omop
-from ehr_rwe_eln.synth import bayes_net, mst, vae
+from ehr_rwe_eln.synth import aim, bayes_net, mst, vae
 from ehr_rwe_eln.synth.distribution import privacy_flags
 from ehr_rwe_eln.synth.fidelity import fidelity_report, subgroup_report, utility_auc
 from ehr_rwe_eln.synth.parity import load_trial, parity_report, repeated_draws, trial_estimate
@@ -85,11 +87,22 @@ def privacy_row(label: str, report: dict) -> str:
 
 def main() -> None:
     omop, cdm = connect_omop()
-    with DatabaseSettings().connect() as con, omop:
+    with DatabaseSettings().connect() as con:
         releases = con.execute(
             "SELECT release_id, method, epsilon, spec, withdrawn_at FROM synth.release"
             " ORDER BY release_id"
         ).fetchall()
+        # Every spec's source is read first, so the Redshift session (billed while open) ends
+        # before the hours of scoring and trial redraws.
+        tables = {}
+        with omop:
+            for *_, spec_json, _ in releases:
+                spec = Spec.model_validate(spec_json)
+                key = spec.model_dump_json(
+                    include={"name", "columns", "holdout_fraction", "protocol"}
+                )
+                if key not in tables:
+                    tables[key] = split(build_source(omop, spec, cdm), spec)
         sources, trial_lines, privacy_lines, summaries, subgroup_lines = {}, [], [], [], []
         review = []
         print(
@@ -100,7 +113,7 @@ def main() -> None:
             spec = Spec.model_validate(spec_json)
             key = spec.model_dump_json(include={"name", "columns", "holdout_fraction", "protocol"})
             if key not in sources:
-                train, holdout = split(build_source(omop, spec, cdm), spec)
+                train, holdout = tables[key]
                 target = spec.utility_target
                 trtr = utility_auc(train, holdout, spec.columns, target) if target else None
                 floor = None
@@ -178,7 +191,7 @@ def main() -> None:
                 release = next(
                     r for r in spec.releases if (r.method, r.epsilon) == (method, epsilon)
                 )
-                module = {"vae": vae, "mst": mst}.get(method, bayes_net)
+                module = {"vae": vae, "mst": mst, "aim": aim}.get(method, bayes_net)
                 draws = repeated_draws(train, spec, release, protocol, module.synthesize, real)
                 trial = parity_report(real, trial_estimate(synthetic, protocol), draws)
                 save_report(con, release_id, "trial", trial)

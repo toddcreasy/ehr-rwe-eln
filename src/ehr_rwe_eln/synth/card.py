@@ -274,7 +274,10 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
         "vae": "variational autoencoder trained with differentially private SGD (Opacus)",
         "mst": "MST (noisy one-way histograms, a privately chosen tree of column pairs and their"
         " noisy histograms, then a graphical model fitted to them and sampled)",
+        "aim": "AIM (noisy one-way histograms, then rounds that each privately choose the"
+        " workload marginal the model fits worst and measure it, then a graphical model sampled)",
     }[release["method"]]
+    pgm = release["method"] in ("mst", "aim")
     trial = reports.get("trial")
     spurious = trial["repeated"]["spurious_effect"] if trial else None
     subgroups = reports.get("fidelity", {}).get("subgroups") or []
@@ -304,7 +307,7 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
         f"| Method | {method} |",
         f"| Privacy budget | epsilon {release['epsilon']:g}"
         + (f", delta {spec.vae.delta:g}" if release["method"] == "vae" else "")
-        + (f", delta {spec.pgm.delta:g}" if release["method"] == "mst" else "")
+        + (f", delta {spec.pgm.delta:g}" if pgm else "")
         + " |",
         f"| Rows | {release['rows']:,} (a noisy count) |",
         f"| Trained on | {release['source_rows']:,} people;"
@@ -366,6 +369,9 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
         + (
             " MST does not use them: it chooses its own pairs, and pays for the choice below."
             if release["method"] == "mst"
+            else " AIM does not use them: it chooses its marginals from the workload below, and"
+            " pays for each choice."
+            if release["method"] == "aim"
             else ""
         ),
         "",
@@ -380,8 +386,27 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
         + (
             f": in zCDP, where the rho values add up to the rho that gives epsilon"
             f" {release['epsilon']:g} at delta {spec.pgm.delta:g}."
-            if release["method"] == "mst"
+            if pgm
             else "."
+        ),
+        *(
+            [
+                "",
+                "AIM's workload: every pair of columns at weight 1"
+                + (", and these at their weights." if spec.workload else "."),
+                *(
+                    [
+                        "",
+                        "| Workload marginal | Weight |",
+                        "|---|---|",
+                        *(f"| {' x '.join(q.columns)} | {q.weight:g} |" for q in spec.workload),
+                    ]
+                    if spec.workload
+                    else []
+                ),
+            ]
+            if release["method"] == "aim"
+            else []
         ),
         "",
         "| Mechanism | Spend |",
@@ -441,6 +466,11 @@ def render_card(release: dict, reports: dict[str, dict]) -> str:
         lines.append(
             "- Only the column pairs MST chose (a tree) are measured; other relationships survive"
             " only through that tree, and the choice itself is noisy."
+        )
+    if release["method"] == "aim":
+        lines.append(
+            "- Only the marginals AIM chose are measured, and it chooses from the workload:"
+            " relationships outside it are kept only as well as they fit those marginals."
         )
     lines.append("")
     return "\n".join(lines)

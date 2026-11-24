@@ -16,7 +16,7 @@ from pathlib import Path
 
 from ehr_rwe_eln.config import DatabaseSettings
 from ehr_rwe_eln.omop import connect_omop
-from ehr_rwe_eln.synth import bayes_net, mst, vae
+from ehr_rwe_eln.synth import aim, bayes_net, mst, vae
 from ehr_rwe_eln.synth.release import save_release
 from ehr_rwe_eln.synth.source import build_source, split
 from ehr_rwe_eln.synth.spec import SPECS, load_spec
@@ -42,8 +42,9 @@ def main() -> None:
                 continue
             if release.method == "vae":
                 synthetic, spend = vae.synthesize(train, spec, release)
-            elif release.method == "mst":
-                synthetic, spend = mst.synthesize(train, spec, release)
+            elif release.method in ("mst", "aim"):
+                module = mst if release.method == "mst" else aim
+                synthetic, spend = module.synthesize(train, spec, release)
             else:
                 synthetic, measurements = bayes_net.synthesize(train, spec, release)
                 spend = bayes_net.plan(measurements)
@@ -51,7 +52,7 @@ def main() -> None:
                 con, spec, release, spend, synthetic, len(train), len(holdout)
             )
             con.commit()
-            if release.method == "mst":
+            if release.method in ("mst", "aim"):
                 spent = f"rho {sum(s['rho'] for s in spend):.4f}, delta {spec.pgm.delta:g}"
             else:
                 spent = f"{sum(s['epsilon'] for s in spend):.3f}"

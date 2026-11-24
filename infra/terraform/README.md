@@ -99,7 +99,7 @@ BIAS-2015 v3.0.0 runs on Ensembl's own VEP 115 image, pinned by digest, in `dock
 
 ## Synthetic releases on AWS
 
-`scripts/synthesize.py` and `scripts/evaluate_synth.py` run as Fargate task `ehr-rwe-eln-synth` (`app/synth.tf`): X86_64, 4 vCPUs, 16 GB, about 25 cents an hour. `scripts/run_synth.py <script> [args]` starts one and prints its log when it stops.
+`scripts/synthesize.py` and `scripts/evaluate_synth.py` run as Fargate task `ehr-rwe-eln-synth` (`app/synth.tf`): X86_64, 4 vCPUs, 30 GB (AIM ran out of 16), about 30 cents an hour. `scripts/run_synth.py <script> [args]` starts one and prints its log when it stops.
 
 - **Image**: `docker/synth.Dockerfile`, Python with the locked dependencies and the `synth` group, no project code. Built by the gwas CodeBuild project into ECR repository `ehr-rwe-eln-synth`; the tag is a hash of the Dockerfile, `docker/synth_task.py`, `pyproject.toml`, and `uv.lock`, so only a dependency change needs a new image and an apply.
 - **Code**: each run uploads `git archive` of HEAD to `build/source-<commit>.zip` (the tree must be clean), and the task runs that commit's script with `CODE_VERSION` set to it, which each release records.
@@ -118,7 +118,7 @@ The app has no sign-in. What bounds it, as in glia-nav:
 | Tasks | Express Mode scaling | Exactly 1 |
 | Daily token alarm | CloudWatch metric `ehr-rwe-eln/AgentTokens` from the `agent run` log lines | Email past 120,000 in a UTC day (SNS; confirm the subscription email) |
 | Budget | `foundation/budget.tf` | $100 a month, credits excluded, email at 50% and 80% actual and 100% forecast |
-| Redshift | `foundation/redshift.tf` | 120 RPU-hours a month (about $45 at list price), then the workgroup stops |
+| Redshift | `foundation/redshift.tf` | 150 RPU-hours a month (about $56 at list price), then the workgroup stops |
 | Logs | `/ecs/ehr-rwe-eln` | 30 days |
 
 `GET /api/usage` shows today's allowance. Visitors never touch Redshift: the API reads only Aurora.
