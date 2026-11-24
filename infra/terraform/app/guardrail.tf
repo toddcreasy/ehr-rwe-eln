@@ -64,4 +64,12 @@ resource "aws_bedrock_guardrail" "agent" {
 resource "aws_bedrock_guardrail_version" "agent" {
   guardrail_arn = aws_bedrock_guardrail.agent.guardrail_arn
   description   = "Initial settings, 2026-11-21"
+
+  # Any change to the guardrail publishes a new version, and the task and the IAM pin move to it.
+  # The new version exists before the old one is deleted, so the running task never points at a
+  # deleted version.
+  lifecycle {
+    create_before_destroy = true
+    replace_triggered_by  = [aws_bedrock_guardrail.agent]
+  }
 }

@@ -1,4 +1,5 @@
 import anthropic
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Opus 4.6 thinks only when asked; adaptive lets it decide how much. Every call sets this.
@@ -21,6 +22,12 @@ class AgentSettings(BaseSettings):
     # where no guardrail is used.
     guardrail_id: str = ""
     guardrail_version: str = ""
+
+    @model_validator(mode="after")
+    def guardrail_needs_a_version(self) -> AgentSettings:
+        if self.guardrail_id and not self.guardrail_version:
+            raise ValueError("GUARDRAIL_ID is set but GUARDRAIL_VERSION is empty; set both")
+        return self
 
 
 def claude_client() -> anthropic.AnthropicBedrock:

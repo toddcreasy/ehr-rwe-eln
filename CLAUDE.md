@@ -82,7 +82,7 @@ All AWS resources in Terraform. Values that are settled are in the table above; 
 | Backend framework | FastAPI + Pydantic | Typed request and response models, OpenAPI for free. |
 | Python toolchain | uv, ruff, pytest | Fast, one tool per job, lockfile pinned. |
 | DB migrations | Alembic | `uv run alembic upgrade head` against the Compose Postgres locally, and against Aurora through the bastion tunnel. |
-| Dev-loop evals | pydantic-evals golden set in pytest | Scores the agent against the real model before a deploy. Run by hand, never in CI (billed, needs Bedrock and local data); all of `evals/` takes about 6 minutes. |
+| Dev-loop evals | pydantic-evals golden set in pytest | Scores the agent against the real model before a deploy. Run by hand, never in CI (billed, needs Bedrock and local data); each eval's docstring gives its time and cost. |
 | Frontend framework | Next.js + React + Tailwind, static export | Builds to plain files, so no Node server at runtime. |
 | Code host + CI runner | GitHub + GitHub Actions | `lint-test` runs ruff and pytest against a Postgres service container. `secrets` runs gitleaks (pinned, checksum verified) over every commit and file for keys, tokens, passwords, usernames, and email addresses, with the rules in `.gitleaks.toml`; the same scan runs in pre-commit. `terraform` checks formatting, validates each stack, and runs tflint and trivy. All three are required to merge. |
 | Containers | Docker + Docker Compose | Open standard; the whole stack starts with one command. |
