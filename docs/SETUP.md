@@ -6,8 +6,9 @@ Phase 10 moved them here once infrastructure was done, so `CLAUDE.md` carries on
 session needs. Each phase lists the tools it introduced, why they were picked, the checklist as
 completed, and the STOP gate that verified it.
 
-The AWS stacks were destroyed on 2026-10-12 and `infra/` was deleted after that. This file is the record
-of what was built; its AWS commands no longer run. The local run steps are in [INSTALL.md](INSTALL.md).
+The first AWS stacks were destroyed on 2026-10-12 and their `infra/` was deleted after that; the build
+phases below are the record of what was built then, and their AWS commands no longer run. The run
+steps for the current setup are in [INSTALL.md](INSTALL.md).
 
 The project moved back to AWS from 2026-11-19 to 2026-11-23, on Terraform this time (`infra/terraform/`). That move and the local-first one before it are at the end of this file, moved from `CLAUDE.md` once done.
 
@@ -233,6 +234,25 @@ Start from it rather than deleting sections by hand.
 STOP gate 10: show CLAUDE.md under roughly 100 lines, `docs/SETUP.md` containing the full history, and both rendering correctly on GitHub.
 
 ## Expected monthly cost (dev, personal scale)
+
+### Now, since the move back to AWS (2026-11-23)
+
+The budget is $100 a month on resources tagged `project = ehr-rwe-eln`, with email at 50% and 80% of actual spend and 100% forecast.
+
+| Item | Expected |
+|---|---|
+| ECS Express Mode (load balancer + the app's one task) | About $24 to $36, the largest fixed cost (the first build's estimate below) |
+| Redshift Serverless | Per second of compute; capped at 150 RPU-hours a month, at most about $56. A full DQD run is about 4.5 RPU-hours |
+| Aurora Serverless v2 | About $0 while paused, plus storage |
+| S3 Tables, the genomics bucket, ECR | A few dollars at this scale |
+| Fargate jobs | Per run: Exomiser or LIRICAL on 5,000 people about $2 to $2.60, an evaluation of every synthetic release 9 cents, a GWAS a few cents |
+| CodeBuild | Per build minute; an image takes about 5 minutes |
+| Bedrock tokens | Usage-driven; `/api/agent` is held to 150,000 tokens a day |
+| CloudWatch, CloudTrail, Budgets | A few dollars |
+
+No NAT gateway or interface endpoints: they would cost more than the whole budget.
+
+### The first AWS build (until 2026-10-12)
 
 | Item | Expected |
 |---|---|

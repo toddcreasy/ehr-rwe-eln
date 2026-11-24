@@ -56,7 +56,7 @@ Code that reads OMOP for analysis reads the lake through Redshift: trial emulati
 
 Their SQL runs unchanged on both engines (no Postgres arrays, `DISTINCT ON`, `FILTER`, `make_date`, or correlated `EXISTS`; values written in as integers), so the tests keep checking it on Postgres. `scripts/compare_omop_sources.py` runs every trial protocol, negative control, and synthetic data spec on both and requires identical tables, column types included; it takes about 17 minutes and a few RPU-hours.
 
-Code that writes OMOP stays on staging: the ETL, cohort building (`cdm.cohort`), and the ELN bridge (`specimen`, `measurement`, `fact_relationship`). After any of them, republish the tables it changed (`publish_omop.py --tables cohort`) and reconcile. Data quality runs on staging until OHDSI's DataQualityDashboard replaces it on Redshift.
+Code that writes OMOP stays on staging: the ETL, cohort building (`cdm.cohort`), the ELN bridge (`specimen`, `measurement`, `fact_relationship`), and the genomics panel (`write_panel_omop.py`, `measurement`). After any of them, republish the tables it changed (`publish_omop.py --tables cohort`) and reconcile. Data quality runs OHDSI's DataQualityDashboard on the lake, through Redshift ([data quality](data_quality.md)). One session per run is billed until it ends, so `RedshiftSession` ends it when its `with` block ends, and a script reads what it needs inside the block and computes after it.
 
 ## Results
 

@@ -1,8 +1,10 @@
 # Install and run
 
-Everything runs on one machine. There is no cloud account to set up; the only outside service is the [Anthropic API](https://docs.claude.com), on your own key, and only the ELN (electronic lab notebook) extraction and the agent call it.
+The project runs on AWS, with the laptop building the data and starting every job. Set up the AWS side first: the [infrastructure README](../infra/terraform/README.md) applies the three Terraform stacks (the state bucket, the foundation with the lake, Redshift, and Aurora, and the app with ECS, the Fargate tasks, and Bedrock's Guardrail). Claude runs on Amazon Bedrock with your AWS credentials; there is no API key.
 
-Terms are defined in the [glossary](GLOSSARY.md). A full build from a fresh clone takes about an hour, most of it [Synthea](https://github.com/synthetichealth/synthea) and the 20,000-patient load. One step needs you at a browser: the vocabulary download from [OHDSI Athena](https://athena.ohdsi.org).
+On the laptop, the ETL builds OMOP in a staging Postgres in Docker Compose, which is published to the lake. Heavy jobs (the GWAS, Exomiser, LIRICAL, BIAS-2015, synthetic releases) run as Fargate tasks that a script starts and waits for; nothing heavy runs in local Docker.
+
+Terms are defined in the [glossary](GLOSSARY.md). Building the data from a fresh clone takes about an hour, most of it [Synthea](https://github.com/synthetichealth/synthea) and the 20,000-patient load. The module runs add several hours more, most of it Fargate tasks you only wait for: data quality about 32 minutes, trial emulation 31, Exomiser 75, LIRICAL about two hours. One step needs you at a browser: the vocabulary download from [OHDSI Athena](https://athena.ohdsi.org).
 
 ## Contents
 
@@ -25,7 +27,9 @@ Terms are defined in the [glossary](GLOSSARY.md). A full build from a fresh clon
 | [Docker Desktop](https://www.docker.com/products/docker-desktop/) | Runs Postgres and the app | `docker compose version` |
 | Java 17 or newer | Synthea, the synthetic patient generator, is a Java program | `java -version` |
 | Node.js 24 | Builds the frontend; only needed outside Docker | `node --version` |
-| AWS credentials with Bedrock access (`aws sso login`) | ELN extraction, the agent, the evals, and the lake | Your AWS account |
+| AWS credentials with Bedrock access (`aws sso login`) | ELN extraction, the agent, the evals, the lake, and every Fargate job | Your AWS account |
+| [Terraform](https://developer.hashicorp.com/terraform) | Creates the AWS resources; the run scripts read its outputs | `terraform version` |
+| [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) | The tunnels to Redshift (OHDSI's R tools) and Aurora | `session-manager-plugin --version` |
 
 On a Mac, `brew install openjdk@21` gives you Java. Homebrew installs it keg-only, so either put `/opt/homebrew/opt/openjdk@21/bin` on your `PATH` or prefix the Synthea commands with it.
 
@@ -59,7 +63,7 @@ uv run alembic upgrade head
 uv run python scripts/db_check.py
 ```
 
-Postgres 18 with [pgvector](https://github.com/pgvector/pgvector) listens on 127.0.0.1:5432. `alembic upgrade head` creates the `dq`, `tte`, `eln`, `synth`, and `curation` schemas. `db_check.py` runs a pgvector round trip and leaves nothing behind.
+Postgres 18 with [pgvector](https://github.com/pgvector/pgvector) listens on 127.0.0.1:5432. `alembic upgrade head` creates the module schemas (`dq`, `tte`, `eln`, `synth`, `curation`) and the app's (`omop_stats`, `agent`, `langgraph`) here, for local runs and tests; on AWS the same migrations run against Aurora through the [bastion tunnel](../infra/terraform/README.md#tunnel-to-aurora). `db_check.py` runs a pgvector round trip and leaves nothing behind.
 
 ## Get the vocabularies
 
@@ -74,15 +78,18 @@ The published counts were built from SNOMED 2026-03 US, LOINC 2.82, RxNorm 2026-
 
 ## Build the data
 
-One Synthea population, loaded into `ehr_rwe_eln`:
+One Synthea population, built in the staging database `ehr_rwe_eln` and published to the lake:
 
 ```bash
 uv run python scripts/generate_synthea.py
 uv run python scripts/build_omop.py
 uv run python scripts/build_cohorts.py
+uv run python scripts/publish_omop.py      # copy every cdm table to the lake
+uv run python scripts/reconcile_lake.py    # check every column through Redshift
+OMOP_SOURCE=staging uv run python scripts/build_omop_stats.py --target aurora   # the agent's counts
 ```
 
-`generate_synthea.py` downloads Synthea 3.3.0, checks its SHA-256, and runs it with a fixed seed and reference date, so the same arguments always give the same people: 23,421 by default (20,000 living plus those who died during the simulation). `build_omop.py` loads the vocabularies, runs the ETL (extract, transform, load), builds condition and drug eras, then adds keys and indices. The build takes about five minutes.
+`generate_synthea.py` downloads Synthea 3.3.0, checks its SHA-256, and runs it with a fixed seed and reference date, so the same arguments always give the same people: 23,421 by default (20,000 living plus those who died during the simulation). `build_omop.py` loads the vocabularies, runs the ETL (extract, transform, load), builds condition and drug eras, then adds keys and indices. The build takes about five minutes. Every module reads OMOP from the lake by default; `OMOP_SOURCE=staging` points it at the staging copy instead. A step that writes OMOP (cohorts, the ELN bridge, the genomics panel) writes to staging, so publish the tables it changed afterwards (`publish_omop.py --tables ...`).
 
 ## Run the modules
 
@@ -93,8 +100,12 @@ Each module has its own page with what it does and how to read its output. The c
 uv run python scripts/hades.py run_dqd.R
 uv run python scripts/load_dqd.py data/hades/dqd/<file>.json --target local
 
-# Target trial emulation (about 1 minute)
+# Target trial emulation; reads every table first, so the Redshift session ends before the bootstrap
 uv run python scripts/run_tte.py
+uv run python scripts/write_cohorts.py                  # the arms and outcomes CohortMethod reads
+uv run python scripts/hades.py run_cohortmethod.R      # OHDSI CohortMethod, the check
+OMOP_SOURCE=staging uv run python scripts/write_person_periods.py
+uv run python scripts/hades.py --local run_trialemulation.R   # OHDSI TrialEmulation, per-protocol
 
 # ELN bridge (extraction takes minutes and is billed)
 uv run python scripts/generate_eln.py
@@ -104,25 +115,32 @@ uv run python scripts/export_eln_fhir.py
 
 # Synthetic genomics
 uv run python scripts/generate_genomics.py
-uv run python scripts/run_gwas.py
-docker compose run --rm --build hail      # optional: the same GWAS in Hail, a 2.4 GB image
+uv run python scripts/run_regenie.py      # PLINK 2 QC and PCs, then REGENIE, on Fargate
+docker compose run --rm --build hail      # optional: the GWAS in Hail, a 2.4 GB image; before run_gwas
+uv run python scripts/run_gwas.py         # checks the planted effect, and compares with Hail if it ran
 uv run python scripts/generate_panel.py   # clinical panel: downloads ClinVar (200 MB) once
+uv run python scripts/write_panel_omop.py # the panel's carriers as OMOP measurement rows
+uv run python scripts/publish_omop.py --tables specimen measurement fact_relationship
+OMOP_SOURCE=staging uv run python scripts/build_omop_stats.py --target aurora   # counts with the new rows
 
 # Variant curation
 uv run python scripts/curate_variants.py --set panel   # the panel's 48 variants
 uv run python scripts/curate_variants.py --set eval    # scored against ClinVar expert panels
 uv run python scripts/curate_variants.py --set erepo   # criterion by criterion, ClinGen Evidence Repository
 uv run python scripts/curate_literature.py --dry-run   # literature retrieval and token count; drop --dry-run to call Claude
+uv run python scripts/match_phenotypes.py              # HPO phenotype scores
+uv run python scripts/run_exomiser.py fetch            # once, then: run --tasks 6 (Fargate)
+uv run python scripts/run_lirical.py run --tasks 6     # Fargate
+uv run python scripts/run_bias.py fetch                # once, then: run (Fargate)
 
-# Synthetic data
-export SPEC=src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
-uv run python scripts/synthesize.py
-uv run python scripts/synthesize.py --spec $SPEC
-uv run python scripts/evaluate_synth.py
-uv run python scripts/synth_cards.py
+# Synthetic data, on Fargate
+uv run python scripts/run_synth.py synthesize.py
+uv run python scripts/run_synth.py synthesize.py --spec src/ehr_rwe_eln/synth/specs/trial_lisinopril_amlodipine_ckd.yaml
+uv run python scripts/run_synth.py evaluate_synth.py
+uv run python scripts/synth_cards.py      # reads the database in .env: point it at Aurora's tunnel
 ```
 
-Details: [cohort pipeline](modules/cohort.md), [data quality](modules/data_quality.md), [target trial emulation](modules/trial_emulation.md), [ELN bridge](modules/eln.md), [synthetic genomics](modules/genomics.md), [synthetic data](modules/synthetic_data.md).
+Details: [cohort pipeline](modules/cohort.md), [data quality](modules/data_quality.md), [target trial emulation](modules/trial_emulation.md), [ELN bridge](modules/eln.md), [synthetic genomics](modules/genomics.md), [variant curation](modules/curation.md), [synthetic data](modules/synthetic_data.md).
 
 ## Run the app
 
@@ -131,7 +149,9 @@ Details: [cohort pipeline](modules/cohort.md), [data quality](modules/data_quali
 uv run fastapi dev                         # http://127.0.0.1:8000, reloads on save
 ```
 
-To run the app in Docker instead, `docker compose up -d --build --wait` builds the frontend into the image and serves everything on http://127.0.0.1:8000. Both ports bind to 127.0.0.1 only, because there is no sign-in. The same command starts the `monitor` service, which reruns the privacy checks on the synthetic releases every `MONITOR_INTERVAL_HOURS` (default 24) when a source or the synth code has changed; outside Docker, `uv run python -m ehr_rwe_eln.synth.monitor --once` runs one check.
+This runs the app against the database in `.env`, normally the Compose Postgres. To run it in Docker instead, `docker compose up -d --build --wait` builds the frontend into the image and serves everything on http://127.0.0.1:8000; every port binds to 127.0.0.1, because there is no sign-in. The same command starts a local `monitor` service; on AWS the monitor is a Fargate task every day at 11:00 UTC. `uv run python -m ehr_rwe_eln.synth.monitor --once` runs one check.
+
+The deployed app is built by CodeBuild and deployed with Terraform: see [Deploy the app](../infra/terraform/README.md#deploy-the-app).
 
 ```bash
 curl localhost:8000/api/health/db
@@ -139,7 +159,7 @@ curl -X POST localhost:8000/api/agent -H 'Content-Type: application/json' \
   -d '{"prompt": "How many people have essential hypertension?"}'
 ```
 
-The agent's tools read `omop_stats`; build it once with `OMOP_SOURCE=staging uv run python scripts/build_omop_stats.py --target local`. Claude Code picks up the same tools from `.mcp.json`, which starts `python -m ehr_rwe_eln.agents.mcp_server` over stdio.
+The agent's tools read `omop_stats`; for a local app, build it with `OMOP_SOURCE=staging uv run python scripts/build_omop_stats.py --target local`. Claude Code picks up the same tools from `.mcp.json`, which starts `python -m ehr_rwe_eln.agents.mcp_server` over stdio.
 
 ## Tests and evals
 

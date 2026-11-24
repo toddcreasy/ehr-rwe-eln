@@ -30,9 +30,9 @@ Source: NOT-OD-14-124. It applies to NIH-funded research that generates large-sc
 
 Source: NOT-OD-24-157, released July 25, 2024, effective January 25, 2025. Approved users of controlled-access human genomic data from NIH repositories attest that their institution's systems comply with NIST SP 800-171. An approved user who works on a third-party IT system or cloud provider attests that it complies with NIST SP 800-171. Repositories attest to the NIST SP 800-53 Moderate baseline (FedRAMP Moderate or FISMA Moderate satisfies it). The standard goes into new or renewed Data Use Certifications.
 
-This repository is a single-user local stack. Every port binds to 127.0.0.1, the API key is a `SecretStr` read from a gitignored `.env`, and data stay in a Docker volume and the gitignored `data/` folder. That is sound hygiene but not NIST SP 800-171 compliance: there is no authentication, no audit logging, no account management, and no encryption beyond whatever the host disk provides.
+This repository runs as a public demo on AWS, on synthetic data only. Some of what NIST SP 800-171 asks for is there: Aurora's storage is encrypted, CloudTrail records every API call in the account, Claude is reached with IAM credentials (no API key to leak), every database password is managed in Secrets Manager, and Lake Formation grants each role only its tables. Much is not: the app has no sign-in by design, so there are no user accounts, no record of who read which release, and no account management, and the account is a personal one that no institution has attested.
 
-The way to meet the requirement is not to retrofit a laptop: run the stack inside an environment the institution has already attested, such as an approved research enclave or an attested cloud workspace. If the app were shared among users there, it would also need authentication and audit logging of who read which release.
+The way to meet the requirement is not to retrofit this account: run the stack inside an environment the institution has already attested, such as an approved research enclave or an attested cloud workspace. If the app were shared among users there, it would also need authentication and audit logging of who read which release.
 
 ## 3. HIPAA Privacy Rule de-identification
 
@@ -64,7 +64,7 @@ In order of importance:
 3. **Data use limitations in the spec.** Done 2026-11-18: `data_use_limitations` is a required spec field, and every data card prints it.
 4. **Random codes for lab notebook subjects.** Done 2026-11-18: `HTN-` codes are assigned in a random order, as the genotype codes are.
 5. **Keep registries apart from releases.** Done 2026-11-18: both registries are written to `data/registry/`, outside `data/eln/` and `data/genomics/`.
-6. **Attested environment.** Run on real data only inside a system the institution has attested under NIST SP 800-171, with authentication and audit logging if more than one person uses it. This cannot be done in the repository: it is the institution's infrastructure, and this local stack is single-user with no sign-in by design. It is the one item left before real data.
+6. **Attested environment.** Run on real data only inside a system the institution has attested under NIST SP 800-171, with authentication and audit logging if more than one person uses it. This cannot be done in the repository: it is the institution's infrastructure, and this public demo has no sign-in by design. It is the one item left before real data.
 7. **A written rule for derived data.** Done 2026-11-18: a controlled spec lists `approved_users`, exports go only to them unless `dac_sharing_approval` cites the DAC's decision, and every card from a controlled source states the rule.
 
 ## Sources

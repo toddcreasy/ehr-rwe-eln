@@ -2,11 +2,11 @@
 
 Package: `ehr_rwe_eln.dq`. Back to the [README](../../README.md). Terms are defined in the [glossary](../GLOSSARY.md).
 
-Profiles the [OMOP](https://ohdsi.github.io/CommonDataModel/cdm54.html) database before anyone trusts an analysis from it. It runs every check in [OHDSI](https://www.ohdsi.org)'s [DataQualityDashboard](https://github.com/OHDSI/DataQualityDashboard) (DQD) v2.9.0, reimplemented in Python, and its results match DQD's on every check.
+Profiles the [OMOP](https://ohdsi.github.io/CommonDataModel/cdm54.html) database before anyone trusts an analysis from it. It runs [OHDSI](https://www.ohdsi.org)'s own [DataQualityDashboard](https://github.com/OHDSI/DataQualityDashboard) (DQD) 2.9.1, in R, against the OMOP lake, and loads the results into the `dq` schema for the dashboard at `/dq/`.
 
 ## What it checks
 
-2,384 checks at three levels, from DQD's own check and threshold files (`dq/csv/`):
+2,384 checks at three levels, from the check and threshold files bundled with DQD 2.9.1. The repo keeps one of DQD's files, `OMOP_CDMv5.4_Check_Descriptions.csv` (`src/ehr_rwe_eln/dq/csv/`), which `dqd.py` reads for each check's severity:
 
 | Level | Asks | Example |
 |---|---|---|
@@ -20,7 +20,7 @@ Each check falls into one category of the [Kahn framework](https://doi.org/10.13
 - **Completeness**: the expected values are there.
 - **Plausibility**: values make sense, including over time (no visit ends before it starts).
 
-A check fails when its share of violating rows passes its threshold. It is not applicable when there is nothing to check, such as a unit check for a lab that never appears. Scoring follows DQD's rules (`scoring.py` ports its R code).
+A check fails when its share of violating rows passes its threshold. It is not applicable when there is nothing to check, such as a unit check for a lab that never appears. DQD scores its own runs.
 
 ## Run it
 

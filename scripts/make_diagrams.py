@@ -87,125 +87,259 @@ def arrow(points, label="", lx=None, ly=None, anchor="start"):
     return out + "</g>"
 
 
-W, H = 1240, 1020
-# Everything below the runtime panel moves down this far, to fit the monitor under the database.
-SHIFT = 70
+W, H = 1240, 1160
+# Everything below the AWS and laptop panels moves down this far.
+SHIFT = 210
 NH, DW = 56, 190
 C = [60, 290, 520, 750, 980]
 s = header(
     W,
     H,
-    "ehr-rwe-eln: one OMOP database, seven modules, all on one machine",
-    "Synthea patients and Athena vocabularies become an OMOP CDM v5.4 database in Postgres. Data "
-    "quality checks, target trial emulation, synthetic data releases, and a synthetic genotype "
-    "study read it; the ELN bridge writes lab results into it with Claude; variant curation "
-    "classifies the study's clinical panel, with literature evidence proposed by Claude. A "
-    "FastAPI app serves the results on 127.0.0.1.",
+    "ehr-rwe-eln: one OMOP lake, seven modules, on AWS",
+    "Synthea patients and Athena vocabularies become an OMOP CDM v5.4 database: built in a "
+    "staging Postgres on the laptop, published as Iceberg tables in S3 Tables, and read through "
+    "Redshift Serverless. Data quality, target trial emulation, synthetic data releases, and a "
+    "synthetic genotype study read it; the ELN bridge writes lab results into it with Claude; "
+    "variant curation classifies the study's clinical panel. Module results live in Aurora, "
+    "heavy jobs run as Fargate tasks, and the app, RWE Workbench, runs on ECS with Claude on "
+    "Amazon Bedrock.",
 )
 s.append('<text x="40" y="26" class="t" font-size="15" font-weight="700">ehr-rwe-eln</text>')
 s.append(
-    '<text x="140" y="26" class="s">Dashed boxes are outside the machine. '
+    '<text x="140" y="26" class="s">Dashed boxes are outside the project. '
     "Open the SVG on its own and hover a box for what it does and why.</text>"
 )
 
-# Runtime.
-RT = 90
-mt = RT + NH // 2
+# AWS.
+RA, RB = 90, 172
+ma, mb = RA + NH // 2, RB + NH // 2
 s.append(
     panel(
         40,
         40,
         1160,
-        130 + SHIFT,
-        "Docker Compose, every port on 127.0.0.1",
-        "docker compose up -d starts the database, the app, and the privacy monitor. No cloud "
-        "account; the only "
-        "outside service is the Anthropic API, on your own key. There is no sign-in, which is "
-        "why nothing listens beyond this machine.",
+        210,
+        "AWS, us-east-1, all in Terraform",
+        "infra/terraform: bootstrap/ (state bucket), foundation/ (network, lake, Redshift, "
+        "Aurora, budget, audit), app/ (ECR, ECS, CodeBuild, Fargate tasks, Guardrail, alarms). "
+        "Public subnets only, no NAT gateway: each task gets a public IP.",
     )
 )
 s += [
     node(
         C[0],
-        RT,
+        RA,
         DW,
         NH,
         "outside",
         "Browser",
-        "http://127.0.0.1:8000",
-        "The dashboards: data quality, target trials, ELN extraction, and synthetic releases.",
+        "the public demo, no sign-in",
+        "The dashboards: data quality, target trials, ELN extraction, synthetic releases, and "
+        "variant curation, plus the agent. No sign-in; /api/agent has a daily token limit and "
+        "10 calls an hour per address, and curator decisions are off in the demo.",
     ),
     node(
         C[1],
-        RT,
+        RA,
         DW,
         NH,
         "runtime",
-        "app container",
-        "FastAPI /api + static Next.js",
-        "One container serves the API under /api and the frontend at /. The frontend is a "
-        "Next.js static export, so no Node server runs. Routes for data quality, trials, ELN, "
-        "synthetic data, and the agent at POST /api/agent.",
-        REPO + "src/ehr_rwe_eln/api/main.py",
+        "RWE Workbench",
+        "ECS Express Mode, 1 x86 task",
+        "One container serves the API under /api and the static Next.js frontend at /. ECS "
+        "Express Mode builds the load balancer, HTTPS certificate, and URL. The image is built "
+        "by CodeBuild and tagged with its git commit.",
+        REPO + "infra/terraform/app/service.tf",
     ),
     node(
         C[2],
-        RT,
+        RA,
         DW,
         NH,
-        "runtime",
-        "db container",
-        "Postgres 18 + pgvector 0.8.7",
-        "One database, ehr_rwe_eln, with 23,421 people. Schemas: cdm, dq, tte, eln, synth. "
-        "Tests use ehr_rwe_eln_test. Data lives in the ehr-rwe-eln-db volume.",
-        REPO + "docker-compose.yml",
+        "outside",
+        "Amazon Bedrock",
+        "Claude Opus 4.6, Guardrail",
+        "Claude through the Anthropic SDK's AnthropicBedrock client, with IAM credentials (SSO "
+        "on the laptop, the task role on ECS); no API key. A Bedrock Guardrail checks every "
+        "/api/agent call. Used by the agent, ELN extraction, and literature curation.",
+        "https://docs.claude.com/en/docs/build-with-claude/claude-on-amazon-bedrock",
     ),
     node(
         C[3],
-        RT,
+        RA,
+        DW,
+        NH,
+        "ops",
+        "CodeBuild, ECR",
+        "builds every image",
+        "CodeBuild builds the app image and each Fargate task's image into its own ECR "
+        "repository; task image tags are a hash of their Dockerfile and task script, and tags "
+        "are immutable.",
+        REPO + "infra/terraform/app/app_build.tf",
+    ),
+    node(
+        C[4],
+        RA,
+        DW,
+        NH,
+        "ops",
+        "Budget, alarms, audit",
+        "$100 a month, email",
+        "An AWS Budget on resources tagged project = ehr-rwe-eln, CloudWatch alarms (agent "
+        "tokens, app errors, Bedrock errors, Guardrail interventions) to email, and CloudTrail.",
+        REPO + "infra/terraform/app/alarms.tf",
+    ),
+    node(
+        C[1],
+        RB,
+        DW,
+        NH,
+        "data",
+        "Aurora Serverless v2",
+        "PostgreSQL 18.6 + pgvector",
+        "App state and every module's results (dq, tte, eln, synth, curation), plus omop_stats, "
+        "the precomputed concept counts the agent reads, so public calls never reach Redshift. "
+        "Never holds OMOP. Pauses to zero when idle.",
+        REPO + "infra/terraform/foundation/aurora.tf",
+    ),
+    node(
+        C[2],
+        RB,
+        DW,
+        NH,
+        "data",
+        "S3 Tables",
+        "OMOP as Iceberg, cdm",
+        "The OMOP CDM v5.4 tables as Apache Iceberg in an S3 table bucket, namespace cdm, in the "
+        "Glue Data Catalog; Lake Formation grants each reader its tables.",
+        REPO + "infra/terraform/foundation/lake.tf",
+    ),
+    node(
+        C[3],
+        RB,
+        DW,
+        NH,
+        "runtime",
+        "Redshift Serverless",
+        "SQL on the lake, 150 RPU-h",
+        "Every OMOP reader goes through it, in SQL that also runs on the staging Postgres. "
+        "Billed per second of compute, capped at 150 RPU-hours a month. A Data API session is "
+        "billed until it ends, so RedshiftSession ends it when its block ends.",
+        REPO + "infra/terraform/foundation/redshift.tf",
+    ),
+    node(
+        C[4],
+        RB,
+        DW,
+        NH,
+        "runtime",
+        "Fargate tasks",
+        "on demand, x86",
+        "Heavy jobs leave the laptop: gwas (PLINK 2 and REGENIE), exomiser, lirical, bias "
+        "(BIAS-2015), and synth (synthetic releases and their reports); monitor, the privacy "
+        "checks, daily at 11:00 UTC; and bastion, the tunnel to Redshift. Billed only while a "
+        "task runs. Genomics inputs and outputs are in the genomics bucket.",
+        REPO + "infra/terraform/app",
+    ),
+    arrow([(C[0] + DW, ma), (C[1], ma)], "HTTPS", C[0] + DW + 4, ma - 6),
+    arrow([(C[1] + DW, ma), (C[2], ma)], "agent", C[1] + DW + 8, ma - 6),
+    arrow(
+        [(C[1] + DW / 2, RA + NH), (C[1] + DW / 2, RB)], "read, write", C[1] + DW / 2 + 8, RB - 8
+    ),
+    arrow([(C[2] + DW, mb), (C[3], mb)]),
+    arrow([(C[4], mb), (C[3] + DW, mb)]),
+]
+
+# Laptop.
+RL = 300
+s.append(
+    panel(
+        40,
+        265,
+        1160,
+        110,
+        "The laptop",
+        "Scripts, the ETL's staging database, and the R and Hail containers. Nothing heavy runs "
+        "in local Docker; the containers here are for R's and Hail's own toolchains.",
+    )
+)
+s += [
+    node(
+        C[0],
+        RL,
+        DW,
+        NH,
+        "ops",
+        "MCP server",
+        "stdio, for Claude Code",
+        "The agent's four read-only tools for Claude Code, over stdio (agents/mcp_server.py, "
+        ".mcp.json). Nothing serves MCP on the public demo.",
+        REPO + "src/ehr_rwe_eln/agents/mcp_server.py",
+    ),
+    node(
+        C[1],
+        RL,
+        DW,
+        NH,
+        "runtime",
+        "Compose Postgres",
+        "ETL staging and pytest",
+        "Postgres 18 + pgvector 0.8.7 in Docker Compose, ports on 127.0.0.1. The ETL, cohorts, "
+        "and the ELN bridge write OMOP here; publish_omop.py copies it to the lake and "
+        "reconcile_lake.py checks every column. pytest uses ehr_rwe_eln_test.",
+        REPO + "docker-compose.yml",
+    ),
+    node(
+        C[2],
+        RL,
+        DW,
+        NH,
+        "runtime",
+        "hades container",
+        "OHDSI R tools",
+        "R 4.6.1 and Java 21 with OHDSI HADES: DataQualityDashboard, CohortMethod, and "
+        "TrialEmulation. scripts/hades.py starts the bastion task, opens a tunnel, and connects "
+        "over JDBC with a one-hour IAM password.",
+        REPO + "docker/hades.Dockerfile",
+    ),
+    node(
+        C[3],
+        RL,
         DW,
         NH,
         "ops",
         "scripts/*.py",
-        "uv run on the host",
-        "Every build and analysis step is a script run with uv run python scripts/<name>.py. "
-        "Each writes to ehr_rwe_eln.",
+        "uv run, start every job",
+        "Every build and analysis step is a script: uv run python scripts/<name>.py. The run_*.py "
+        "scripts build an image if needed, start Fargate tasks, wait, and download the results.",
         REPO + "scripts",
     ),
     node(
         C[4],
-        RT,
+        RL,
         DW,
         NH,
         "runtime",
         "hail container",
-        "genomics profile, on request",
-        "Hail pins pandas below 3, PySpark 3.5, and Java 11, so it gets its own 2.4 GB image, "
-        "built only by docker compose run --rm --build hail. No ports; it reads and writes "
-        "data/genomics.",
+        "GWAS cross-check",
+        "Hail pins pandas below 3, PySpark 3.5, and Java 11, so it has its own image, built only "
+        "on request. Reruns the Python score test with REGENIE's principal components, and "
+        "run_gwas.py compares the two variant by variant.",
         REPO + "docker/hail.Dockerfile",
     ),
-    arrow([(C[0] + DW, mt), (C[1], mt)], "HTTP", C[0] + DW + 8, mt - 6),
-    arrow([(C[1] + DW, mt), (C[2], mt)], "read", C[1] + DW + 8, mt - 6),
-    arrow([(C[3], mt), (C[2] + DW, mt)], "write", C[2] + DW + 8, mt - 6),
-    node(
-        C[2],
-        RT + NH + 18,
-        DW,
-        NH,
-        "runtime",
-        "monitor container",
-        "privacy checks every 24h",
-        "Reruns the privacy attacks on every release when a source table or the synth code has "
-        "changed since the last check, and skips otherwise. Each run is a row in "
-        "synth.monitor_run; the last one shows on /synth/. Set MONITOR_INTERVAL_HOURS in .env.",
-        REPO + "src/ehr_rwe_eln/synth/monitor.py",
+    arrow(
+        [
+            (C[1] + DW, RL + 16),
+            (C[2] - 12, RL + 16),
+            (C[2] - 12, RB + NH - 10),
+            (C[2], RB + NH - 10),
+        ]
     ),
     arrow(
-        [(C[2] + DW / 2, RT + NH + 18), (C[2] + DW / 2, RT + NH)],
-        "read, write reports",
-        C[2] + DW / 2 + 8,
-        RT + NH + 13,
+        [(C[2] + DW, RL + 16), (C[3] - 14, RL + 16), (C[3] - 14, RB + NH - 6), (C[3], RB + NH - 6)]
+    ),
+    arrow(
+        [(C[3] + DW, RL + 16), (C[4] - 14, RL + 16), (C[4] - 14, RB + NH - 6), (C[4], RB + NH - 6)]
     ),
 ]
 s.append(f'<g transform="translate(0,{SHIFT})">')
@@ -221,7 +355,7 @@ s.append(
         470,
         "Modules and data flow",
         "The cohort pipeline builds the OMOP tables every other module reads. The ELN bridge "
-        "writes lab results back into them.",
+        "and the genomics panel write rows back into them.",
     )
 )
 s += [
@@ -307,9 +441,10 @@ s += [
         R[3] + NH - R[0],
         "data",
         "OMOP CDM v5.4",
-        "cdm schema, Postgres",
-        "The one database every module shares: person, visits, conditions, drugs, "
-        "measurements, eras, cohorts, and the ELN's specimen and measurement rows.",
+        "S3 Tables, via Redshift",
+        "The one OMOP database every module shares: person, visits, conditions, drugs, "
+        "measurements, eras, cohorts, and the ELN's and the panel's rows. Built in the staging "
+        "Postgres, published to the lake, read through Redshift.",
         "https://ohdsi.github.io/CommonDataModel/cdm54.html",
     ),
     node(
@@ -331,9 +466,10 @@ s += [
         NH,
         "module",
         "Data quality",
-        "2,384 DQD checks",
-        "Every check in OHDSI DataQualityDashboard v2.9.0, grouped by the Kahn framework "
-        "(conformance, completeness, plausibility), scored, and matched against DQD itself.",
+        "DQD 2.9.1, 2,384 checks",
+        "OHDSI DataQualityDashboard 2.9.1 in R, in the hades container, against the lake: "
+        "conformance, completeness, and plausibility checks (the Kahn framework), loaded into "
+        "the dq schema.",
         MOD + "data_quality.md",
     ),
     node(
@@ -346,7 +482,7 @@ s += [
         "4 protocols in YAML",
         "Eligibility, strategies, time zero, and outcomes in YAML. Propensity score weights, "
         "weighted Kaplan-Meier risks, Cox hazard ratios, bootstrap intervals, and negative "
-        "control outcomes.",
+        "control outcomes, in Python; OHDSI CohortMethod and TrialEmulation in R as checks.",
         MOD + "trial_emulation.md",
     ),
     node(
@@ -356,9 +492,10 @@ s += [
         NH,
         "module",
         "Synthetic data",
-        "DP releases, 2 specs",
-        "Differentially private Bayesian network and DP-SGD autoencoder releases, an "
-        "independent-columns baseline, and a 30% holdout to judge them against.",
+        "DP releases, on Fargate",
+        "Differentially private releases from a Bayesian network, a DP-SGD autoencoder, MST, "
+        "and AIM, an independent-columns baseline, and a 30% holdout to judge them against. "
+        "Made and evaluated by the synth task; the monitor reruns the privacy checks daily.",
         MOD + "synthetic_data.md",
     ),
     node(
@@ -371,7 +508,8 @@ s += [
         "stdpopsim study, GWAS",
         "5,000 adults on three simulated chromosomes, with an odds ratio of 1.4 planted on "
         "hypertension. A GWAS is checked against the planted effect. A clinical panel puts "
-        "real ClinVar variants at their GRCh38 positions in the same people.",
+        "real ClinVar variants at their GRCh38 positions in the same people, and its carriers "
+        "go back into OMOP as measurement rows.",
         MOD + "genomics.md",
     ),
     node(
@@ -384,9 +522,10 @@ s += [
         "ACMG rules, expert panels",
         "Classifies the panel's variants with each gene's ClinGen expert panel thresholds, "
         "from gnomAD v4 frequencies and Ensembl VEP consequences, scored against ClinVar and "
-        "ClinGen expert panels. Claude proposes literature evidence, every quote checked in code; "
-        "HPO phenotype scores add context; a curator decides on /curation/. Results in the "
-        "curation schema.",
+        "ClinGen expert panels, and against BIAS-2015 as a baseline. Claude proposes literature "
+        "evidence, every quote checked in code; HPO and Exomiser phenotype rankings add context, "
+        "and LIRICAL is compared with them offline; a curator decides on /curation/. Results in "
+        "the curation schema.",
         MOD + "curation.md",
     ),
     node(
@@ -396,7 +535,7 @@ s += [
         NH,
         "data",
         "dq schema",
-        "results per run, dashboard",
+        "Aurora, shown at /dq/",
         "Each run's checks, thresholds, and pass rates, shown at /dq/.",
         MOD + "data_quality.md",
     ),
@@ -407,7 +546,7 @@ s += [
         NH,
         "data",
         "tte schema",
-        "bias report per protocol",
+        "Aurora, shown at /tte/",
         "Attrition, balance, estimates, and negative controls for each protocol, shown at /tte/.",
         MOD + "trial_emulation.md",
     ),
@@ -418,7 +557,7 @@ s += [
         NH,
         "data",
         "synth schema",
-        "releases, reports, data cards",
+        "Aurora, shown at /synth/",
         "Each release with its provenance, fidelity, utility, trial parity, and privacy risk "
         "reports, plus a data card per release. Shown at /synth/.",
         REPO + "docs/synthetic_data_methodology.md",
@@ -429,10 +568,11 @@ s += [
         DW,
         NH,
         "data",
-        "data/genomics",
+        "Genomics files",
         "VCF, PLINK, dbGaP tables",
-        "Laid out as dbGaP distributes a study. The registry linking study codes to persons is "
-        "written apart, to data/registry/.",
+        "Laid out as dbGaP distributes a study, in data/genomics and the genomics bucket, where "
+        "the Fargate tasks read them. The registry linking study codes to persons is written "
+        "apart, to data/registry/.",
         MOD + "genomics.md",
     ),
     node(
@@ -441,11 +581,11 @@ s += [
         DW,
         NH,
         "runtime",
-        "Hail GWAS",
-        "MatrixTable, cross-check",
-        "Reruns the GWAS in Hail and compares score statistics variant by variant with the "
-        "Python GWAS.",
-        REPO + "scripts/hail_gwas.py",
+        "REGENIE GWAS",
+        "Fargate, Hail cross-check",
+        "PLINK 2 QC and principal components, then REGENIE, as the gwas Fargate task. Hail "
+        "cross-checks the Python score test, with the same principal components.",
+        REPO + "scripts/run_regenie.py",
     ),
     arrow([(C[0] + DW, m[0]), (C[1], m[0])], "CSV", C[0] + DW + 8, m[0] - 6),
     arrow(
@@ -517,7 +657,7 @@ s += [
         "GitHub",
         "pull request to main",
         "main is protected: every change arrives as a pull request, up to date with main, with "
-        "lint-test and secrets passing, and is squash-merged.",
+        "lint-test, secrets, and terraform passing, and is squash-merged.",
         "https://github.com/toddcreasy/ehr-rwe-eln/pulls",
     ),
     node(
@@ -527,10 +667,10 @@ s += [
         NH,
         "ops",
         "GitHub Actions",
-        "lint-test, secrets",
+        "lint-test, secrets, terraform",
         "lint-test: uv sync --locked, ruff, and pytest against the same pgvector image as "
         "Compose. secrets: gitleaks over every commit and every file, for keys, tokens, "
-        "passwords, usernames, and email addresses.",
+        "passwords, usernames, and email addresses. terraform: fmt, validate, tflint, trivy.",
         REPO + ".github/workflows",
     ),
     node(
@@ -553,8 +693,8 @@ s += [
         "ops",
         "evals",
         "real model, run by hand",
-        "Golden cases for the agent, ELN extraction, and literature evidence against Claude. "
-        "Slow and billed, so never in CI.",
+        "Golden cases for the agent, ELN extraction, and literature evidence against Claude on "
+        "Bedrock. Slow and billed, so never in CI.",
         REPO + "evals",
     ),
     arrow([(C[0] + DW, mq), (C[1], mq)]),
@@ -569,9 +709,9 @@ for i, (kind, name, sub) in enumerate(
     [
         ("module", "Module", "Python package"),
         ("data", "Data or output", "database, files"),
-        ("runtime", "Runtime", "containers"),
+        ("runtime", "Runtime", "services, containers"),
         ("ops", "Operations", "scripts, checks"),
-        ("outside", "Outside", "external source"),
+        ("outside", "Outside", "not ours"),
     ]
 ):
     s.append(node(60 + i * 230, LY + 40, DW, NH, kind, name, sub, f"{name}: {sub}"))
@@ -588,14 +728,15 @@ X = [75, 250, 425, 600]
 MX = [820, 1030]
 MW = 150
 # Everything below the module schemas moves down this far, to fit the curation schema.
-SHIFT_SCHEMA = 230
+SHIFT_SCHEMA = 390
 s = header(
     1240,
     860 + SHIFT_SCHEMA,
-    "ehr-rwe-eln database: OMOP tables in cdm, one schema per module",
-    "One Postgres database, ehr_rwe_eln. The cdm schema holds the OMOP CDM v5.4 tables: clinical "
-    "events keyed to person, derived eras and cohorts, and the Athena vocabularies keyed to "
-    "concept. The dq, tte, eln, synth, and curation schemas hold each module's results. Genotypes, "
+    "ehr-rwe-eln data: OMOP in the lake, one Aurora schema per module",
+    "The OMOP CDM v5.4 tables are Iceberg tables in the cdm namespace of an S3 table bucket, read "
+    "through Redshift Serverless: clinical events keyed to person, derived eras and cohorts, and "
+    "the Athena vocabularies keyed to concept. Aurora PostgreSQL holds each module's results in "
+    "the dq, tte, eln, synth, and curation schemas, and the app's own state. Genotypes, "
     "registries, the FHIR bundle, and data cards are files under data/.",
 )
 s.append('<text x="40" y="26" class="t" font-size="15" font-weight="700">ehr_rwe_eln</text>')
@@ -619,11 +760,12 @@ s.append(
         40,
         1160,
         560 + SHIFT_SCHEMA,
-        "Postgres database ehr_rwe_eln",
-        "Every module reads and writes this one database. Alembic migrations create the module "
-        "schemas and record their version in public.alembic_version; scripts/build_omop.py "
-        "builds cdm. A second patient population would be a second CDM schema here, not a "
-        "second database.",
+        "OMOP in the lake, module results in Aurora",
+        "scripts/build_omop.py builds cdm in the staging Postgres and scripts/publish_omop.py "
+        "copies it to the lake. Alembic migrations create the Aurora schemas and record their "
+        "version in public.alembic_version. Foreign keys on the left are OMOP's own; Iceberg "
+        "does not enforce them. A second patient population would be a second CDM namespace, "
+        "not a second database.",
     )
 )
 
@@ -634,8 +776,9 @@ s.append(
         70,
         735,
         515,
-        "cdm schema: OMOP CDM v5.4",
-        "The OHDSI standard tables. 17 foreign keys point at person and 118 at concept.",
+        "Lake: cdm, OMOP CDM v5.4 in S3 Tables",
+        "The OHDSI standard tables, as Apache Iceberg, read through Redshift Serverless. In "
+        "OMOP's model, 17 foreign keys point at person and 118 at concept.",
     )
 )
 s.append(label(75, 112, "Clinical data: every row has person_id, a foreign key to person"))
@@ -720,8 +863,9 @@ s.append(
         70,
         380,
         515 + SHIFT_SCHEMA,
-        "Module schemas",
-        "Each module's results, created by Alembic migrations. Arrows are foreign keys.",
+        "Aurora: module schemas",
+        "Each module's results and the app's state, in Aurora Serverless v2 PostgreSQL, created "
+        "by Alembic migrations. Arrows are foreign keys.",
     )
 )
 mods = [
@@ -872,6 +1016,52 @@ s.append(
         MW,
     )
 )
+s.append(label(820, 820, "synth, continued, and the app's own"))
+for y, (left, right) in [
+    (
+        828,
+        (
+            (
+                "synth.distribution",
+                "who got each release",
+                "Each release's recipients, its withdrawal, and their confirmations that they "
+                "deleted it.",
+                MIG + "009_synth_withdrawal.py",
+            ),
+            (
+                "synth.monitor_run",
+                "one per privacy check",
+                "Each scheduled privacy check: which releases it reran and what changed. The "
+                "monitor task writes one a day.",
+                MIG + "011_synth_monitor.py",
+            ),
+        ),
+    ),
+    (
+        908,
+        (
+            (
+                "omop_stats",
+                "concept counts, build",
+                "Person counts per concept, precomputed from the lake by "
+                "scripts/build_omop_stats.py, so the agent's public calls never reach Redshift. "
+                "Counts under 11 are suppressed and never stored.",
+                MIG + "020_omop_stats.py",
+            ),
+            (
+                "agent.daily_usage",
+                "tokens per day",
+                "Tokens /api/agent spent each day, for the daily limit.",
+                MIG + "018_agent_daily_usage.py",
+            ),
+        ),
+    ),
+]:
+    s.append(table(MX[0], y, "module", *left, MW))
+    s.append(table(MX[1], y, "module", *right, MW))
+# synth.distribution's release_id, along the panel's left edge to synth.release.
+s.append(arrow([(MX[0], 852), (812, 852), (812, 460), (MX[0], 460)]))
+s.append('<text x="821" y="566" class="e" transform="rotate(-90 821 566)">release_id</text>')
 s.append(arrow([(MX[0] + MW / 2, 660), (MX[0] + MW / 2, 628)]))
 s.append(f'<text x="{MX[0] + MW / 2 + 6}" y="648" class="e">run_id</text>')
 s.append(arrow([(MX[1] + MW / 2, 660), (MX[1] + MW / 2, 628)]))
@@ -887,16 +1077,18 @@ s.append(
         620,
         1160,
         110,
-        "Outside this database",
-        "Files under data/, which is gitignored, and the test database.",
+        "On the laptop",
+        "The staging Postgres and files under data/, which is gitignored.",
     )
 )
 outside = [
     (
-        "ehr_rwe_eln_test",
-        "same schemas, pytest only",
-        "Where pytest writes and rolls back, so tests never touch ehr_rwe_eln. Holds no patients.",
-        REPO + "tests/conftest.py",
+        "Compose Postgres",
+        "ETL staging, pytest",
+        "The ETL, cohorts, and the ELN bridge write OMOP to ehr_rwe_eln here, and "
+        "publish_omop.py copies it to the lake. pytest writes to ehr_rwe_eln_test and rolls "
+        "back; it holds no patients.",
+        REPO + "docker-compose.yml",
     ),
     (
         "data/genomics",
@@ -933,8 +1125,8 @@ for i, (kind, name, sub) in enumerate(
     [
         ("data", "OMOP table", "clinical or derived"),
         ("ops", "Vocabulary table", "from Athena"),
-        ("module", "Module table", "dq, tte, eln, synth, curation"),
-        ("outside", "Outside", "files, test database"),
+        ("module", "Aurora table", "module results, app state"),
+        ("outside", "On the laptop", "staging, files"),
     ]
 ):
     s.append(node(60 + i * 230, 780, DW, NH, kind, name, sub, f"{name}: {sub}"))
