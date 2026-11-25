@@ -166,9 +166,13 @@ export function EntryHelp({ entry }: { entry: Entry }) {
         day the specimens were collected.
       </p>
       <p>
-        {entry.model
-          ? `It was extracted by ${entry.model}, a version of Claude, a large language model (LLM).`
-          : "No model has read this entry yet."}
+        {entry.model ? (
+          <>
+            It was extracted by {entry.model}, a version of Claude, a <Term t="LLM">large language model</Term>.
+          </>
+        ) : (
+          "No model has read this entry yet."
+        )}
       </p>
       <p>
         Below, the entry&apos;s text sits on the left and what Claude pulled out of it on the right, so you can
@@ -213,7 +217,7 @@ export function ExtractedHelp({ entry }: { entry: Entry }) {
         {entry.extraction
           ? `This entry gave ${fmt(entry.extraction.samples.length)} samples and ${fmt(entry.extraction.results.length)} results.`
           : entry.error
-            ? "This entry's extraction failed, so nothing from it reaches OMOP (Observational Medical Outcomes Partnership); it is retried on the next run."
+            ? <>This entry&apos;s extraction failed, so nothing from it reaches <Term t="OMOP" />; it is retried on the next run.</>
             : "This entry has not been sent to the model yet."}
       </p>
       <p>

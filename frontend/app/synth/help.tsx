@@ -4,12 +4,21 @@ import { Help, Term } from "../help";
 // docs/synthetic_data_methodology.md, and src/ehr_rwe_eln/synth/; the numbers come from the
 // releases and monitor run on screen, so the notes stay true as releases are added.
 
-// Each spec's heading, in words. A spec not listed shows its file name.
-export const specTitle = (spec: string) =>
-  ({
-    person_summary: "Person summary",
-    trial_lisinopril_amlodipine_ckd: "Trial table: lisinopril against amlodipine, CKD (chronic kidney disease) stage 3 or worse",
-  })[spec] ?? spec.replaceAll("_", " ");
+// Each spec's name in words, as plain text for the help panel's title, and as the heading on the
+// page, where an acronym can be a hover term. A spec not listed shows its file name.
+const SPECS: Record<string, { title: string; heading: React.ReactNode }> = {
+  person_summary: { title: "Person summary", heading: "Person summary" },
+  trial_lisinopril_amlodipine_ckd: {
+    title: "Trial table: lisinopril against amlodipine",
+    heading: (
+      <>
+        Trial table: lisinopril against amlodipine, <Term t="CKD" /> stage 3 or worse
+      </>
+    ),
+  },
+};
+const specTitle = (spec: string) => SPECS[spec]?.title ?? spec.replaceAll("_", " ");
+export const specHeading = (spec: string) => SPECS[spec]?.heading ?? spec.replaceAll("_", " ");
 
 type Release = {
   release_id: number;
@@ -37,26 +46,45 @@ const num = (n: number) => n.toFixed(3);
 const pct = (n: number) => `${(n * 100).toFixed(0)}%`;
 const day = (iso: string) => new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
 
-const NAMES: Record<string, string> = {
-  bayes_net: "Bayesian network",
-  independent: "Independent columns",
-  vae: "VAE (variational autoencoder)",
-  mst: "MST (maximum spanning tree)",
-  aim: "AIM (adaptive and iterative mechanism)",
+// Each synthesizer's short name, and the glossary term that defines it when it has one.
+const NAMES: Record<string, { short: string; term?: "VAE" | "MST" | "AIM" }> = {
+  bayes_net: { short: "Bayesian network" },
+  independent: { short: "Independent columns" },
+  vae: { short: "VAE", term: "VAE" },
+  mst: { short: "MST", term: "MST" },
+  aim: { short: "AIM", term: "AIM" },
 };
-const name = (m: string) => NAMES[m] ?? m;
+const name = (m: string) => {
+  const t = NAMES[m]?.term;
+  return t ? <Term t={t} /> : (NAMES[m]?.short ?? m);
+};
 
-const ABOUT: Record<string, string> = {
+const ABOUT: Record<string, React.ReactNode> = {
   bayes_net:
     "each column gets a noisy histogram (a count of people per value) together with the columns it depends on, as declared in the spec; new rows are sampled from those counts.",
   independent:
     "a baseline that keeps each column on its own and loses every relationship between them. A release that scores like this one is useless.",
-  vae: "a small neural network that learns to compress each row and rebuild it, trained with DP-SGD (differentially private stochastic gradient descent), which adds noise at every training step.",
-  mst: "the method that won the 2018 NIST (National Institute of Standards and Technology) synthetic data contest. It measures every column, picks a tree of column pairs, measures those, and samples from a model fitted to them.",
-  aim: "the successor to MST (maximum spanning tree), from the same research group. It is told which column combinations the analyses will read and spends its budget in rounds, each measuring the one the current model fits worst.",
+  vae: (
+    <>
+      a small neural network that learns to compress each row and rebuild it, trained with <Term t="DP-SGD" />, which
+      adds noise at every training step.
+    </>
+  ),
+  mst: (
+    <>
+      the method that won the 2018 <Term t="NIST" /> synthetic data contest. It measures every column, picks a tree of
+      column pairs, measures those, and samples from a model fitted to them.
+    </>
+  ),
+  aim: (
+    <>
+      the successor to <Term t="MST" />, from the same research group. It is told which column combinations the analyses will read
+      and spends its budget in rounds, each measuring the one the current model fits worst.
+    </>
+  ),
 };
 
-const short = (m: string) => (NAMES[m] ? NAMES[m].split(" (")[0] : m);
+const short = (m: string) => NAMES[m]?.short ?? m;
 const label = (r: Release) => `release ${r.release_id} (${short(r.method)}, epsilon ${r.epsilon})`;
 
 function lowest(releases: Release[], key: keyof Release) {
@@ -324,8 +352,13 @@ export function CardHelp({ release }: { release: Release | undefined }) {
       <p>
         A data card is the label that travels with a release: an export writes it next to the rows. It is rendered
         only from the stored release record and its reports.
-        {release &&
-          ` This one is for release ${release.release_id}, made with ${name(release.method)} at epsilon ${release.epsilon} on ${new Date(release.created_at).toLocaleDateString("en-US", { dateStyle: "medium" })}.`}
+        {release && (
+          <>
+            {" "}
+            This one is for release {release.release_id}, made with {name(release.method)} at epsilon {release.epsilon} on{" "}
+            {new Date(release.created_at).toLocaleDateString("en-US", { dateStyle: "medium" })}.
+          </>
+        )}
       </p>
       <p>
         <strong>At a glance</strong> gives the method, the privacy budget (epsilon, plus delta for some methods, a

@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import Spinner from "../spinner";
-import { CardHelp, MonitorHelp, PageHelp, ReleaseTableHelp, specTitle } from "./help";
+import { CardHelp, MonitorHelp, PageHelp, ReleaseTableHelp, specHeading } from "./help";
 
 type Release = {
   release_id: number;
@@ -267,7 +267,7 @@ export default function SyntheticData() {
       {specs.map((name) => (
         <section key={name} data-help className="flex flex-col gap-2">
           <h2 className="flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-100">
-            {specTitle(name)} <ReleaseTableHelp spec={name} releases={releases!.filter((r) => r.spec_name === name)} />
+            <span>{specHeading(name)}</span> <ReleaseTableHelp spec={name} releases={releases!.filter((r) => r.spec_name === name)} />
           </h2>
           <ReleaseTable releases={releases!.filter((r) => r.spec_name === name)} selected={selected} onSelect={loadCard} />
         </section>

@@ -33,6 +33,10 @@ export const GLOSSARY = {
     name: "Confidence interval",
     def: "A range around an estimate, here at 95%, that says how sure the estimate is.",
   },
+  CKD: {
+    name: "Chronic kidney disease",
+    def: "Kidney function lost over months or years, graded in stages 1 to 5. One of the outcomes the trial protocols study.",
+  },
   ClinGen: {
     name: "Clinical Genome Resource",
     def: "Its expert panels adapt the ACMG/AMP criteria to their genes and publish the result in the CSpec registry.",
@@ -53,6 +57,10 @@ export const GLOSSARY = {
   DP: {
     name: "Differential privacy",
     def: "A mathematical guarantee that what is released barely changes whether or not any one person's data was used. It works by adding calibrated random noise.",
+  },
+  "DP-SGD": {
+    name: "Differentially private stochastic gradient descent",
+    def: "Training a neural network so the result is differentially private, by clipping each person's contribution and adding noise at every step.",
   },
   DQD: {
     name: "DataQualityDashboard",
