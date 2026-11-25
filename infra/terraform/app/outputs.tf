@@ -1,3 +1,8 @@
+output "web_url" {
+  description = "The app's own name, through CloudFront."
+  value       = "https://${var.domain_name}"
+}
+
 output "ecr_repository_url" {
   value = aws_ecr_repository.app.repository_url
 }

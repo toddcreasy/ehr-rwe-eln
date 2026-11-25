@@ -44,10 +44,15 @@ async def log_requests(request: Request, call_next):
     if is_page_view(request):
         # Who visits the demo: scripts/demo_visitors.py looks up each address's registered
         # organization. Logs expire after 30 days.
-        fields["client"] = client_address(request)
+        fields["client"] = client_address(request, origin_secret())
         fields["user_agent"] = request.headers.get("user-agent", "")[:300]
     log.info("request", extra={"fields": fields})
     return response
+
+
+def origin_secret() -> str | None:
+    secret = settings.origin_verify_secret
+    return secret.get_secret_value() if secret else None
 
 
 def is_page_view(request: Request) -> bool:
@@ -100,7 +105,7 @@ def agent(request: AgentRequest, http_request: Request) -> dict:
     """Public: no sign-in. The switch and both limits are checked before the model is called."""
     if not settings.agent_enabled:
         raise HTTPException(status_code=503, detail=AGENT_OFF_MESSAGE)
-    if not within_address_limit(client_address(http_request)):
+    if not within_address_limit(client_address(http_request, origin_secret())):
         log.info("agent address limit", extra={"fields": {}})
         raise HTTPException(status_code=429, detail=ADDRESS_LIMIT_MESSAGE)
     with connect() as con:

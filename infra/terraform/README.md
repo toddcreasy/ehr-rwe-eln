@@ -6,7 +6,7 @@ Three stacks, each with its own state file in one S3 bucket, `ehr-rwe-eln-tfstat
 |---|---|---|
 | `bootstrap/` | The state bucket itself (versioned, encrypted, private, old versions expire after 90 days) | `bootstrap/terraform.tfstate` |
 | `foundation/` | VPC, S3 Tables lake with Lake Formation and the Glue catalog, Redshift Serverless, Aurora Serverless v2, the $100 budget, the CloudTrail trail | `foundation/terraform.tfstate` |
-| `app/` | ECR, the public ECS Express Mode service, the two CodeBuild projects (the app image, and every task image), the Fargate task definitions (bastion, monitor, gwas, exomiser, lirical, bias, synth), the daily monitor schedule, the Fargate vCPU quota, the Bedrock Guardrail, the alarms, Bedrock invocation logging, and their IAM roles. Reads `foundation/` outputs through `terraform_remote_state` | `app/terraform.tfstate` |
+| `app/` | ECR, the public ECS Express Mode service, the two CodeBuild projects (the app image, and every task image), the Fargate task definitions (bastion, monitor, gwas, exomiser, lirical, bias, synth), the daily monitor schedule, the Fargate vCPU quota, the CloudFront distribution that serves the app at its own name, the Bedrock Guardrail, the alarms, Bedrock invocation logging, and their IAM roles. Reads `foundation/` outputs through `terraform_remote_state` | `app/terraform.tfstate` |
 
 Two of these cover the whole account, not just this project: the CloudTrail trail (`foundation/audit.tf`, every Region, a year in `ehr-rwe-eln-cloudtrail-<account ID>`) and Bedrock invocation logging (`app/bedrock_logging.tf`, every Bedrock call in us-east-1, prompts and responses as text, 30 days in `/bedrock/invocations`). Each is one setting per account, so no other repo should manage them.
 
@@ -91,7 +91,9 @@ To check a guardrail change before it goes live, update only the guardrail's DRA
 
 The runner needs a clean working tree. It uploads `git archive` of HEAD (tracked files only, so never `.env` or `data/`) to `build/app-<commit>.zip` in the genomics bucket and skips the build if ECR already has the tag. Images up to `1b0e4c3` were ARM, built on the laptop with `docker buildx`.
 
-The first deploy took about 25 minutes: Express Mode builds the load balancer and certificate before it starts a task. Express Mode gives the task a public IP in the public subnets, which is how it pulls from ECR with no NAT gateway. `terraform output app_url` is the public HTTPS URL. A brand-new hostname can stay unresolvable on a Mac that looked it up too early (macOS caches the miss); `sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder` clears it.
+The first deploy took about 25 minutes: Express Mode builds the load balancer and certificate before it starts a task. Express Mode gives the task a public IP in the public subnets, which is how it pulls from ECR with no NAT gateway. `terraform output app_url` is that URL.
+
+Visitors use `terraform output web_url` instead: a CloudFront distribution in front of the Express Mode URL (`app/web_domain.tf`), with caching off. Express Mode owns its load balancer and shifts traffic between two target groups on each deploy, so the custom name can't go on the load balancer itself. The name's Route 53 zone comes from project-template's `ops/dns`; this stack adds the certificate and records. CloudFront waits up to 60 s for the app; the longest `/api/agent` call in the 30 days to 2026-11-25 took 27 s. Behind CloudFront the last X-Forwarded-For hop is a CloudFront server, so CloudFront also sends the visitor's address and a secret (`ORIGIN_VERIFY_SECRET`, in Secrets Manager), and the app trusts that address only when the secret matches (`api/limits.py`). A brand-new hostname can stay unresolvable on a Mac that looked it up too early (macOS caches the miss); `sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder` clears it.
 
 ## GWAS on AWS
 

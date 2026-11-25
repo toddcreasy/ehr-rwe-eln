@@ -2,6 +2,8 @@
 model bill: the daily token limit bounds total spend, and the per-address limit keeps one visitor
 from using the whole day's allowance. Same design as glia-nav (docs/OPERATIONS.md there)."""
 
+import hmac
+import ipaddress
 import threading
 import time
 from collections import defaultdict, deque
@@ -44,13 +46,33 @@ def next_reset(now: datetime | None = None) -> datetime:
     return datetime.combine(today + timedelta(days=1), clock_time(), tzinfo=EASTERN)
 
 
-def client_address(request: Request) -> str:
-    """The caller's address. The load balancer appends the address it saw to X-Forwarded-For,
-    so the last entry is the one a caller cannot set."""
+def client_address(request: Request, origin_secret: str | None = None) -> str:
+    """The caller's address. Through CloudFront, the address CloudFront saw, which it sends with
+    X-Origin-Verify; without a matching secret that header is ignored, so a caller can't set it.
+    Otherwise the load balancer's: it appends the address it saw to X-Forwarded-For, so the last
+    entry is the one a caller cannot set."""
+    if origin_secret and hmac.compare_digest(
+        request.headers.get("x-origin-verify", "").encode(), origin_secret.encode()
+    ):
+        viewer = viewer_ip(request.headers.get("cloudfront-viewer-address", ""))
+        if viewer:
+            return viewer
     forwarded = request.headers.get("x-forwarded-for", "")
     if forwarded:
         return forwarded.rsplit(",", 1)[-1].strip()
     return request.client.host if request.client else "unknown"
+
+
+def viewer_ip(value: str) -> str | None:
+    """The IP in CloudFront-Viewer-Address, which is address:port (198.51.100.10:46532; an IPv6
+    address keeps its colons, so the port is whatever follows the last one)."""
+    host = value.strip().rsplit(":", 1)[0].strip("[]") if ":" in value else ""
+    for candidate in (host, value.strip().strip("[]")):
+        try:
+            return str(ipaddress.ip_address(candidate))
+        except ValueError:
+            continue
+    return None
 
 
 def within_address_limit(address: str) -> bool:
