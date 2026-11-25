@@ -95,7 +95,7 @@ function GitHub() {
 function SectionStrip({ path }: { path: string }) {
   const live = useLive();
   return (
-    <nav aria-label="Sections" className="sticky top-0 z-10 border-b border-line bg-card/90 backdrop-blur">
+    <nav aria-label="Sections" className="border-b border-line bg-card/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 sm:px-6">
         {MODULES.map((m, i) => {
           const active = path.startsWith(m.href);
@@ -127,6 +127,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   return (
     <LiveContext.Provider value={live}>
       <HelpProvider>
+      {/* The header and the section strip stay at the top while the page scrolls, under the help panel. */}
+      <div className="sticky top-0 z-30">
       <header className="border-b border-line bg-card">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link href="/" className="flex items-center gap-3">
@@ -154,6 +156,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       {!home && <SectionStrip path={path} />}
+      </div>
       <div className="flex-1">
         {home ? (
           children

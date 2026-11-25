@@ -1,4 +1,4 @@
-import { Help } from "../help";
+import { Help, Term } from "../help";
 
 // Help notes for the synthetic data page. Facts come from docs/modules/synthetic_data.md,
 // docs/synthetic_data_methodology.md, and src/ehr_rwe_eln/synth/; the numbers come from the
@@ -72,25 +72,25 @@ const Head = ({ children }: { children: React.ReactNode }) => (
 export function PageHelp({ releases }: { releases: Release[] | null }) {
   const epsilons = releases ? [...new Set(releases.map((r) => r.epsilon))].sort((a, b) => a - b) : [];
   return (
-    <Help title="Synthetic data releases">
+    <Help page title="Synthetic data releases">
       <Head>Why run it</Head>
       <p>
         Health records with real people in them are shared under controlled access: a researcher applies, and a
-        committee checks the use against what the participants agreed to. This page treats the project&apos;s OMOP
-        (Observational Medical Outcomes Partnership) database as if it were such a source.
+        committee checks the use against what the participants agreed to. This page treats the project&apos;s{" "}
+        <Term t="OMOP" /> database as if it were such a source.
       </p>
       <p>
         A synthetic release is a made-up table with the same columns and, as far as possible, the same patterns. Each
-        one is generated under <strong>differential privacy</strong> (DP), a mathematical guarantee that what is
+        one is generated under <Term t="DP">differential privacy</Term>, a mathematical guarantee that what is
         released barely changes whether or not any one person&apos;s data was used. Teams can then build and test
         analysis code against it without seeing anyone in the source. The checks on each release are written for a
-        reviewer such as a DAC (data access committee), who decides whether a dataset may be shared.
+        reviewer such as a <Term t="DAC">data access committee</Term>, who decides whether a dataset may be shared.
       </p>
 
       <Head>Where the data comes from</Head>
       <p>
-        <strong>Synthea</strong>, an open-source simulator, generates 23,421 people who never existed. The project
-        converts their records to the OMOP Common Data Model (CDM) v5.4. No real patient data is used anywhere.
+        <Term t="Synthea" />, an open-source simulator, generates 23,421 people who never existed. The project
+        converts their records to the OMOP <Term t="CDM">Common Data Model</Term> v5.4. No real patient data is used anywhere.
       </p>
       <p>
         A spec file names the source table, its columns, and the fixed range of every column. Ranges are written
@@ -109,10 +109,9 @@ export function PageHelp({ releases }: { releases: Release[] | null }) {
         events, too few to hold any out.
       </p>
       <p>
-        Five synthesizers make releases: a Bayesian network (each column measured with the columns it depends on), a
-        VAE (variational autoencoder, a small neural network), <strong>MST</strong> (maximum spanning tree), the
-        method that won the 2018 NIST (National Institute of Standards and Technology) synthetic data contest,{" "}
-        <strong>AIM</strong> (adaptive and iterative mechanism), MST&apos;s successor from the same group, and an
+        Five synthesizers make releases: a Bayesian network (each column measured with the columns it depends on), a{" "}
+        <Term t="VAE" /> (a small neural network), <Term t="MST" />, the method that won the 2018 <Term t="NIST" />{" "}
+        synthetic data contest, <Term t="AIM" />, MST&apos;s successor from the same group, and an
         independent-columns baseline that keeps no relationships at all.
       </p>
       <p>
@@ -166,11 +165,11 @@ export function MonitorHelp({ monitor }: { monitor: Monitor }) {
       <p>
         The attacks are seeded, so on unchanged data and code they give the same answer. Each run fingerprints the
         source tables and the synthesizer code and reruns the attacks only if one changed: a rebuild, new lab results
-        written to the OMOP (Observational Medical Outcomes Partnership) tables, or new code. Otherwise it records a skipped
+        written to the <Term t="OMOP" /> tables, or new code. Otherwise it records a skipped
         run, which is what &ldquo;sources and code unchanged&rdquo; means.
       </p>
       <p>
-        A release is flagged when its membership AUC (area under the curve, where 0.5 is a coin flip) or its share of
+        A release is flagged when its membership <Term t="AUC" /> (0.5 is a coin flip) or its share of
         synthetic rows nearest a training person moves more than halfway from chance toward what a plain copy of the
         training data scores. For the person summary that is 0.575 and 56.5%, per the methodology. A flag is a
         reason to investigate and maybe withdraw the release, not proof of a leak.
@@ -242,7 +241,7 @@ export function ReleaseTableHelp({ spec, releases }: { spec: string; releases: R
 
       <Head>Fidelity</Head>
       <p>
-        <strong>Column TVD</strong> (total variation distance) is how far each column&apos;s distribution in the
+        <strong>Column <Term t="TVD" /></strong> is how far each column&apos;s distribution in the
         release is from the real one, averaged over columns: 0 is identical, 1 is no overlap.{" "}
         <strong>Pair TVD</strong> is the same for every pair of columns, which shows whether relationships survived.
       </p>
@@ -265,7 +264,7 @@ export function ReleaseTableHelp({ spec, releases }: { spec: string; releases: R
         <>
           <Head>Utility and privacy</Head>
           <p>
-            <strong>Utility AUC</strong> (area under the curve): a model predicting death, trained on the release and
+            <strong>Utility <Term t="AUC" /></strong>: a model predicting death, trained on the release and
             scored on held-out real people. 0.5 is guessing, 1 is perfect.
             {real !== null && ` In parentheses, the same model trained on real data: ${num(real)}.`}
             {bestUtility && ` The best release is ${label(bestUtility)} at ${num(bestUtility.utility_auc as number)}.`}
@@ -286,9 +285,9 @@ export function ReleaseTableHelp({ spec, releases }: { spec: string; releases: R
           <Head>Trial parity</Head>
           <p>
             The trial emulation page&apos;s own analysis, a propensity-weighted Cox model, run on 20 more draws of
-            each method and epsilon. Its answer is a hazard ratio (HR): how much faster the outcome comes on
+            each method and epsilon. Its answer is a <Term t="HR">hazard ratio</Term> (HR): how much faster the outcome comes on
             lisinopril than on amlodipine, where 1 means no difference. In the run of 2026-11-22 the real data gave
-            1.00, with a 95% confidence interval of 0.43 to 2.32.
+            1.00, with a 95% <Term t="CI">confidence interval</Term> of 0.43 to 2.32.
           </p>
           <p>
             <strong>Trial covers real</strong>: the share of draws whose interval contains the real HR.{" "}

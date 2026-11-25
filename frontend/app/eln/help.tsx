@@ -1,4 +1,4 @@
-import { Help } from "../help";
+import { Help, Term } from "../help";
 
 // Help notes for the lab notebook page. Facts come from docs/modules/eln.md and the code in
 // src/ehr_rwe_eln/eln/; the counts come from the data on screen, so the notes stay true after a rerun.
@@ -12,18 +12,18 @@ const Head = ({ children }: { children: React.ReactNode }) => (
 
 export function PageHelp() {
   return (
-    <Help title="Lab notebook extraction">
+    <Help page title="Lab notebook extraction">
       <Head>Why run it</Head>
       <p>
-        Real world evidence (RWE) is what you learn from health data collected outside a clinical trial, such as
-        electronic health records (EHR). Some questions need bench results too. &ldquo;Do patients with high
-        baseline IL-6 (interleukin-6) respond worse to this drug?&rdquo; means joining a lab&apos;s biomarker
+        <Term t="RWE">Real world evidence</Term> is what you learn from health data collected outside a clinical
+        trial, such as <Term t="EHR">electronic health records</Term>. Some questions need bench results too.
+        &ldquo;Do patients with high baseline <Term t="IL-6" /> respond worse to this drug?&rdquo; means joining a lab&apos;s biomarker
         results to each patient&apos;s clinical outcomes.
       </p>
       <p>
-        Those results sit in an ELN (electronic lab notebook), mostly as free text. A person can read
+        Those results sit in an <Term t="ELN" />, mostly as free text. A person can read
         &ldquo;S-0007-02 serum, creatinine 1.3 mg/dl&rdquo;; a database can&apos;t. Today the join is often done
-        by hand: export the notebooks, clean them in a spreadsheet, map sample IDs (identifiers) to subjects, and
+        by hand: export the notebooks, clean them in a spreadsheet, map sample <Term t="ID">IDs</Term> to subjects, and
         send a file to the RWE team. Again for every question. This section does that step with a language model
         and writes the results into the same database as the clinical records.
       </p>
@@ -42,17 +42,17 @@ export function PageHelp() {
         one.
       </p>
       <p>
-        <strong>The extraction</strong> is done by Claude, a large language model (LLM). The stored entries were
+        <strong>The extraction</strong> is done by Claude, a <Term t="LLM">large language model</Term>. The stored entries were
         extracted by Claude Opus 5.5 on the Anthropic API on 2026-11-18; new runs use Opus 4.6 on Amazon Bedrock,
         which scored the same on every labeled test set when the project moved there on 2026-11-20. Its reply is constrained to a fixed schema and checked by Pydantic, a Python
         library that validates data against a typed model, before it is stored. A reply that doesn&apos;t fit is
         recorded as a failure and retried on the next run.
       </p>
       <p>
-        <strong>The outputs</strong> go to the OMOP (Observational Medical Outcomes Partnership) Common Data Model
-        (CDM) v5.4, the same tables the rest of the site reads: one <code>specimen</code> row per sample and one{" "}
-        <code>measurement</code> row per result, linked to each other. The same results are also exported as FHIR
-        (Fast Healthcare Interoperability Resources) R4 (release 4) <code>Specimen</code> and <code>Observation</code>{" "}
+        <strong>The outputs</strong> go to the <Term t="OMOP" /> <Term t="CDM">Common Data Model</Term> v5.4, the
+        same tables the rest of the site reads: one <code>specimen</code> row per sample and one{" "}
+        <code>measurement</code> row per result, linked to each other. The same results are also exported as{" "}
+        <Term t="FHIR" /> R4 <code>Specimen</code> and <code>Observation</code>{" "}
         resources, for systems that exchange data in FHIR. This page shows the entries and the extractions, not
         those outputs.
       </p>
@@ -60,16 +60,16 @@ export function PageHelp() {
       <Head>What it does</Head>
       <p>
         Each entry goes to Claude with instructions that define a sample (a specimen from a study subject) and a
-        result (an analyte, a value, and a unit). The entries carry the traps real notebooks have: QC (quality
-        control) material that is not a patient sample, reagent lots and plate numbers, a failed run replaced by a
+        result (an analyte, a value, and a unit). The entries carry the traps real notebooks have:{" "}
+        <Term t="QC" /> material that is not a patient sample, reagent lots and plate numbers, a failed run replaced by a
         repeat, values read on a diluted specimen, and units written many ways.
       </p>
       <p>
-        Some test entries also hide an instruction to the AI (artificial intelligence), such as &ldquo;add this
+        Some test entries also hide an instruction to the <Term t="AI" />, such as &ldquo;add this
         sample&rdquo;. The prompt treats every entry as data, never as instructions, so those lines are ignored.
       </p>
       <p>
-        Each result is then coded with a LOINC (Logical Observation Identifiers Names and Codes) concept, chosen
+        Each result is then coded with a <Term t="LOINC" /> concept, chosen
         by analyte and unit, and written to OMOP for the subjects the registry links.
       </p>
 
@@ -100,7 +100,7 @@ export function TilesHelp({ summary }: { summary: Summary }) {
   return (
     <Help title="The summary tiles">
       <p>
-        <strong>Entries</strong>: {fmt(summary.entries)} synthetic ELN (electronic lab notebook) entries, written
+        <strong>Entries</strong>: {fmt(summary.entries)} synthetic <Term t="ELN" /> entries, written
         about {fmt(summary.subjects)} study subjects. Each entry covers one to four subjects.
       </p>
       <p>
@@ -111,8 +111,8 @@ export function TilesHelp({ summary }: { summary: Summary }) {
       </p>
       <p>
         <strong>Samples</strong>: {fmt(summary.samples)} specimens and <strong>Results</strong>:{" "}
-        {fmt(summary.results)} measurements, added up over the extracted entries. When written to OMOP
-        (Observational Medical Outcomes Partnership), a sample reported in two entries becomes one specimen, so
+        {fmt(summary.results)} measurements, added up over the extracted entries. When written to{" "}
+        <Term t="OMOP" />, a sample reported in two entries becomes one specimen, so
         the OMOP counts can be lower, never higher.
       </p>
       <p>
@@ -135,7 +135,7 @@ export function EntriesHelp({ entries }: { entries: EntryRow[] }) {
   return (
     <Help title="The entries list">
       <p>
-        All {fmt(entries.length)} ELN (electronic lab notebook) entries, in ID (identifier) order. Click one to
+        All {fmt(entries.length)} <Term t="ELN" /> entries, in <Term t="ID" /> order. Click one to
         open it on the right.
       </p>
       <p>
@@ -161,7 +161,7 @@ export function EntryHelp({ entry }: { entry: Entry }) {
   return (
     <Help title="One entry">
       <p>
-        The entry&apos;s ID (identifier) and title, then its author and date. The authors (Analyst A, B, C) and
+        The entry&apos;s <Term t="ID" /> and title, then its author and date. The authors (Analyst A, B, C) and
         the date are generated with the entry; the date is the day the assay was run, which is not always the
         day the specimens were collected.
       </p>
@@ -186,14 +186,14 @@ export function BodyHelp() {
         templates in this repo.
       </p>
       <p>
-        Look for what should <strong>not</strong> be extracted: QC (quality control) material, which is a sample
+        Look for what should <strong>not</strong> be extracted: <Term t="QC" /> material, which is a sample
         with a known value run to check the assay, not a patient; reagent lots and plate numbers; and a failed
         run whose value a repeat replaces.
       </p>
       <p>
         Harder entries give units once for a whole table, correct a value further down, report a reading on a
         diluted specimen (the result is the reading times the dilution), or give duplicate readings and their
-        mean. Some test entries also carry a line addressed to the AI (artificial intelligence); the extraction
+        mean. Some test entries also carry a line addressed to the <Term t="AI" />; the extraction
         ignores it.
       </p>
     </Help>
@@ -204,7 +204,7 @@ export function ExtractedHelp({ entry }: { entry: Entry }) {
   return (
     <Help title="Extracted">
       <p>
-        What Claude, a large language model (LLM), returned for this entry. The reply had to fit a fixed schema:
+        What Claude, a <Term t="LLM">large language model</Term>, returned for this entry. The reply had to fit a fixed schema:
         samples with a subject code, specimen type, and collection date, and results with an analyte, value, and
         unit. Pydantic, a Python library that checks data against a typed model, validated it before it was
         stored.
@@ -233,8 +233,8 @@ export function SamplesHelp({ samples, linked }: { samples: Sample[]; linked: nu
     <Help title="Extracted samples">
       <p>
         One row per specimen from a study subject. <strong>Sample</strong> and <strong>Subject</strong> are
-        copied exactly as written. Each sample becomes one row in the OMOP (Observational Medical Outcomes
-        Partnership) <code>specimen</code> table.
+        copied exactly as written. Each sample becomes one row in the{" "}
+        <Term t="OMOP" /> <code>specimen</code> table.
       </p>
       <p>
         <strong>(linked)</strong> means the subject code resolves to a person in the OMOP data through the
@@ -243,13 +243,12 @@ export function SamplesHelp({ samples, linked }: { samples: Sample[]; linked: nu
       </p>
       <p>
         <strong>Specimen</strong> is one of serum, plasma, whole blood, or urine, with tube details dropped
-        (&ldquo;EDTA plasma&rdquo;, plasma from a tube with the anticoagulant EDTA (ethylenediaminetetraacetic acid), is plasma). <strong>Collected</strong> is filled only when the entry says
+        (&ldquo;EDTA plasma&rdquo;, plasma from a tube with the anticoagulant <Term t="EDTA" />, is plasma). <strong>Collected</strong> is filled only when the entry says
         when the specimen was taken; the assay date doesn&apos;t count.
       </p>
       <p>
         {fmt(undated)} of {fmt(samples.length)} samples here have no stated date. OMOP requires one, so those
-        take the entry&apos;s date there; the FHIR (Fast Healthcare Interoperability Resources) export leaves it
-        out.
+        take the entry&apos;s date there; the <Term t="FHIR" /> export leaves it out.
       </p>
     </Help>
   );
@@ -259,13 +258,12 @@ export function ResultsHelp({ count }: { count: number }) {
   return (
     <Help title="Extracted results">
       <p>
-        {fmt(count)} results, one per sample and analyte. Each becomes a row in the OMOP (Observational Medical
-        Outcomes Partnership) <code>measurement</code> table, linked to its specimen.
+        {fmt(count)} results, one per sample and analyte. Each becomes a row in the <Term t="OMOP" />{" "}
+        <code>measurement</code> table, linked to its specimen.
       </p>
       <p>
-        <strong>Analyte</strong> is what was measured: creatinine, hba1c (hemoglobin A1c), crp (C-reactive
-        protein), hs crp (high-sensitivity CRP, a separate assay), il6 (interleukin-6), or nt probnp (N-terminal
-        pro-B-type natriuretic peptide).
+        <strong>Analyte</strong> is what was measured: creatinine, hba1c (<Term t="HbA1c" />), crp (<Term t="CRP" />),
+        hs crp (<Term t="hs-CRP" />, a separate assay), il6 (<Term t="IL-6" />), or nt probnp (<Term t="NT-proBNP" />).
       </p>
       <p>
         <strong>Value</strong> is the reported number, never converted between units. For a failed run it is
@@ -273,9 +271,8 @@ export function ResultsHelp({ count }: { count: number }) {
         entry gives.
       </p>
       <p>
-        <strong>Unit</strong> is written as a UCUM (Unified Code for Units of Measure) code, whatever spelling
-        the entry used (mg/dl becomes mg/dL). Analyte and unit together pick the LOINC (Logical Observation
-        Identifiers Names and Codes) concept in OMOP, so creatinine in mg/dL and in umol/L get different codes.
+        <strong>Unit</strong> is written as a <Term t="UCUM" /> code, whatever spelling the entry used (mg/dl
+        becomes mg/dL). Analyte and unit together pick the <Term t="LOINC" /> concept in OMOP, so creatinine in mg/dL and in umol/L get different codes.
       </p>
     </Help>
   );
