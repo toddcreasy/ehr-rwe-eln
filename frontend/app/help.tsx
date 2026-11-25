@@ -58,6 +58,14 @@ function opensAtLaunch() {
     return true;
   }
 }
+function hintUnseen() {
+  try {
+    // Someone who has opened a "?" note before already knows where help is.
+    return !localStorage.getItem("hint-seen") && !localStorage.getItem("help-seen");
+  } catch {
+    return false;
+  }
+}
 function rememberClosed(closed: boolean) {
   try {
     if (closed) sessionStorage.setItem("help-panel", "closed");
@@ -174,7 +182,18 @@ export function DocsToggle() {
     () => !document.documentElement.classList.contains("docs-off"),
     () => true,
   );
+  // A first visit with help on gets a one-time pointer to this switch.
+  const unseen = useSyncExternalStore(noChange, hintUnseen, () => false);
+  const [dismissed, setDismissed] = useState(false);
+  const hint = on && unseen && !dismissed;
+  function dismiss() {
+    setDismissed(true);
+    try {
+      localStorage.setItem("hint-seen", "1");
+    } catch {}
+  }
   function toggle() {
+    dismiss();
     const off = document.documentElement.classList.toggle("docs-off");
     if (off) close();
     else show(PAGE);
@@ -183,30 +202,48 @@ export function DocsToggle() {
     } catch {}
   }
   return (
-    <button
-      onClick={toggle}
-      aria-pressed={on}
-      aria-label={on ? "Hide help on the page" : "Show help on the page"}
-      data-tip={on ? "Hide help on the page" : "Show help on the page"}
-      className={`tip rounded-full p-2 hover:text-foreground ${on ? "bg-accent-soft text-foreground" : "text-muted hover:bg-accent-soft"}`}
-    >
-      {on ? (
-        // On: a solid circle with the question mark cut out of it.
-        <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-          <circle cx="12" cy="12" r="10" fill="currentColor" />
-          <path d="M9.5 9.3a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.8" fill="none" stroke="var(--card)" strokeWidth="2" strokeLinecap="round" />
-          <circle cx="12" cy="17.2" r="1.1" fill="var(--card)" />
-        </svg>
-      ) : (
-        // Off: the outline, struck through.
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M9.5 9.3a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.8" strokeLinecap="round" />
-          <circle cx="12" cy="17" r="0.6" fill="currentColor" />
-          <path d="M4 4l16 16" strokeLinecap="round" />
-        </svg>
+    <span className="relative inline-flex">
+      <button
+        onClick={toggle}
+        aria-pressed={on}
+        aria-label={on ? "Hide help on the page" : "Show help on the page"}
+        data-tip={hint ? undefined : on ? "Hide help on the page" : "Show help on the page"}
+        className={`tip rounded-full p-2 hover:text-foreground ${on ? "bg-accent-soft text-foreground" : "text-muted hover:bg-accent-soft"}`}
+      >
+        {on ? (
+          // On: a solid circle with the question mark cut out of it.
+          <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" fill="currentColor" />
+            <path d="M9.5 9.3a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.8" fill="none" stroke="var(--card)" strokeWidth="2" strokeLinecap="round" />
+            <circle cx="12" cy="17.2" r="1.1" fill="var(--card)" />
+          </svg>
+        ) : (
+          // Off: the outline, struck through.
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M9.5 9.3a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.8" strokeLinecap="round" />
+            <circle cx="12" cy="17" r="0.6" fill="currentColor" />
+            <path d="M4 4l16 16" strokeLinecap="round" />
+          </svg>
+        )}
+      </button>
+      {hint && (
+        <div role="status" className="absolute top-full right-0 z-50 mt-3 w-64 rounded-lg bg-foreground p-3 font-sans text-sm leading-relaxed text-card shadow-lg">
+          <span aria-hidden="true" className="absolute -top-1.5 right-3 h-3 w-3 rotate-45 bg-foreground" />
+          <p>
+            New here? Each <strong>?</strong> on the page explains the part next to it. This button turns help on and
+            off.
+          </p>
+          <button
+            type="button"
+            onClick={dismiss}
+            className="mt-2 rounded-full bg-card px-3 py-1 text-xs font-semibold text-foreground hover:opacity-90"
+          >
+            Got it
+          </button>
+        </div>
       )}
-    </button>
+    </span>
   );
 }
 
@@ -323,7 +360,7 @@ export function Help({
         aria-controls={shown ? `${id}-note` : undefined}
         aria-label={`About: ${title}`}
         data-tip="What's this?"
-        className={`help-button tip inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent align-middle text-sm font-bold text-card shadow-sm hover:opacity-85 ${
+        className={`help-button tip inline-flex h-[1.3em] w-[1.3em] shrink-0 items-center justify-center rounded-full bg-accent align-middle font-sans text-[min(0.75em,16px)] leading-none font-bold text-card before:absolute before:top-1/2 before:left-1/2 before:h-6 before:w-6 before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] shadow-sm hover:opacity-85 ${
           shown ? "ring-2 ring-accent ring-offset-2 ring-offset-card" : ""
         } ${className}`}
       >
