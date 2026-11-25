@@ -23,7 +23,7 @@ export function PageHelp() {
       <p>
         Those results sit in an <Term t="ELN" />, mostly as free text. A person can read
         &ldquo;S-0007-02 serum, creatinine 1.3 mg/dl&rdquo;; a database can&apos;t. Today the join is often done
-        by hand: export the notebooks, clean them in a spreadsheet, map sample IDs to subjects, and
+        by hand: export the notebooks, clean them in a spreadsheet, map sample <Term t="ID">IDs</Term> to subjects, and
         send a file to the RWE team. Again for every question. This section does that step with a language model
         and writes the results into the same database as the clinical records.
       </p>
@@ -135,7 +135,7 @@ export function EntriesHelp({ entries }: { entries: EntryRow[] }) {
   return (
     <Help title="The entries list">
       <p>
-        All {fmt(entries.length)} <Term t="ELN" /> entries, in ID order. Click one to
+        All {fmt(entries.length)} <Term t="ELN" /> entries, in <Term t="ID" /> order. Click one to
         open it on the right.
       </p>
       <p>
@@ -161,7 +161,7 @@ export function EntryHelp({ entry }: { entry: Entry }) {
   return (
     <Help title="One entry">
       <p>
-        The entry&apos;s ID and title, then its author and date. The authors (Analyst A, B, C) and
+        The entry&apos;s <Term t="ID" /> and title, then its author and date. The authors (Analyst A, B, C) and
         the date are generated with the entry; the date is the day the assay was run, which is not always the
         day the specimens were collected.
       </p>

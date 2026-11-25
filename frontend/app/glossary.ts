@@ -116,6 +116,7 @@ export const GLOSSARY = {
     name: "High-sensitivity CRP",
     def: "A separate, more sensitive test for C-reactive protein, a marker of inflammation.",
   },
+  ID: { name: "Identifier", def: "The code or number that picks out one record, such as one entry, sample, or variant." },
   Iceberg: {
     name: "Apache Iceberg",
     def: "An open table format: a table is data files plus metadata files that any query engine can read.",

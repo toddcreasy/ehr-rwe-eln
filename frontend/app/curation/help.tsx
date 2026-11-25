@@ -164,7 +164,7 @@ export function HeaderHelp({
   return (
     <Help title="The variant and its class">
       <p>
-        The title names the variant by gene and <Term t="HGVS" /> notation. The line under it gives its ID:
+        The title names the variant by gene and <Term t="HGVS" /> notation. The line under it gives its <Term t="ID" />:
         chromosome, position, the reference letters, and the changed letters, on <Term t="GRCh38" />, the current
         reference genome.
       </p>

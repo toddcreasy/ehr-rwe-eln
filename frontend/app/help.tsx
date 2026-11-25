@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import {
   Children,
+  useCallback,
   createContext,
   isValidElement,
   type ReactNode,
@@ -26,6 +27,8 @@ import { type Entry, GLOSSARY, type TermKey } from "./glossary";
 const PANEL_WIDTH = 380;
 const TIP_WIDTH = 288;
 const EDGE = 12;
+// The narrowest screen where the page makes room for the panel (globals.css, .help-panel-open).
+const WIDE = 1100;
 // The id of each page's own note (the one marked <Help page>).
 const PAGE = "page";
 
@@ -37,15 +40,18 @@ const HelpContext = createContext<{
   shown: string | null;
   show: (id: string) => void;
   close: () => void;
+  register: (id: string, title: string) => () => void;
   panelEl: HTMLElement | null;
   setTip: (tip: Tip | null) => void;
-}>({ shown: null, show: () => {}, close: () => {}, panelEl: null, setTip: () => {} });
+}>({ shown: null, show: () => {}, close: () => {}, register: () => () => {}, panelEl: null, setTip: () => {} });
 
 // The panel's launch state, also read by the script in layout.tsx before first paint: open when
-// help is on, unless the visitor closed it earlier in this browser session.
+// help is on and the screen is wide enough for the page to make room for it, unless the visitor
+// closed it earlier in this browser session. Narrower, it waits for a "?".
 const noChange = () => () => {};
 function opensAtLaunch() {
   if (document.documentElement.classList.contains("docs-off")) return false;
+  if (!matchMedia(`(min-width: ${WIDE}px)`).matches) return false;
   try {
     return sessionStorage.getItem("help-panel") !== "closed";
   } catch {
@@ -66,17 +72,32 @@ export function HelpProvider({ children }: { children: ReactNode }) {
   const launch = useSyncExternalStore(noChange, opensAtLaunch, () => false);
   const [tip, setTip] = useState<Tip | null>(null);
   const [panelEl, setPanelEl] = useState<HTMLElement | null>(null);
+  // The notes on the page now, by id, with their titles.
+  const [notes, setNotes] = useState<ReadonlyMap<string, string>>(new Map());
+  const register = useCallback((id: string, title: string) => {
+    setNotes((m) => new Map(m).set(id, title));
+    return () =>
+      setNotes((m) => {
+        const next = new Map(m);
+        next.delete(id);
+        return next;
+      });
+  }, []);
 
-  // A note picked on another page is gone; the panel shows this page's own note instead.
+  // A note picked on another page, or one its page no longer shows, is gone; the panel shows
+  // this page's own note instead, or says there is none.
   const open = active === undefined ? launch : active !== null;
-  const shown = !open ? null : active && active.path === path ? active.id : PAGE;
+  const wanted = !open ? null : active && active.path === path ? active.id : PAGE;
+  const shown = wanted === null ? null : notes.has(wanted) ? wanted : notes.has(PAGE) ? PAGE : null;
 
   const show = (id: string) => {
     setActive({ path, id });
+    setTip(null);
     rememberClosed(false);
   };
   const close = () => {
     setActive(null);
+    setTip(null);
     rememberClosed(true);
   };
 
@@ -88,28 +109,50 @@ export function HelpProvider({ children }: { children: ReactNode }) {
     return () => html.classList.remove("help-panel-open");
   }, [open]);
 
-  // A definition is placed where its term was; any scroll would leave it behind, so it goes.
+  // A definition is placed where its term was; any scroll would leave it behind, so it goes. So
+  // does a tap anywhere but a term, since a touch screen never hovers off or blurs it.
   useEffect(() => {
     if (!tip) return;
     const hide = () => setTip(null);
+    const away = (e: PointerEvent) => {
+      if (!(e.target as Element).closest?.("[data-term]")) setTip(null);
+    };
     window.addEventListener("scroll", hide, true);
     window.addEventListener("resize", hide);
+    document.addEventListener("pointerdown", away);
     return () => {
       window.removeEventListener("scroll", hide, true);
       window.removeEventListener("resize", hide);
+      document.removeEventListener("pointerdown", away);
     };
   }, [tip]);
 
   return (
-    <HelpContext.Provider value={{ shown, show, close, panelEl, setTip }}>
+    <HelpContext.Provider value={{ shown, show, close, register, panelEl, setTip }}>
       {children}
       {open && (
         <aside
-          ref={setPanelEl}
           aria-label="Help"
           style={{ width: PANEL_WIDTH }}
           className="fixed top-0 right-0 z-40 flex h-dvh max-w-full flex-col border-l border-grid bg-card font-sans text-sm shadow-lg"
-        />
+        >
+          <div className="flex items-start justify-between gap-2 border-b border-line px-5 py-4">
+            <div className="text-base font-semibold text-foreground">{shown ? notes.get(shown) : "Help"}</div>
+            <button
+              type="button"
+              onClick={close}
+              aria-label="Close help"
+              className="-mt-1 -mr-2 rounded-full p-1 text-muted hover:bg-accent-soft hover:text-foreground"
+            >
+              <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+          <div ref={setPanelEl} className="flex-1 overflow-y-auto overscroll-contain">
+            {shown === null && <p className="px-5 py-4 text-muted">There is no help for this page.</p>}
+          </div>
+        </aside>
       )}
       {tip && <TermTip tip={tip} />}
     </HelpContext.Provider>
@@ -205,6 +248,7 @@ export function Term({ t, children }: { t: TermKey; children?: ReactNode }) {
   return (
     <button
       type="button"
+      data-term=""
       aria-describedby="term-tip"
       onPointerEnter={(e) => e.pointerType === "mouse" && show(e.currentTarget)}
       onPointerLeave={(e) => e.pointerType === "mouse" && setTip(null)}
@@ -242,10 +286,13 @@ export function Help({
 }) {
   const uid = useId();
   const id = page ? PAGE : uid;
-  const { shown: current, show, close, panelEl } = useContext(HelpContext);
+  const { shown: current, show, register, panelEl } = useContext(HelpContext);
   const shown = current === id;
   const button = useRef<HTMLButtonElement>(null);
   const note = useRef<HTMLDivElement>(null);
+
+  // Before paint, so the panel never shows "no help" for a page that has some.
+  useLayoutEffect(() => register(id, title), [register, id, title]);
 
   // Outline the region this note is about while the panel shows it.
   useLayoutEffect(() => {
@@ -291,25 +338,9 @@ export function Help({
             role="region"
             aria-label={title}
             tabIndex={-1}
-            className="flex min-h-0 flex-1 flex-col font-normal tracking-normal normal-case outline-none"
+            className="px-5 py-4 leading-relaxed font-normal tracking-normal normal-case outline-none"
           >
-            <div className="flex items-start justify-between gap-2 border-b border-line px-5 py-4">
-              <div className="text-base font-semibold text-foreground">{title}</div>
-              <button
-                type="button"
-                onClick={() => {
-                  close();
-                  button.current?.focus();
-                }}
-                aria-label="Close help"
-                className="-mt-1 -mr-2 rounded-full p-1 text-muted hover:bg-accent-soft hover:text-foreground"
-              >
-                <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                  <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 leading-relaxed">
+            <div>
               <div className="flex flex-col gap-2 text-muted [&_strong]:font-medium [&_strong]:text-foreground">{children}</div>
               {terms.length > 0 && (
                 <div className="mt-6 border-t border-line pt-4">

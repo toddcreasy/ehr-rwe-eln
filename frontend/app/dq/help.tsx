@@ -136,7 +136,7 @@ export function TableHelp({ failed }: { failed: number }) {
     <Help title="The checks table">
       <p>
         One row per check. It opens on the {fmt(failed)} failed checks (and any errors); the first menu shows
-        passed or not-applicable checks too. Filter by category or <Term t="OMOP" /> table, or search for a field or <Term t="concept" /> ID.
+        passed or not-applicable checks too. Filter by category or <Term t="OMOP" /> table, or search for a field or <Term t="concept" /> <Term t="ID" />.
       </p>
       <p>
         <strong>Check</strong>: the check&apos;s name in <Term t="DQD" />, then the table and field it tests, and a concept ID when the
