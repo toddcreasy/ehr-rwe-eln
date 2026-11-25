@@ -2,6 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Spinner from "../spinner";
+import {
+  ArmsHelp,
+  AttritionHelp,
+  BalanceHelp,
+  ControlsHelp,
+  DiagnosticsHelp,
+  HazardHelp,
+  NotEstimableHelp,
+  PageHelp,
+  RisksHelp,
+} from "./help";
 
 type Run = {
   run_id: number;
@@ -84,11 +95,13 @@ function StatTile({ label, value, note }: { label: string; value: string; note?:
   );
 }
 
-function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+function Section({ title, note, help, children }: { title: string; note?: string; help?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-2">
+    <section data-help className="flex flex-col gap-2">
       <div>
-        <h3 className="font-medium text-zinc-900 dark:text-zinc-100">{title}</h3>
+        <h3 className="flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-100">
+          {title} {help}
+        </h3>
         {note && <p className={`text-sm ${muted}`}>{note}</p>}
       </div>
       <div className="overflow-x-auto">{children}</div>
@@ -109,7 +122,7 @@ function ProtocolReport({ report }: { report: Report }) {
       </header>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <Section title="Attrition" note="Persons remaining after each eligibility rule.">
+        <Section title="Attrition" note="Persons remaining after each eligibility rule." help={<AttritionHelp attrition={report.attrition} />}>
           <table className="w-full text-sm tabular-nums">
             <tbody>
               {report.attrition.map((a) => (
@@ -121,7 +134,7 @@ function ProtocolReport({ report }: { report: Report }) {
             </tbody>
           </table>
         </Section>
-        <Section title="Arms">
+        <Section title="Arms" help={<ArmsHelp arms={report.arms} />}>
           <table className="w-full text-sm tabular-nums">
             <thead className={`text-left ${muted}`}>
               <tr>
@@ -146,17 +159,30 @@ function ProtocolReport({ report }: { report: Report }) {
       </div>
 
       {report.not_estimable && (
-        <div className="rounded-lg border border-zinc-300 p-4 text-sm dark:border-zinc-700">
-          <div className="font-medium text-zinc-900 dark:text-zinc-100">Not estimable</div>
+        <div data-help className="rounded-lg border border-zinc-300 p-4 text-sm dark:border-zinc-700">
+          <div className="flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-100">
+            Not estimable <NotEstimableHelp reason={report.not_estimable} />
+          </div>
           <div className={muted}>
-            {report.not_estimable}. The arms do not overlap enough to compare, so no estimate is made.
+            {report.not_estimable}. The covariates tell the arms apart too well for weighting to make them comparable,
+            so no estimate is made.
           </div>
         </div>
       )}
 
       {d && report.balance && (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div data-help className="relative grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="absolute -top-2.5 -right-2.5 rounded-full bg-card">
+              <DiagnosticsHelp
+                outside={d["share_ps_outside_0.05_0.95"]}
+                weightMin={d.weight_min}
+                weightMax={d.weight_max}
+                effective={[d.effective_n_treatment, d.effective_n_comparator]}
+                arms={report.arms}
+                unbalanced={d.covariates_unbalanced_after}
+              />
+            </div>
             <StatTile
               label="Propensity outside 0.05 to 0.95"
               value={`${(d["share_ps_outside_0.05_0.95"] * 100).toFixed(0)}%`}
@@ -174,6 +200,7 @@ function ProtocolReport({ report }: { report: Report }) {
           <Section
             title="Covariate balance"
             note={`Standardized mean difference between the arms. Below ${BALANCED} in absolute value is the usual threshold for balanced.`}
+            help={<BalanceHelp balance={report.balance} />}
           >
             <table className="w-full text-sm tabular-nums">
               <thead className={`text-left ${muted}`}>
@@ -211,6 +238,14 @@ function ProtocolReport({ report }: { report: Report }) {
           <Section
             title="Risk of the outcome"
             note="Kaplan-Meier risk by day, crude and weighted, with the 95% bootstrap interval for the weighted difference."
+            help={
+              <RisksHelp
+                treatment={protocol.treatment}
+                comparator={protocol.comparator}
+                weighted={s.weighted_risks}
+                bootstrap={s.bootstrap_ci}
+              />
+            }
           >
             <table className="w-full text-sm tabular-nums">
               <thead className={`text-left ${muted}`}>
@@ -241,7 +276,19 @@ function ProtocolReport({ report }: { report: Report }) {
             </table>
           </Section>
 
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div data-help className="relative grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="absolute -top-2.5 -right-2.5 rounded-full bg-card">
+              <HazardHelp
+                treatment={protocol.treatment}
+                comparator={protocol.comparator}
+                hr={s.hazard_ratio}
+                robust={s.hazard_ratio_robust_ci}
+                boot={s.bootstrap_ci.hazard_ratio ?? null}
+                crude={s.crude_hazard_ratio}
+                used={s.replicates_used}
+                notEstimable={s.replicates_not_estimable}
+              />
+            </div>
             <StatTile label="Hazard ratio, weighted" value={ratio(s.hazard_ratio)} note={`${protocol.treatment} vs ${protocol.comparator}`} />
             <StatTile label="Robust 95% CI" value={ci(s.hazard_ratio_robust_ci) || "none"} />
             <StatTile label="Bootstrap 95% CI" value={ci(s.bootstrap_ci.hazard_ratio ?? null) || "none"} note={`${fmt(s.replicates_used)} resamples, ${fmt(s.replicates_not_estimable)} not estimable`} />
@@ -254,6 +301,7 @@ function ProtocolReport({ report }: { report: Report }) {
         <Section
           title="Negative controls"
           note="Outcomes neither strategy plausibly causes, run through the same analysis. Hazard ratios should be near 1; an interval that excludes 1 points to confounding the weights did not remove, or chance."
+          help={<ControlsHelp controls={report.negative_controls} />}
         >
           <table className="w-full text-sm tabular-nums">
             <thead className={`text-left ${muted}`}>
@@ -316,8 +364,10 @@ export default function TargetTrials() {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-12">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Target trial emulation</h1>
+        <div data-help>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold">
+            Target trial emulation <PageHelp />
+          </h1>
           <p className={`text-sm ${muted}`}>Bias diagnostics for each protocol: who was eligible, how well weighting balanced the arms, the estimates, and negative controls.</p>
         </div>
         {runs && runs.length > 0 && (

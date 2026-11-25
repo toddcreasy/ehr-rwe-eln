@@ -2,6 +2,20 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Spinner from "../spinner";
+import {
+  CriteriaHelp,
+  DecisionHelp,
+  EvidenceHelp,
+  ExomiserHelp,
+  HeaderHelp,
+  HistoryHelp,
+  ListHelp,
+  PageHelp,
+  PhenotypeHelp,
+  ProposalsHelp,
+  SetsHelp,
+  SourcesHelp,
+} from "./help";
 
 type VariantSet = { variant_set: string; run_id: number; created_at: string; variants: number; decided: number };
 
@@ -72,7 +86,7 @@ const FILTERS = {
   all: "All",
   proposals: "With proposals",
   undecided: "Undecided",
-  differs: "Rules differ from panel",
+  differs: "Rules and panel in different tiers",
 } as const;
 type Filter = keyof typeof FILTERS;
 
@@ -86,6 +100,20 @@ const json = (res: Response) =>
 const name = (r: { gene: string; hgvsc: string | null; hgvsp: string | null; variant_id: string }) =>
   `${r.gene} ${r.hgvsc ?? r.variant_id}${r.hgvsp ? ` (${r.hgvsp})` : ""}`;
 const points = (p: number | null) => (p === null ? "stand-alone" : `${p > 0 ? "+" : ""}${p} points`);
+// ClinVar writes "Likely_benign", the Evidence Repository "Likely Benign", the rules "Likely benign".
+const spelled = (c: string) => c.toLowerCase().replaceAll("_", " ");
+// The three tiers the docs score agreement in: curation/curate.py TIERS, spelled out. A class
+// outside them (a conflicting ClinVar record) has no tier and never counts as differing.
+const TIERS: Record<string, string> = {
+  pathogenic: "P/LP",
+  "likely pathogenic": "P/LP",
+  "pathogenic/likely pathogenic": "P/LP",
+  "uncertain significance": "VUS",
+  "likely benign": "B/LB",
+  benign: "B/LB",
+  "benign/likely benign": "B/LB",
+};
+const tier = (c: string) => TIERS[spelled(c)];
 const when = (t: string) => new Date(t).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
 
 function readCurator() {
@@ -114,8 +142,10 @@ function Evidence({ v }: { v: Detail }) {
   const vep = v.evidence.vep;
   const g = v.evidence.gnomad;
   return (
-    <section className={`${box} flex flex-col gap-2 text-sm`}>
-      <h3 className={h3}>Evidence</h3>
+    <section data-help className={`${box} flex flex-col gap-2 text-sm`}>
+      <h3 className={`${h3} flex items-center gap-2`}>
+        Evidence <EvidenceHelp gnomad={g} />
+      </h3>
       <p>
         <span className={muted}>Consequence (Ensembl VEP, MANE Select): </span>
         {vep?.consequences?.join(", ").replaceAll("_", " ") ?? "none"}
@@ -186,14 +216,14 @@ function Proposals({
   );
 }
 
-function DecisionForm({ v, onSaved }: { v: Detail; onSaved: () => void }) {
+// enabled: null until the server says whether decisions are recorded here (false on the public demo).
+function DecisionForm({ v, onSaved, enabled }: { v: Detail; onSaved: () => void; enabled: boolean | null }) {
   const [accepted, setAccepted] = useState<Set<number>>(new Set());
   const [score, setScore] = useState<Score | null>(null);
   const [choice, setChoice] = useState("");
   const [note, setNote] = useState("");
   const [curator, setCurator] = useState(readCurator);
   const [message, setMessage] = useState("");
-
   useEffect(() => {
     fetch("/api/curation/score", {
       method: "POST",
@@ -245,8 +275,14 @@ function DecisionForm({ v, onSaved }: { v: Detail; onSaved: () => void }) {
   const differs = score !== null && choice !== score.classification;
   return (
     <>
-      <section className={`${box} flex flex-col gap-3`}>
-        <h3 className={h3}>Literature proposed by Claude</h3>
+      <section data-help className={`${box} flex flex-col gap-3`}>
+        <h3 className={`${h3} flex items-center gap-2`}>
+          Literature proposed by Claude{" "}
+          <ProposalsHelp
+            verified={v.proposals.filter((p) => p.verified).length}
+            rejected={v.proposals.filter((p) => !p.verified).length}
+          />
+        </h3>
         <p className={`text-xs ${muted}`}>
           Each verified claim quotes a passage that was sent to the model from that paper. Proposals change nothing until
           you accept them here.
@@ -254,8 +290,10 @@ function DecisionForm({ v, onSaved }: { v: Detail; onSaved: () => void }) {
         <Proposals v={v} accepted={accepted} toggle={toggle} />
       </section>
 
-      <section className={`${box} flex flex-col gap-3 text-sm`}>
-        <h3 className={h3}>Decision</h3>
+      <section data-help className={`${box} flex flex-col gap-3 text-sm`}>
+        <h3 className={`${h3} flex items-center gap-2`}>
+          Decision <DecisionHelp score={score} />
+        </h3>
         {score && (
           <p>
             With the accepted evidence: <span className="font-medium">{score.classification}</span>{" "}
@@ -284,11 +322,17 @@ function DecisionForm({ v, onSaved }: { v: Detail; onSaved: () => void }) {
         />
         <button
           onClick={save}
-          disabled={!curator.trim() || (differs && !note.trim())}
+          disabled={enabled !== true || !curator.trim() || (differs && !note.trim())}
           className="w-fit rounded bg-zinc-900 px-4 py-2 text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-black"
         >
           Record decision
         </button>
+        {enabled === false && (
+          <p className={muted}>
+            Recording is off on the public demo, where anyone could write. The form still rescores; run the app locally
+            to record decisions.
+          </p>
+        )}
         {message && <p>{message}</p>}
       </section>
     </>
@@ -316,15 +360,18 @@ function History({ decisions }: { decisions: Decision[] }) {
 function Phenotypes({ p }: { p: NonNullable<Detail["phenotype"]> }) {
   const high = p.percentiles.filter((x) => x >= 90).length;
   return (
-    <section className={`${box} flex flex-col gap-2 text-sm`}>
-      <h3 className={h3}>Carriers&apos; phenotypes (context, not evidence)</h3>
+    <section data-help className={`${box} flex flex-col gap-2 text-sm`}>
+      <h3 className={`${h3} flex items-center gap-2`}>
+        Carriers&apos; phenotypes (context, not evidence){" "}
+        <PhenotypeHelp release={p.hpo_release} subjects={p.subjects} high={high} />
+      </h3>
       {p.subjects === 0 ? (
         <p className={muted}>No one in the synthetic genomics study carries this variant.</p>
       ) : (
         <>
           <p>
             {p.subjects.toLocaleString("en-US")} {p.subjects === 1 ? "carrier" : "carriers"} in the synthetic genomics
-            study; {high} in the top 10% of 5,000 subjects for phenotype match with {p.gene_group.join(", ")}.
+            study; {high} in the top 10% of all study subjects for phenotype match with {p.gene_group.join(", ")}.
           </p>
           {p.subjects <= 40 && (
             <p className={muted}>Percentiles: {p.percentiles.map((x) => Math.round(x)).join(", ")}</p>
@@ -353,8 +400,11 @@ function median(xs: number[]) {
 function Exomiser({ e }: { e: NonNullable<Detail["exomiser"]> }) {
   const first = e.ranks.filter((r) => r === 1).length;
   return (
-    <section className={`${box} flex flex-col gap-2 text-sm`}>
-      <h3 className={h3}>Carriers&apos; Exomiser rank (context, not evidence)</h3>
+    <section data-help className={`${box} flex flex-col gap-2 text-sm`}>
+      <h3 className={`${h3} flex items-center gap-2`}>
+        Carriers&apos; Exomiser rank (context, not evidence){" "}
+        <ExomiserHelp release={e.data_release} gene={e.gene} auc={e.auc} />
+      </h3>
       {e.subjects === 0 ? (
         <p className={muted}>No one in the synthetic genomics study carries this variant.</p>
       ) : (
@@ -378,11 +428,13 @@ function Exomiser({ e }: { e: NonNullable<Detail["exomiser"]> }) {
   );
 }
 
-function VariantDetail({ v, onSaved }: { v: Detail; onSaved: () => void }) {
+function VariantDetail({ v, onSaved, enabled }: { v: Detail; onSaved: () => void; enabled: boolean | null }) {
   return (
     <article className="flex flex-col gap-4">
-      <header>
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{name(v)}</h2>
+      <header data-help>
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          {name(v)} <HeaderHelp classification={v.classification} points={v.points} expected={v.expected} />
+        </h2>
         <p className={`text-sm ${muted}`}>
           {v.variant_id} (GRCh38). Rules: <span className="font-medium">{v.classification}</span> ({points(v.points)})
           {v.expected && `; expert panel: ${v.expected}`}
@@ -391,7 +443,15 @@ function VariantDetail({ v, onSaved }: { v: Detail; onSaved: () => void }) {
 
       <Evidence v={v} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div data-help className="relative grid gap-4 lg:grid-cols-2">
+        <div className="absolute -top-2.5 -right-2.5 rounded-full bg-card">
+          <CriteriaHelp
+            met={v.met}
+            notAssessed={v.not_assessed.length}
+            points={v.points}
+            classification={v.classification}
+          />
+        </div>
         <section className={`${box} flex flex-col gap-2`}>
           <h3 className={h3}>Criteria the rules met</h3>
           <Criteria items={v.met} />
@@ -415,15 +475,19 @@ function VariantDetail({ v, onSaved }: { v: Detail; onSaved: () => void }) {
       {v.phenotype && <Phenotypes p={v.phenotype} />}
       {v.exomiser && <Exomiser e={v.exomiser} />}
 
-      <DecisionForm key={`${v.run_id} ${v.variant_id}`} v={v} onSaved={onSaved} />
+      <DecisionForm key={`${v.run_id} ${v.variant_id}`} v={v} onSaved={onSaved} enabled={enabled} />
 
-      <section className={`${box} flex flex-col gap-2`}>
-        <h3 className={h3}>History</h3>
+      <section data-help className={`${box} flex flex-col gap-2`}>
+        <h3 className={`${h3} flex items-center gap-2`}>
+          History <HistoryHelp count={v.decisions.length} />
+        </h3>
         <History decisions={v.decisions} />
       </section>
 
-      <section className={`${box} flex flex-col gap-1 text-xs ${muted}`}>
-        <h3 className={h3}>Sources</h3>
+      <section data-help className={`${box} flex flex-col gap-1 text-xs ${muted}`}>
+        <h3 className={`${h3} flex items-center gap-2`}>
+          Sources <SourcesHelp />
+        </h3>
         <p>
           {v.variant_set} run {v.run_id}, {when(v.run_at)}
         </p>
@@ -432,7 +496,7 @@ function VariantDetail({ v, onSaved }: { v: Detail; onSaved: () => void }) {
             {k}: {typeof val === "object" ? JSON.stringify(val).replaceAll(/[{}"]/g, "").replaceAll(",", ", ") : String(val)}
           </p>
         ))}
-        <p>Includes data from the gnomAD v4 release. Expert panel specifications and tables from ClinGen (CC0).</p>
+        <p>Includes data from the gnomAD v4 release. Expert panel specifications and tables from ClinGen (CC0), accessed 2026-11-19.</p>
       </section>
     </article>
   );
@@ -444,6 +508,7 @@ export default function Curation() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [detail, setDetail] = useState<Detail | null>(null);
+  const [enabled, setEnabled] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -475,6 +540,12 @@ export default function Curation() {
 
   useEffect(loadSets, [loadSets]);
   useEffect(() => {
+    fetch("/api/curation/decisions/enabled")
+      .then(json)
+      .then(setEnabled)
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
     if (runId !== null) loadRows(runId);
   }, [runId, loadRows]);
 
@@ -483,7 +554,7 @@ export default function Curation() {
       filter === "all" ||
       (filter === "proposals" && r.proposals > 0) ||
       (filter === "undecided" && !r.decision) ||
-      (filter === "differs" && r.expected !== null && r.expected !== r.classification),
+      (filter === "differs" && r.expected !== null && tier(r.expected) !== undefined && tier(r.expected) !== tier(r.classification)),
   );
 
   function saved() {
@@ -495,8 +566,10 @@ export default function Curation() {
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-12">
-      <div>
-        <h1 className="text-2xl font-semibold">Variant curation</h1>
+      <div data-help>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold">
+          Variant curation <PageHelp />
+        </h1>
         <p className={`text-sm ${muted}`}>
           ACMG/AMP criteria the rules decided from gnomAD and Ensembl VEP with each gene&apos;s ClinGen expert panel
           thresholds, literature evidence Claude proposed with quotes checked in code, and the curator&apos;s decision
@@ -519,7 +592,7 @@ export default function Curation() {
       )}
 
       {sets && sets.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
+        <div data-help className="flex flex-wrap items-center gap-2 text-sm">
           {sets.map((s) => (
             <button
               key={s.run_id}
@@ -539,14 +612,15 @@ export default function Curation() {
               </option>
             ))}
           </select>
+          <SetsHelp sets={sets} />
         </div>
       )}
 
       {rows && runId !== null && (
         <div className="grid gap-6 lg:grid-cols-[20rem_1fr]">
-          <div className="max-h-[75vh] overflow-y-auto rounded-lg border-[1.5px] border-grid">
-            <p className={`border-b border-zinc-200 px-3 py-2 text-xs dark:border-zinc-800 ${muted}`}>
-              {shown.length.toLocaleString("en-US")} shown
+          <div data-help className="max-h-[75vh] overflow-y-auto rounded-lg border-[1.5px] border-grid">
+            <p className={`flex items-center justify-between gap-2 border-b border-zinc-200 px-3 py-2 text-xs dark:border-zinc-800 ${muted}`}>
+              {shown.length.toLocaleString("en-US")} shown <ListHelp shown={shown.length} total={rows.length} />
             </p>
             <ul>
               {shown.map((r) => (
@@ -558,7 +632,7 @@ export default function Curation() {
                     <span className="font-medium">{name(r)}</span>
                     <span className={muted}>
                       {r.classification}
-                      {r.expected && r.expected !== r.classification && `; panel ${r.expected}`}
+                      {r.expected && spelled(r.expected) !== spelled(r.classification) && `; panel ${r.expected}`}
                     </span>
                     <span className="text-xs text-zinc-500">
                       {r.proposals > 0 && `${r.proposals} proposed; `}
@@ -571,7 +645,7 @@ export default function Curation() {
           </div>
           <div className={`transition-opacity ${loading ? "opacity-50" : ""}`}>
             {detail ? (
-              <VariantDetail v={detail} onSaved={saved} />
+              <VariantDetail v={detail} onSaved={saved} enabled={enabled} />
             ) : (
               <p className={`text-sm ${muted}`}>Pick a variant.</p>
             )}

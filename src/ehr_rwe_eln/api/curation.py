@@ -8,7 +8,7 @@ from psycopg.rows import dict_row
 from pydantic import BaseModel, Field, field_validator
 
 from ehr_rwe_eln.api.demo import not_in_public_demo
-from ehr_rwe_eln.config import DB_CONNECT_TIMEOUT_S, DatabaseSettings
+from ehr_rwe_eln.config import DB_CONNECT_TIMEOUT_S, DatabaseSettings, Settings
 from ehr_rwe_eln.curation import literature_graph
 from ehr_rwe_eln.curation.rules import POINTS, classify, label
 
@@ -182,6 +182,12 @@ def variant(run_id: int, variant_id: str) -> dict:
 def preview(draft: Draft) -> dict:
     with connect() as con:
         return score(con, draft)
+
+
+@router.get("/decisions/enabled")
+def decisions_enabled() -> bool:
+    """False on the public demo, so the page can say so before anyone fills in the form."""
+    return not Settings().public_demo
 
 
 @router.post("/decisions", status_code=201, dependencies=[Depends(not_in_public_demo)])

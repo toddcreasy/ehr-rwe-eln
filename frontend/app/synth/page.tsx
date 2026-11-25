@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import Spinner from "../spinner";
+import { CardHelp, MonitorHelp, PageHelp, ReleaseTableHelp, specTitle } from "./help";
 
 type Release = {
   release_id: number;
@@ -13,6 +14,7 @@ type Release = {
   source_rows: number;
   holdout_rows: number | null;
   withdrawn_at: string | null;
+  withdrawn_reason: string | null;
   column_tvd_mean: number | null;
   pair_tvd_mean: number | null;
   pair_tvd_floor: number | null;
@@ -32,7 +34,8 @@ function MonitorStatus({ monitor }: { monitor: Monitor }) {
   if (monitor === null) {
     return (
       <p className={`text-sm ${muted}`}>
-        Scheduled privacy checks have not run yet. The Compose <code>monitor</code> service runs them, or once with{" "}
+        Scheduled privacy checks have not run yet. On AWS a scheduled task runs them every day at 11:00 UTC; locally
+        the Compose <code>monitor</code> service does, or run once with{" "}
         <code>uv run python -m ehr_rwe_eln.synth.monitor --once</code>.
       </p>
     );
@@ -160,7 +163,7 @@ function ReleaseTable({ releases, selected, onSelect }: { releases: Release[]; s
               <td className="py-1 pr-4">{r.release_id}</td>
               <td className="py-1 pr-4">
                 {METHODS[r.method] ?? r.method}
-                {r.withdrawn_at && <span className="ml-2 rounded bg-red-100 px-1 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-300">withdrawn</span>}
+                {r.withdrawn_at && <span title={`Withdrawn ${day(r.withdrawn_at)}${r.withdrawn_reason ? `: ${r.withdrawn_reason}` : ""}`} className="ml-2 rounded bg-red-100 px-1 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-300">withdrawn</span>}
               </td>
               <td className={td}>{r.epsilon}</td>
               <td className={td}>{fmt(r.rows)}</td>
@@ -222,8 +225,10 @@ export default function SyntheticData() {
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-12">
-      <div>
-        <h1 className="text-2xl font-semibold">Synthetic data releases</h1>
+      <div data-help>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold">
+          Synthetic data releases <PageHelp releases={releases} />
+        </h1>
         <p className={`text-sm ${muted}`}>
           Differentially private copies of the OMOP data, each with its fidelity, utility, privacy risk, and data card.
           Pick a release to read its card.
@@ -237,31 +242,42 @@ export default function SyntheticData() {
 
       <p className={`text-sm ${muted}`}>
         TVD (total variation distance) is 0 for identical distributions and 1 for no overlap; the floor is the same
-        measure between two real samples, which no release can be expected to beat. Utility AUC is a model trained on
+        measure between two real samples, the gap that sampling alone leaves. A release can come in under it, since it
+        is compared with the people it learned from. Utility AUC is a model trained on
         the release and tested on held-out real people, against one trained on real data. Membership AUC is how well an
         attacker tells training people from held-out ones: 0.5 is a coin flip.
       </p>
 
-      {monitor !== undefined && <MonitorStatus monitor={monitor} />}
+      {monitor !== undefined && (
+        <div data-help className="flex items-start gap-2">
+          <MonitorStatus monitor={monitor} />
+          <MonitorHelp monitor={monitor} />
+        </div>
+      )}
 
       {error && <p className="text-sm text-zinc-900 dark:text-zinc-100">{error}</p>}
       {!error && (releases === null || loading) && <Spinner />}
       {releases && releases.length === 0 && (
         <p className={`text-sm ${muted}`}>
-          No releases yet. Run <code>uv run python scripts/synthesize.py</code> and{" "}
-          <code>scripts/evaluate_synth.py</code>, then reload.
+          No releases yet. Run <code>uv run python scripts/run_synth.py synthesize.py</code>, then{" "}
+          <code>scripts/run_synth.py evaluate_synth.py</code>, and reload.
         </p>
       )}
 
       {specs.map((name) => (
-        <section key={name} className="flex flex-col gap-2">
-          <h2 className="font-medium text-zinc-900 dark:text-zinc-100">{name.replaceAll("_", " ")}</h2>
+        <section key={name} data-help className="flex flex-col gap-2">
+          <h2 className="flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-100">
+            {specTitle(name)} <ReleaseTableHelp spec={name} releases={releases!.filter((r) => r.spec_name === name)} />
+          </h2>
           <ReleaseTable releases={releases!.filter((r) => r.spec_name === name)} selected={selected} onSelect={loadCard} />
         </section>
       ))}
 
       {card && (
-        <article className={`rounded-lg border-[1.5px] border-grid p-6 transition-opacity ${loading ? "opacity-50" : ""}`}>
+        <article data-help className={`relative rounded-lg border-[1.5px] border-grid p-6 transition-opacity ${loading ? "opacity-50" : ""}`}>
+          <div className="absolute -top-2.5 -right-2.5 rounded-full bg-card">
+            <CardHelp release={releases?.find((r) => r.release_id === selected)} />
+          </div>
           <Markdown source={card} />
         </article>
       )}
