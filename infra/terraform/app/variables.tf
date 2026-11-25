@@ -6,7 +6,7 @@ variable "state_bucket" {
 variable "domain_name" {
   description = "The app's own name, served through CloudFront (web_domain.tf). Its Route 53 zone is made in project-template's ops/dns."
   type        = string
-  default     = "ehr-rwe-eln.pilotbio.io"
+  default     = "rwe-workbench.pilotbio.io"
 }
 
 variable "image_tag" {
