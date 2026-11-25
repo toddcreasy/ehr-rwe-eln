@@ -4,6 +4,10 @@ What changed in each release of RWE Workbench, newest first. A release is a `vX.
 
 ## Unreleased
 
+### Added
+
+- This changelog, linked from the README; the version-bump pull request moves Unreleased under the new version (#77).
+
 ### Changed
 
 - The deploy runbook deploys releases: a `vX.Y.Z` tag and a GitHub release, the image built from the tag, and rollback to the image tag recorded in the previous release's notes (#76).
