@@ -13,6 +13,7 @@ What changed in each release of RWE Workbench, newest first. A release is a `vX.
 ### Changed
 
 - The deploy runbook deploys releases: a `vX.Y.Z` tag and a GitHub release, the image built from the tag, and rollback to the image tag recorded in the previous release's notes (#76).
+- The footer names the release ("Release Version 0.2.0") and shows its date without the time (#84).
 
 ## v0.1.0 (2026-11-24)
 

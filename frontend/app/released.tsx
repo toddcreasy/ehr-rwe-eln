@@ -2,9 +2,10 @@
 
 import { useSyncExternalStore } from "react";
 
-// The build time (next.config.ts), in the visitor's timezone and date format. The browser knows
-// both from the device's settings; the static pages are built without them, so the date only
-// appears once the page runs in the browser.
+// The release (package.json) and its build time (next.config.ts). The date is in the visitor's
+// timezone and date format, which the browser knows from the device's settings; the static pages
+// are built without them, so the date only appears once the page runs in the browser.
+const version = process.env.RELEASE_VERSION ?? "";
 const released = process.env.RELEASED_AT ?? "";
 const noChange = () => () => {};
 
@@ -15,28 +16,30 @@ export const Dot = () => (
   </span>
 );
 
-function local() {
+function localDate() {
   const when = new Date(released);
   if (Number.isNaN(when.getTime())) return "";
-  return when.toLocaleString(undefined, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  });
+  return when.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
 }
 
 export default function Released() {
-  const text = useSyncExternalStore(noChange, local, () => "");
-  if (!text) return null;
+  const date = useSyncExternalStore(noChange, localDate, () => "");
   return (
     <>
-      <Dot />
-      <time dateTime={released} title={`${released} (UTC)`}>
-        Released {text}
-      </time>
+      {version && (
+        <>
+          <Dot />
+          <span>Release Version {version}</span>
+        </>
+      )}
+      {date && (
+        <>
+          <Dot />
+          <time dateTime={released} title={`${released} (UTC)`}>
+            {date}
+          </time>
+        </>
+      )}
     </>
   );
 }
