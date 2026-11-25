@@ -75,12 +75,24 @@ def viewer_ip(value: str) -> str | None:
     return None
 
 
+def limit_key(address: str) -> str:
+    """What the per-address limit counts: an IPv4 address, or an IPv6 address's /64. One host
+    usually holds a whole /64, so counting each IPv6 address apart would give it 2^64 buckets."""
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return address
+    if ip.version == 6:
+        return str(ipaddress.ip_network(f"{ip}/64", strict=False))
+    return str(ip)
+
+
 def within_address_limit(address: str) -> bool:
     """Counts this call if it is allowed. Held in memory, so it is per app task; the service
     runs one."""
     now = time.monotonic()
     with _calls_lock:
-        times = _calls[address]
+        times = _calls[limit_key(address)]
         while times and now - times[0] > 3600:
             times.popleft()
         if len(times) >= CALLS_PER_ADDRESS_PER_HOUR:

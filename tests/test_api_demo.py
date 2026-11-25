@@ -106,6 +106,33 @@ def test_viewer_ip_drops_the_port(value, ip):
     assert limits.viewer_ip(value) == ip
 
 
+@pytest.mark.parametrize(
+    ("address", "key"),
+    [
+        ("198.51.100.10", "198.51.100.10"),
+        ("2001:db8:85a3:1:8a2e:370:7334:1", "2001:db8:85a3:1::/64"),
+        ("2001:db8:85a3:1::ffff", "2001:db8:85a3:1::/64"),
+        ("unknown", "unknown"),
+    ],
+)
+def test_limit_key_groups_an_ipv6_host_by_its_64(address, key):
+    assert limits.limit_key(address) == key
+
+
+def test_agent_per_address_limit_counts_an_ipv6_64_once(app_with_limit, monkeypatch):
+    monkeypatch.setenv("ORIGIN_VERIFY_SECRET", SECRET)
+    client = app_with_limit(1_000_000)
+    edge = {"x-origin-verify": SECRET, "x-forwarded-for": "130.176.1.1"}  # gitleaks:allow
+    # A new address in the same /64 for every call.
+    for n in range(limits.CALLS_PER_ADDRESS_PER_HOUR):
+        rotated = {**edge, "cloudfront-viewer-address": f"[2001:db8:1:2::{n + 1:x}]:443"}
+        assert client.post("/api/agent", json={"prompt": "hi"}, headers=rotated).status_code == 200
+    rotated = {**edge, "cloudfront-viewer-address": "[2001:db8:1:2::ffff]:443"}
+    assert client.post("/api/agent", json={"prompt": "hi"}, headers=rotated).status_code == 429
+    other = {**edge, "cloudfront-viewer-address": "[2001:db8:1:3::1]:443"}
+    assert client.post("/api/agent", json={"prompt": "hi"}, headers=other).status_code == 200
+
+
 def test_agent_per_address_limit_follows_the_cloudfront_viewer(app_with_limit, monkeypatch):
     monkeypatch.setenv("ORIGIN_VERIFY_SECRET", SECRET)
     client = app_with_limit(1_000_000)

@@ -144,7 +144,7 @@ The app has no sign-in. What bounds it, as in glia-nav:
 | Limit | Where | Value |
 |---|---|---|
 | Daily token limit on `/api/agent` | `DAILY_TOKEN_LIMIT`, `agent.daily_usage` (`src/ehr_rwe_eln/api/limits.py`) | 150,000 tokens a day (US Eastern), then 429 until midnight |
-| Per-address limit on `/api/agent` | In the task's memory, keyed on the last `X-Forwarded-For` entry | 10 calls an hour |
+| Per-address limit on `/api/agent` | In the task's memory, keyed on the viewer CloudFront saw (when `X-Origin-Verify` matches) or else the last `X-Forwarded-For` entry; an IPv6 viewer counts by its /64 | 10 calls an hour |
 | Curator decisions | `PUBLIC_DEMO=true` | 403 |
 | Tasks | Express Mode scaling | Exactly 1 |
 | Daily token alarm | CloudWatch metric `ehr-rwe-eln/AgentTokens` from the `agent run` log lines | Email past 120,000 in a UTC day (SNS; confirm the subscription email) |
