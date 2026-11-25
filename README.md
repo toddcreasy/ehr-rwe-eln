@@ -6,7 +6,7 @@ It was built over seven weeks, from 2026-10-07: on AWS first, then on the laptop
 
 ELN platforms capture bench data well, and few reach past the lab. Revvity's Signals Translational joins biomarker results to clinical trial data, and LabKey links assay results to study participants, but none of them writes notebook results into OMOP or EHR data. The ELN bridge works in that gap: it reads free-text notebook entries with Claude and writes the results next to the clinical record. [Background on ELN platforms and the gap](docs/modules/eln.md#background-what-eln-platforms-do).
 
-The web app is called **RWE Workbench**, a public demo on AWS with no sign-in (`terraform output app_url` in `infra/terraform/app/` gives its address; locally it runs at http://127.0.0.1:8000). Its home page describes the project and shows the five sections (data quality, trial emulation, lab notebook, variant curation, synthetic data) as tabs, each with a live figure from that section's data.
+The web app is called **RWE Workbench**, a public demo on AWS with no sign-in: **[open RWE Workbench](https://eh-c39f32bcf31b4439869799379b64cb5b.ecs.us-east-1.on.aws/)**. Locally it runs at http://127.0.0.1:8000, and `terraform output app_url` in `infra/terraform/app/` gives the deployed address. Its home page describes the project and shows the five sections (data quality, trial emulation, lab notebook, variant curation, synthetic data) as tabs, each with a live figure from that section's data.
 
 Acronyms and services are defined in the [glossary](docs/GLOSSARY.md).
 
