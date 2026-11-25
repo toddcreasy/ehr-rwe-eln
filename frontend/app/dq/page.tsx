@@ -322,7 +322,11 @@ export default function DataQuality() {
           </div>
           <div data-help className="relative grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <div className="absolute -top-2.5 -right-2.5 rounded-full bg-card">
-              <TilesHelp totals={totals} />
+              <TilesHelp
+                totals={totals}
+                strict={detail.run.overview.strictPercentPassed}
+                dqd={detail.run.overview.percentPassed}
+              />
             </div>
             <StatTile
               label="Pass rate"

@@ -10,6 +10,8 @@ const WIDTH = 320;
 const MAX_HEIGHT = 340;
 const GAP = 10;
 const EDGE = 12;
+// The shortest note worth showing; below it, the note goes next to its button instead.
+const MIN_HEIGHT = 160;
 
 const OpenContext = createContext<{ open: string | null; setOpen: (id: string | null) => void }>({
   open: null,
@@ -74,7 +76,9 @@ export function DocsToggle() {
 type Place = { top: number; left: number; maxHeight: number };
 
 // Beside the region if it fits there (right, then left), else below or above it, shrinking to
-// the larger gap when neither has room for the whole note. Never over the region itself.
+// the larger gap when neither has room for the whole note. A region taller than the screen
+// leaves no such gap (and the page cannot scroll while a note is open), so the note goes
+// below or above its button instead, over part of the region, rather than as a sliver.
 function place(region: DOMRect, button: DOMRect, height: number): Place {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -93,9 +97,15 @@ function place(region: DOMRect, button: DOMRect, height: number): Place {
   const left = clampLeft(button.right - width);
   if (below >= h) return { top: region.bottom + GAP, left, maxHeight: h };
   if (above >= h) return { top: region.top - GAP - h, left, maxHeight: h };
-  if (below >= above) return { top: region.bottom + GAP, left, maxHeight: Math.max(below, 0) };
-  const fit = Math.max(above, 0);
-  return { top: region.top - GAP - fit, left, maxHeight: fit };
+  if (Math.max(below, above) >= MIN_HEIGHT) {
+    if (below >= above) return { top: region.bottom + GAP, left, maxHeight: below };
+    return { top: region.top - GAP - above, left, maxHeight: above };
+  }
+  const under = vh - button.bottom - GAP - EDGE;
+  const over = button.top - GAP - EDGE;
+  if (under >= over) return { top: button.bottom + GAP, left, maxHeight: Math.min(h, Math.max(under, 0)) };
+  const fit = Math.min(h, Math.max(over, 0));
+  return { top: button.top - GAP - fit, left, maxHeight: fit };
 }
 
 export function Help({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {

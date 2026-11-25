@@ -5,7 +5,6 @@ import type { Status } from "./status";
 // come from the run on screen, so the notes stay true when another run is picked.
 
 const fmt = (n: number) => n.toLocaleString("en-US");
-const pct = (n: number, d: number) => (d ? `${((n / d) * 100).toFixed(2)}%` : "n/a");
 
 type Totals = Record<Status, number>;
 
@@ -66,7 +65,8 @@ export function PageHelp() {
   );
 }
 
-export function TilesHelp({ totals }: { totals: Totals }) {
+// strict and dqd: the two pass rates exactly as the tiles show them.
+export function TilesHelp({ totals, strict, dqd }: { totals: Totals; strict: number | null; dqd: number }) {
   const all = totals.pass + totals.na + totals.fail + totals.error;
   const applicable = all - totals.na;
   return (
@@ -89,8 +89,8 @@ export function TilesHelp({ totals }: { totals: Totals }) {
         number is large. It says nothing bad about the data.
       </p>
       <p>
-        <strong>Pass rate</strong> ({pct(totals.pass, applicable)}) counts only the {fmt(applicable)} checks that
-        had something to test. <strong>DQD pass rate</strong> ({pct(all - totals.fail - totals.error, all)}) is
+        <strong>Pass rate</strong> ({strict === null ? "n/a" : `${strict}%`}) counts only the {fmt(applicable)} checks that
+        had something to test. <strong>DQD pass rate</strong> ({dqd}%) is
         the figure the checking tool, DataQualityDashboard (DQD), reports itself, which counts not-applicable checks as passed. The first is stricter; the second is shown so this run can be compared with other DQD reports.
       </p>
     </Help>

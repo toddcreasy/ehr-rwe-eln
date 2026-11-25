@@ -102,11 +102,18 @@ const name = (r: { gene: string; hgvsc: string | null; hgvsp: string | null; var
 const points = (p: number | null) => (p === null ? "stand-alone" : `${p > 0 ? "+" : ""}${p} points`);
 // ClinVar writes "Likely_benign", the Evidence Repository "Likely Benign", the rules "Likely benign".
 const spelled = (c: string) => c.toLowerCase().replaceAll("_", " ");
-// The three tiers the docs score agreement in (curation/curate.py TIERS).
-const tier = (c: string) => {
-  const k = spelled(c);
-  return k.includes("pathogenic") ? "P/LP" : k.includes("benign") ? "B/LB" : k.includes("uncertain") ? "VUS" : k;
+// The three tiers the docs score agreement in: curation/curate.py TIERS, spelled out. A class
+// outside them (a conflicting ClinVar record) has no tier and never counts as differing.
+const TIERS: Record<string, string> = {
+  pathogenic: "P/LP",
+  "likely pathogenic": "P/LP",
+  "pathogenic/likely pathogenic": "P/LP",
+  "uncertain significance": "VUS",
+  "likely benign": "B/LB",
+  benign: "B/LB",
+  "benign/likely benign": "B/LB",
 };
+const tier = (c: string) => TIERS[spelled(c)];
 const when = (t: string) => new Date(t).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
 
 function readCurator() {
@@ -209,22 +216,14 @@ function Proposals({
   );
 }
 
-function DecisionForm({ v, onSaved }: { v: Detail; onSaved: () => void }) {
+// enabled: null until the server says whether decisions are recorded here (false on the public demo).
+function DecisionForm({ v, onSaved, enabled }: { v: Detail; onSaved: () => void; enabled: boolean | null }) {
   const [accepted, setAccepted] = useState<Set<number>>(new Set());
   const [score, setScore] = useState<Score | null>(null);
   const [choice, setChoice] = useState("");
   const [note, setNote] = useState("");
   const [curator, setCurator] = useState(readCurator);
   const [message, setMessage] = useState("");
-  const [enabled, setEnabled] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/curation/decisions/enabled")
-      .then(json)
-      .then(setEnabled)
-      .catch(() => {});
-  }, []);
-
   useEffect(() => {
     fetch("/api/curation/score", {
       method: "POST",
@@ -323,12 +322,12 @@ function DecisionForm({ v, onSaved }: { v: Detail; onSaved: () => void }) {
         />
         <button
           onClick={save}
-          disabled={!enabled || !curator.trim() || (differs && !note.trim())}
+          disabled={enabled !== true || !curator.trim() || (differs && !note.trim())}
           className="w-fit rounded bg-zinc-900 px-4 py-2 text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-black"
         >
           Record decision
         </button>
-        {!enabled && (
+        {enabled === false && (
           <p className={muted}>
             Recording is off on the public demo, where anyone could write. The form still rescores; run the app locally
             to record decisions.
@@ -429,7 +428,7 @@ function Exomiser({ e }: { e: NonNullable<Detail["exomiser"]> }) {
   );
 }
 
-function VariantDetail({ v, onSaved }: { v: Detail; onSaved: () => void }) {
+function VariantDetail({ v, onSaved, enabled }: { v: Detail; onSaved: () => void; enabled: boolean | null }) {
   return (
     <article className="flex flex-col gap-4">
       <header data-help>
@@ -476,7 +475,7 @@ function VariantDetail({ v, onSaved }: { v: Detail; onSaved: () => void }) {
       {v.phenotype && <Phenotypes p={v.phenotype} />}
       {v.exomiser && <Exomiser e={v.exomiser} />}
 
-      <DecisionForm key={`${v.run_id} ${v.variant_id}`} v={v} onSaved={onSaved} />
+      <DecisionForm key={`${v.run_id} ${v.variant_id}`} v={v} onSaved={onSaved} enabled={enabled} />
 
       <section data-help className={`${box} flex flex-col gap-2`}>
         <h3 className={`${h3} flex items-center gap-2`}>
@@ -509,6 +508,7 @@ export default function Curation() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [detail, setDetail] = useState<Detail | null>(null);
+  const [enabled, setEnabled] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -540,6 +540,12 @@ export default function Curation() {
 
   useEffect(loadSets, [loadSets]);
   useEffect(() => {
+    fetch("/api/curation/decisions/enabled")
+      .then(json)
+      .then(setEnabled)
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
     if (runId !== null) loadRows(runId);
   }, [runId, loadRows]);
 
@@ -548,7 +554,7 @@ export default function Curation() {
       filter === "all" ||
       (filter === "proposals" && r.proposals > 0) ||
       (filter === "undecided" && !r.decision) ||
-      (filter === "differs" && r.expected !== null && tier(r.expected) !== tier(r.classification)),
+      (filter === "differs" && r.expected !== null && tier(r.expected) !== undefined && tier(r.expected) !== tier(r.classification)),
   );
 
   function saved() {
@@ -639,7 +645,7 @@ export default function Curation() {
           </div>
           <div className={`transition-opacity ${loading ? "opacity-50" : ""}`}>
             {detail ? (
-              <VariantDetail v={detail} onSaved={saved} />
+              <VariantDetail v={detail} onSaved={saved} enabled={enabled} />
             ) : (
               <p className={`text-sm ${muted}`}>Pick a variant.</p>
             )}

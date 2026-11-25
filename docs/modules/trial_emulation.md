@@ -67,7 +67,7 @@ uv run python scripts/hades.py --local run_trialemulation.R       # no database
 | Metformin vs insulin, CKD | 219 / 612 | 1 / 102 | Not estimable |
 | Metformin vs insulin, MI | 215 / 579 | 11 / 16 | Not estimable |
 
-For lisinopril against amlodipine, weighting brings every covariate's standardized mean difference (SMD) under 0.1, the usual threshold for balanced, and no one has a propensity score outside 0.05 to 0.95. In each, 11 of the 12 negative controls have intervals that include 1 ; at 95%, about one in 20 should miss by chance. Both estimates are uncertain; with 26 and 19 events, the intervals are wide.
+For lisinopril against amlodipine, weighting brings every covariate's standardized mean difference (SMD) under 0.1, the usual threshold for balanced, and no one has a propensity score outside 0.05 to 0.95. In each, 11 of the 12 negative controls have intervals that include 1; at 95%, about one in 20 should miss by chance. Both estimates are uncertain; with 26 and 19 events, the intervals are wide.
 
 The metformin protocols are not estimable. In [Synthea](https://github.com/synthetichealth/synthea), diabetes treatment follows fixed rules, so the covariates almost decide who gets insulin, and no weighting can make the arms comparable. The module reporting that instead of a number is the bias check doing its job.
 
