@@ -7,6 +7,7 @@ What changed in each release of RWE Workbench, newest first. A release is a `vX.
 ### Added
 
 - This changelog, linked from the README; the version-bump pull request moves Unreleased under the new version (#77).
+- The README links the live demo (#79).
 
 ### Changed
 
