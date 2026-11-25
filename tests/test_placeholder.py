@@ -1,10 +1,14 @@
 import importlib
+import tomllib
+from pathlib import Path
 
 import ehr_rwe_eln
 
 
-def test_package_version():
-    assert ehr_rwe_eln.__version__ == "0.1.0"
+def test_package_version_matches_pyproject():
+    # A release bumps pyproject.toml; this catches __init__.py left behind.
+    pyproject = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
+    assert ehr_rwe_eln.__version__ == pyproject["project"]["version"]
 
 
 def test_modules_import():
