@@ -6,7 +6,7 @@ What changed in each release of RWE Workbench, newest first. A release is a `vX.
 
 ## v0.2.0 (2026-11-25)
 
-The app at its own name, https://ehr-rwe-eln.pilotbio.io.
+The app at its own name, https://rwe-workbench.pilotbio.io, and a footer that names the release.
 
 ### Added
 
