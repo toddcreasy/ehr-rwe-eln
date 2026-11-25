@@ -71,4 +71,7 @@ class Settings(DatabaseSettings):
     daily_token_limit: int = 150_000
     # The switch for /agent: false refuses every call before the model is reached.
     agent_enabled: bool = True
+    # CloudFront sends this in X-Origin-Verify; only then is CloudFront-Viewer-Address trusted
+    # (api/limits.py). Unset locally and on the Express URL alone.
+    origin_verify_secret: SecretStr | None = None
     frontend_dir: str = "frontend/out"

@@ -2,6 +2,7 @@ import contextlib
 import importlib
 
 import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
 
 from ehr_rwe_eln.api import limits
@@ -58,6 +59,91 @@ def test_agent_per_address_limit_uses_the_last_forwarded_address(app_with_limit)
     spoofed = {"x-forwarded-for": "9.9.9.9, 203.0.113.9"}
     assert client.post("/api/agent", json={"prompt": "hi"}, headers=spoofed).status_code == 429
     other = {"x-forwarded-for": "1.2.3.4, 198.51.100.7"}
+    assert client.post("/api/agent", json={"prompt": "hi"}, headers=other).status_code == 200
+
+
+SECRET = "test-origin-secret"  # noqa: S105  # gitleaks:allow
+
+
+def request_with(headers: dict[str, str], client: str = "10.0.0.5") -> Request:
+    return Request(
+        {
+            "type": "http",
+            "headers": [(k.lower().encode(), v.encode()) for k, v in headers.items()],
+            "client": (client, 50000),
+        }
+    )
+
+
+def test_client_address_trusts_cloudfront_only_with_the_secret():
+    through_cloudfront = {
+        "x-origin-verify": SECRET,  # gitleaks:allow
+        "cloudfront-viewer-address": "198.51.100.10:46532",
+        "x-forwarded-for": "198.51.100.10, 130.176.1.1",
+    }
+    assert limits.client_address(request_with(through_cloudfront), SECRET) == "198.51.100.10"
+    # A caller on the Express URL can send the viewer header, but not the secret.
+    spoofed = {"cloudfront-viewer-address": "9.9.9.9:1", "x-forwarded-for": "203.0.113.9"}
+    assert limits.client_address(request_with(spoofed), SECRET) == "203.0.113.9"
+    wrong = {**spoofed, "x-origin-verify": "guess"}  # gitleaks:allow
+    assert limits.client_address(request_with(wrong), SECRET) == "203.0.113.9"
+    # Without a configured secret (locally) the viewer header is never read.
+    assert limits.client_address(request_with(through_cloudfront), None) == "130.176.1.1"
+
+
+@pytest.mark.parametrize(
+    ("value", "ip"),
+    [
+        ("198.51.100.10:46532", "198.51.100.10"),
+        ("2001:db8:85a3::8a2e:370:7334:46532", "2001:db8:85a3::8a2e:370:7334"),
+        ("[2001:db8::1]:443", "2001:db8::1"),
+        ("198.51.100.10", "198.51.100.10"),
+        ("", None),
+        ("not-an-address:1", None),
+    ],
+)
+def test_viewer_ip_drops_the_port(value, ip):
+    assert limits.viewer_ip(value) == ip
+
+
+@pytest.mark.parametrize(
+    ("address", "key"),
+    [
+        ("198.51.100.10", "198.51.100.10"),
+        ("2001:db8:85a3:1:8a2e:370:7334:1", "2001:db8:85a3:1::/64"),
+        ("2001:db8:85a3:1::ffff", "2001:db8:85a3:1::/64"),
+        ("unknown", "unknown"),
+    ],
+)
+def test_limit_key_groups_an_ipv6_host_by_its_64(address, key):
+    assert limits.limit_key(address) == key
+
+
+def test_agent_per_address_limit_counts_an_ipv6_64_once(app_with_limit, monkeypatch):
+    monkeypatch.setenv("ORIGIN_VERIFY_SECRET", SECRET)
+    client = app_with_limit(1_000_000)
+    edge = {"x-origin-verify": SECRET, "x-forwarded-for": "130.176.1.1"}  # gitleaks:allow
+    # A new address in the same /64 for every call.
+    for n in range(limits.CALLS_PER_ADDRESS_PER_HOUR):
+        rotated = {**edge, "cloudfront-viewer-address": f"[2001:db8:1:2::{n + 1:x}]:443"}
+        assert client.post("/api/agent", json={"prompt": "hi"}, headers=rotated).status_code == 200
+    rotated = {**edge, "cloudfront-viewer-address": "[2001:db8:1:2::ffff]:443"}
+    assert client.post("/api/agent", json={"prompt": "hi"}, headers=rotated).status_code == 429
+    other = {**edge, "cloudfront-viewer-address": "[2001:db8:1:3::1]:443"}
+    assert client.post("/api/agent", json={"prompt": "hi"}, headers=other).status_code == 200
+
+
+def test_agent_per_address_limit_follows_the_cloudfront_viewer(app_with_limit, monkeypatch):
+    monkeypatch.setenv("ORIGIN_VERIFY_SECRET", SECRET)
+    client = app_with_limit(1_000_000)
+    # Every call reaches the load balancer from the same CloudFront server.
+    edge = {"x-origin-verify": SECRET, "x-forwarded-for": "130.176.1.1"}  # gitleaks:allow
+    first = {**edge, "cloudfront-viewer-address": "198.51.100.10:1111"}
+    for _ in range(limits.CALLS_PER_ADDRESS_PER_HOUR):
+        assert client.post("/api/agent", json={"prompt": "hi"}, headers=first).status_code == 200
+    same_viewer = {**edge, "cloudfront-viewer-address": "198.51.100.10:2222"}
+    assert client.post("/api/agent", json={"prompt": "hi"}, headers=same_viewer).status_code == 429
+    other = {**edge, "cloudfront-viewer-address": "198.51.100.11:1111"}
     assert client.post("/api/agent", json={"prompt": "hi"}, headers=other).status_code == 200
 
 

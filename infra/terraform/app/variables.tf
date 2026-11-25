@@ -3,6 +3,12 @@ variable "state_bucket" {
   type        = string
 }
 
+variable "domain_name" {
+  description = "The app's own name, served through CloudFront (web_domain.tf). Its Route 53 zone is made in project-template's ops/dns."
+  type        = string
+  default     = "ehr-rwe-eln.pilotbio.io"
+}
+
 variable "image_tag" {
   description = "The app image tag in ECR to run (scripts push it as the git commit)."
   type        = string

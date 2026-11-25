@@ -70,12 +70,20 @@ resource "aws_ecs_express_gateway_service" "app" {
       name       = "DB_PASSWORD"
       value_from = local.db_credential_ref
     }
+
+    # CloudFront sends this in X-Origin-Verify; with it the app trusts CloudFront-Viewer-Address.
+    secret {
+      name       = "ORIGIN_VERIFY_SECRET"
+      value_from = aws_secretsmanager_secret.origin_verify.arn
+    }
   }
 
   depends_on = [
     aws_iam_role_policy_attachment.infrastructure,
     aws_iam_role_policy_attachment.execution,
     aws_iam_role_policy.execution_db_secret,
+    aws_iam_role_policy.execution_origin_verify,
+    aws_secretsmanager_secret_version.origin_verify,
     aws_iam_role_policy.app_bedrock,
     aws_iam_role_policy.app_aurora,
   ]

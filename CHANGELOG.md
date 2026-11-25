@@ -8,6 +8,7 @@ What changed in each release of RWE Workbench, newest first. A release is a `vX.
 
 - This changelog, linked from the README; the version-bump pull request moves Unreleased under the new version (#77).
 - The README links the live demo (#79).
+- The app at its own name, https://ehr-rwe-eln.pilotbio.io, through CloudFront. The per-address agent limit and the visitor log still see each visitor's own address (#81).
 
 ### Changed
 
