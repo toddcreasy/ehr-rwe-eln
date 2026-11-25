@@ -60,7 +60,8 @@ function opensAtLaunch() {
 }
 function hintUnseen() {
   try {
-    return !localStorage.getItem("hint-seen");
+    // Someone who has opened a "?" note before already knows where help is.
+    return !localStorage.getItem("hint-seen") && !localStorage.getItem("help-seen");
   } catch {
     return false;
   }
@@ -359,7 +360,7 @@ export function Help({
         aria-controls={shown ? `${id}-note` : undefined}
         aria-label={`About: ${title}`}
         data-tip="What's this?"
-        className={`help-button tip inline-flex h-[1.3em] w-[1.3em] shrink-0 items-center justify-center rounded-full bg-accent align-middle font-sans text-[min(0.75em,16px)] leading-none font-bold text-card shadow-sm hover:opacity-85 ${
+        className={`help-button tip inline-flex h-[1.3em] w-[1.3em] shrink-0 items-center justify-center rounded-full bg-accent align-middle font-sans text-[min(0.75em,16px)] leading-none font-bold text-card before:absolute before:top-1/2 before:left-1/2 before:h-6 before:w-6 before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] shadow-sm hover:opacity-85 ${
           shown ? "ring-2 ring-accent ring-offset-2 ring-offset-card" : ""
         } ${className}`}
       >
