@@ -78,7 +78,7 @@ const ABOUT: Record<string, React.ReactNode> = {
   ),
   aim: (
     <>
-      the successor to MST, from the same research group. It is told which column combinations the analyses will read
+      the successor to <Term t="MST" />, from the same research group. It is told which column combinations the analyses will read
       and spends its budget in rounds, each measuring the one the current model fits worst.
     </>
   ),
@@ -352,8 +352,13 @@ export function CardHelp({ release }: { release: Release | undefined }) {
       <p>
         A data card is the label that travels with a release: an export writes it next to the rows. It is rendered
         only from the stored release record and its reports.
-        {release &&
-          ` This one is for release ${release.release_id}, made with ${name(release.method)} at epsilon ${release.epsilon} on ${new Date(release.created_at).toLocaleDateString("en-US", { dateStyle: "medium" })}.`}
+        {release && (
+          <>
+            {" "}
+            This one is for release {release.release_id}, made with {name(release.method)} at epsilon {release.epsilon} on{" "}
+            {new Date(release.created_at).toLocaleDateString("en-US", { dateStyle: "medium" })}.
+          </>
+        )}
       </p>
       <p>
         <strong>At a glance</strong> gives the method, the privacy budget (epsilon, plus delta for some methods, a
