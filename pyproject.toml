@@ -1,6 +1,6 @@
 [project]
 name = "ehr-rwe-eln"
-version = "0.1.0"
+version = "0.2.0"
 description = "Real world evidence from synthetic EHR data: OMOP cohorts, target trial emulation, ELN extraction, and data quality checks"
 authors = [
     { name = "Todd Creasy", email = "toddcreasy@users.noreply.github.com" }
