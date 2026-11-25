@@ -185,7 +185,7 @@ export default function LabNotebook() {
         </h1>
         <p className={`text-sm ${muted}`}>
           Synthetic ELN entries, and the samples and results Claude extracted from each, checked against a typed model
-          before they are written to OMOP and FHIR.
+          before they are stored. This page shows the extraction, not the OMOP and FHIR records written from it.
         </p>
       </div>
 
