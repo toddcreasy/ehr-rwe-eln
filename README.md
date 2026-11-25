@@ -52,6 +52,7 @@ Click the diagram for [the interactive version](https://toddcreasy.github.io/ehr
 | [NIST AI RMF mapping](docs/nist_ai_rmf.md) | The project's AI systems against NIST's AI Risk Management Framework |
 | [NIH and HHS requirements](docs/nih_hhs_requirements.md) | What a real controlled-access source would require |
 | [Infrastructure](infra/terraform/README.md) | The Terraform stacks, each AWS job, the public demo limits, and account limits hit |
+| [Changelog](CHANGELOG.md) | What changed in each release, from `v0.1.0` |
 | [How it got here](docs/HISTORY.md) | The decisions in order: what was chosen over what, what was reversed, and why |
 | [SETUP.md](docs/SETUP.md) | Build history: the first AWS build, the local-first months, and the move back to AWS |
 
