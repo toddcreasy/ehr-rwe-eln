@@ -1,4 +1,4 @@
-import { Help } from "../help";
+import { Help, Term } from "../help";
 
 // Help notes for the variant curation page. Facts come from docs/modules/curation.md,
 // docs/modules/genomics.md, the glossary, src/ehr_rwe_eln/curation/, and api/curation.py; the
@@ -15,7 +15,7 @@ type Criterion = { code: string; label: string; strength: string; proposal_id?: 
 
 export function PageHelp() {
   return (
-    <Help title="Variant curation">
+    <Help page title="Variant curation">
       <Head>Why run it</Head>
       <p>
         A genetic variant is a spot in the genome where people differ. When a test finds one in a gene linked to
@@ -24,8 +24,7 @@ export function PageHelp() {
         curation.
       </p>
       <p>
-        Labs follow the ACMG/AMP (American College of Medical Genetics and Genomics / Association for Molecular
-        Pathology) criteria: each criterion is one piece of evidence, for or against, at a set strength. Some can be
+        Labs follow the <Term t="ACMG/AMP" /> criteria: each criterion is one piece of evidence, for or against, at a set strength. Some can be
         decided from data alone, like how common the variant is. Others need a person to read papers. This page
         does the data part automatically, has Claude point to papers, and leaves the class to a person, so you can
         see which part of each answer came from where.
@@ -39,22 +38,22 @@ export function PageHelp() {
         health records. The variants are real; the people carrying them are not.
       </p>
       <p>
-        <strong>Frequencies</strong> come from gnomAD (Genome Aggregation Database) v4, which counts variants in
+        <strong>Frequencies</strong> come from <Term t="gnomAD" /> v4, which counts variants in
         hundreds of thousands of real exomes and genomes. This page includes data from the gnomAD v4 release.
       </p>
       <p>
-        <strong>Consequences</strong> come from Ensembl VEP (Variant Effect Predictor): what the variant does to
+        <strong>Consequences</strong> come from Ensembl <Term t="VEP" />: what the variant does to
         the gene&apos;s main transcript, such as cutting the protein short.
       </p>
       <p>
-        <strong>Rules</strong> come from ClinGen (the Clinical Genome Resource): each gene&apos;s expert panel sets
-        its own thresholds for the criteria, published in the CSpec (Criteria Specification) registry, read
-        2026-11-19. ClinGen content is CC0 (Creative Commons Zero, a public domain dedication).
+        <strong>Rules</strong> come from <Term t="ClinGen" />: each gene&apos;s expert panel sets its own thresholds
+        for the criteria, published in the <Term t="CSpec" /> registry, read 2026-11-19. ClinGen content is{" "}
+        <Term t="CC0" />, a public domain dedication.
       </p>
       <p>
-        <strong>Literature</strong>: LitVar2, from NCBI (the National Center for Biotechnology Information), finds
+        <strong>Literature</strong>: LitVar2, from <Term t="NCBI" />, finds
         papers that mention the variant, and PubTator3 gives their text. Claude reads passages that name the variant and
-        proposes evidence, each claim with a PMID (PubMed identifier) and a quoted sentence that code checks
+        proposes evidence, each claim with a <Term t="PMID" /> and a quoted sentence that code checks
         against the text it was sent.
       </p>
       <p>
@@ -109,8 +108,8 @@ export function SetsHelp({ sets }: { sets: SetSummary[] }) {
       </p>
       <p>
         <strong>erepo</strong>
-        {line("erepo")}: every short-variant curation in the six genes from ClinGen&apos;s (Clinical Genome
-        Resource) Evidence Repository, which records the class and each criterion the panel used or rejected. The
+        {line("erepo")}: every short-variant curation in the six genes from <Term t="ClinGen" />&apos;s
+        Evidence Repository, which records the class and each criterion the panel used or rejected. The
         page opens on this set.
       </p>
       <p>
@@ -135,8 +134,8 @@ export function ListHelp({ shown, total }: { shown: number; total: number }) {
         open it on the right.
       </p>
       <p>
-        <strong>First line</strong>: the gene and the variant&apos;s HGVS (Human Genome Variation Society) names:
-        the c. name is the change in the gene&apos;s coding DNA (deoxyribonucleic acid), the p. name in brackets the change to the protein.
+        <strong>First line</strong>: the gene and the variant&apos;s <Term t="HGVS" /> names: the c. name is the
+        change in the gene&apos;s coding <Term t="DNA" />, the p. name in brackets the change to the protein.
       </p>
       <p>
         <strong>Second line</strong>: the class the rules gave. When the expert panel&apos;s class differs, it
@@ -165,9 +164,9 @@ export function HeaderHelp({
   return (
     <Help title="The variant and its class">
       <p>
-        The title names the variant by gene and HGVS (Human Genome Variation Society) notation. The line under it
-        gives its ID (identifier): chromosome, position, the reference letters, and the changed letters, on GRCh38
-        (Genome Reference Consortium human build 38), the current reference genome.
+        The title names the variant by gene and <Term t="HGVS" /> notation. The line under it gives its ID:
+        chromosome, position, the reference letters, and the changed letters, on <Term t="GRCh38" />, the current
+        reference genome.
       </p>
       <p>
         <strong>Rules</strong>: {classification}, from {pointsText(points)}. This is what the automatic rules
@@ -203,23 +202,22 @@ export function EvidenceHelp({
   return (
     <Help title="The evidence">
       <p>
-        <strong>Consequence</strong>: what Ensembl VEP (Variant Effect Predictor) says the variant does to the MANE
-        (Matched Annotation from NCBI and EMBL-EBI) Select transcript: the one version of the gene&apos;s transcript
-        that NCBI (National Center for Biotechnology Information) and Ensembl, run by EMBL-EBI (European Molecular
-        Biology Laboratory&apos;s European Bioinformatics Institute), agree on, and that clinical reports use. A stop gained or a frameshift cuts
+        <strong>Consequence</strong>: what Ensembl <Term t="VEP" /> says the variant does to the <Term t="MANE" />{" "}
+        Select transcript: the one version of the gene&apos;s transcript that <Term t="NCBI" /> and Ensembl, run by{" "}
+        <Term t="EMBL-EBI" />, agree on, and that clinical reports use. A stop gained or a frameshift cuts
         the protein short; a missense variant swaps one amino acid. The exon or intron says where in the gene it
         falls.
       </p>
       <p>
-        <strong>gnomAD v4</strong> (Genome Aggregation Database): how often the variant turns up in hundreds of
+        <strong><Term t="gnomAD" /> v4</strong>: how often the variant turns up in hundreds of
         thousands of people. An allele is one copy of the gene; each person has two.{" "}
         {!gnomad || gnomad.ac === 0
           ? "This variant is absent: gnomAD has no call at the site, or counted it zero times. Absent counts as frequency 0, which can meet PM2, the criterion for a variant absent or extremely rare in population data."
           : `This one is seen ${fmt(gnomad.ac)} times in ${fmt(gnomad.an)} alleles.`}
       </p>
       <p>
-        <strong>AF</strong> (allele frequency) is that count as a share. <strong>FAF95</strong> (filtering allele
-        frequency) is the low end of a 95% confidence range on the frequency, in the ancestry group where it is
+        <strong><Term t="AF" /></strong> is that count as a share. <strong><Term t="FAF">FAF95</Term></strong> is
+        the low end of a 95% confidence range on the frequency, in the ancestry group where it is
         highest. Expert panels set their &ldquo;too common&rdquo; thresholds on it: if even the low end is above
         what the disease allows, the variant is too common to cause it.
       </p>
@@ -242,22 +240,21 @@ export function CriteriaHelp({
   return (
     <Help title="Criteria and points">
       <p>
-        ACMG/AMP (American College of Medical Genetics and Genomics / Association for Molecular Pathology) criteria
-        are named by code. The first letter says which way, P pathogenic or B benign; the next says how strong: VS
+        <Term t="ACMG/AMP" /> criteria are named by code. The first letter says which way, P pathogenic or B benign; the next says how strong: VS
         very strong, S strong, M moderate, P supporting, A stand-alone. A suffix like &ldquo;_Supporting&rdquo; means
         the criterion counts at a different strength from its usual one, as the panel&apos;s rules or the evidence
         set it.
       </p>
       <p>The rules can meet these, from data:</p>
       <p>
-        <strong>BA1</strong>: too common in gnomAD (Genome Aggregation Database) to cause the disease; benign on its
+        <strong>BA1</strong>: too common in <Term t="gnomAD" /> to cause the disease; benign on its
         own. <strong>BS1</strong>: more common than the disease allows. <strong>PM2</strong>: absent or extremely
         rare. <strong>PVS1</strong>: a null variant (one that stops the gene making working protein) in a gene where
         loss of function causes the disease; each panel says where in the gene that holds.{" "}
-        <strong>PM5_PTC</strong> (PTC: premature termination codon): for BRCA1 and BRCA2, other proven pathogenic
+        <strong>PM5_PTC</strong> (<Term t="PTC" />): for BRCA1 and BRCA2, other proven pathogenic
         premature stops in the same exon.{" "}
-        <strong>PS3</strong> and <strong>BS3</strong>: for BRCA1 and BRCA2, a calibrated lab assay in ENIGMA&apos;s
-        (Evidence-based Network for the Interpretation of Germline Mutant Alleles) table shows a damaging effect, or
+        <strong>PS3</strong> and <strong>BS3</strong>: for BRCA1 and BRCA2, a calibrated lab assay in{" "}
+        <Term t="ENIGMA" />&apos;s table shows a damaging effect, or
         none.
       </p>
       <p>
@@ -283,9 +280,9 @@ export function PhenotypeHelp({ release, subjects, high }: { release: string; su
         people who carry the variant have conditions that fit the gene.
       </p>
       <p>
-        Each person&apos;s conditions are mapped to HPO (Human Phenotype Ontology) terms and scored against the
-        terms linked to the gene&apos;s group (the two breast cancer genes, the three colon cancer genes, or LDLR, the
-        low-density lipoprotein receptor gene, for hyperlipidemia, high blood fats). The percentile places each carrier among all 5,000 study subjects: 90 or above is
+        Each person&apos;s conditions are mapped to <Term t="HPO" /> terms and scored against the
+        terms linked to the gene&apos;s group (the two breast cancer genes, the three colon cancer genes, or{" "}
+        <Term t="LDLR" /> for hyperlipidemia, high blood fats). The percentile places each carrier among all 5,000 study subjects: 90 or above is
         the top 10%.
       </p>
       <p>
@@ -312,8 +309,8 @@ export function ExomiserHelp({ release, gene, auc }: { release: string; gene: st
     <Help title="Carriers' Exomiser rank">
       <p>
         Exomiser 15.1.0 (data release {release}) is the standard open tool for ranking the genes a person carries
-        variants in, to help find a rare disease. Here it ran on each study subject&apos;s panel variants and HPO
-        (Human Phenotype Ontology) terms.
+        variants in, to help find a rare disease. Here it ran on each study subject&apos;s panel variants and{" "}
+        <Term t="HPO" /> terms.
       </p>
       <p>
         Only its phenotype score is shown: how well the person&apos;s conditions fit each gene. Its variant score
@@ -326,7 +323,7 @@ export function ExomiserHelp({ release, gene, auc }: { release: string; gene: st
       </p>
       {auc !== null && (
         <p>
-          <strong>AUC</strong> (area under the curve) {auc.toFixed(2)}: the chance that a random pathogenic carrier
+          <strong><Term t="AUC" /></strong> {auc.toFixed(2)}: the chance that a random pathogenic carrier
           of {gene} scores above a random non-carrier with a variant in the gene. 0.5 is a coin flip, 1.0 perfect.
         </p>
       )}
@@ -345,7 +342,7 @@ export function ProposalsHelp({ verified, rejected }: { verified: number; reject
         controls), and <strong>PP1</strong> (it travels with the disease through affected family members).
       </p>
       <p>
-        Each claim names a PMID (PubMed identifier) and quotes one sentence. Code then checks the PMID was one
+        Each claim names a <Term t="PMID" /> and quotes one sentence. Code then checks the PMID was one
         Claude was sent and the quote is in a passage from that paper. Failures are kept, greyed out, with the
         reason. This variant has {fmt(verified)} verified and {fmt(rejected)} rejected.
       </p>
@@ -413,17 +410,17 @@ export function SourcesHelp() {
         version.
       </p>
       <p>
-        <strong>gnomad</strong>: the gnomAD (Genome Aggregation Database) dataset. <strong>ensembl</strong>: the
-        Ensembl release VEP (Variant Effect Predictor) answers came from. <strong>clinvar</strong>: the ClinVar
-        release, empty for the planted panel. <strong>rules_sha256</strong>: the start of a SHA-256 (Secure Hash
-        Algorithm) fingerprint of the rules file, which changes if any threshold does.{" "}
-        <strong>cspec</strong>: each gene&apos;s expert panel document and version in ClinGen&apos;s (Clinical
-        Genome Resource) CSpec (Criteria Specification) registry. <strong>erepo</strong>, on that set: the
+        <strong>gnomad</strong>: the <Term t="gnomAD" /> dataset. <strong>ensembl</strong>: the Ensembl release{" "}
+        <Term t="VEP" /> answers came from. <strong>clinvar</strong>: the ClinVar
+        release, empty for the planted panel. <strong>rules_sha256</strong>: the start of a{" "}
+        <Term t="SHA-256" /> fingerprint of the rules file, which changes if any threshold does.{" "}
+        <strong>cspec</strong>: each gene&apos;s expert panel document and version in{" "}
+        <Term t="ClinGen" />&apos;s <Term t="CSpec" /> registry. <strong>erepo</strong>, on that set: the
         Evidence Repository export file, dated in its name.
       </p>
       <p>
         Includes data from the gnomAD v4 release. Expert panel thresholds from ClinGen&apos;s CSpec registry, read
-        2026-11-19 (CC0, Creative Commons Zero: public domain).
+        2026-11-19 (<Term t="CC0" />: public domain).
       </p>
     </Help>
   );

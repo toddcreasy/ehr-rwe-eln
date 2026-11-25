@@ -125,3 +125,11 @@ body {
     animation: help-pulse 2s ease-out infinite;
   }
 }
+
+/* While the help panel is open, the page makes room for it where the screen can spare the
+   panel's width; narrower, the panel covers the right edge. */
+@media (min-width: 1100px) {
+  .help-panel-open body {
+    padding-right: 380px;
+  }
+}

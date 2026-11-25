@@ -1,4 +1,4 @@
-import { Help } from "./help";
+import { Help, Term } from "./help";
 
 // The help note for the home page. Facts come from CLAUDE.md and docs/ARCHITECTURE.md; the
 // patient count is the one the page shows above it.
@@ -9,21 +9,21 @@ const Head = ({ children }: { children: React.ReactNode }) => (
 
 export default function HomeHelp({ persons }: { persons: string }) {
   return (
-    <Help title="About RWE Workbench" className="ml-2">
+    <Help page title="About RWE Workbench" className="ml-2">
       <Head>What it is</Head>
       <p>
-        RWE (real world evidence) is what can be learned about diseases and treatments from routine health records
+        <Term t="RWE">Real world evidence</Term> is what can be learned about diseases and treatments from routine health records
         rather than from clinical trials. RWE Workbench runs the main steps of that work end to end, on one
         population of synthetic patients, so every record behind every number can be shown.
       </p>
 
       <Head>Where the data comes from</Head>
       <p>
-        Synthea, an open-source patient simulator, generated {persons} patients, each with a lifetime of visits,
-        diagnoses, drugs, and lab tests. An ETL (extract, transform, load) step converts them to the OMOP
-        (Observational Medical Outcomes Partnership) Common Data Model (CDM), the standard format of OHDSI
-        (Observational Health Data Sciences and Informatics). The tables are stored as Apache Iceberg files in
-        Amazon S3 (Simple Storage Service) and queried through Amazon Redshift. Every section reads that one copy.
+        <Term t="Synthea" />, an open-source patient simulator, generated {persons} patients, each with a lifetime of
+        visits, diagnoses, drugs, and lab tests. An <Term t="ETL" /> step converts them to the <Term t="OMOP" />{" "}
+        <Term t="CDM">Common Data Model</Term>, the standard format of <Term t="OHDSI" />. The tables are stored as{" "}
+        <Term t="Iceberg">Apache Iceberg</Term> files in Amazon <Term t="S3" /> and queried through Amazon{" "}
+        <Term t="Redshift">Redshift</Term>. Every section reads that one copy.
         No one in it is a real person.
       </p>
 
@@ -38,12 +38,10 @@ export default function HomeHelp({ persons }: { persons: string }) {
           out from records alone, with checks for the bias that records carry.
         </li>
         <li>
-          <strong>Extract</strong> (Lab notebook): Claude, a large language model, reads free-text ELN (electronic lab
-          notebook) entries and turns them into structured samples and results, linked to patients.
+          <strong>Extract</strong> (Lab notebook): Claude, a <Term t="LLM">large language model</Term>, reads free-text <Term t="ELN" /> entries and turns them into structured samples and results, linked to patients.
         </li>
         <li>
-          <strong>Curate</strong> (Variant curation): real genetic variants from ClinVar, NCBI&apos;s (National
-          Center for Biotechnology Information) public archive, classified by the rules expert panels use; a curator
+          <strong>Curate</strong> (Variant curation): real genetic variants from ClinVar, <Term t="NCBI" />&apos;s public archive, classified by the rules expert panels use; a curator
           records the final class.
         </li>
         <li>

@@ -26,8 +26,10 @@ export const metadata: Metadata = {
 };
 
 // Runs before first paint: the saved choice, else the system setting. Help on the page is on
-// unless the visitor turned it off, and its buttons pulse until the first note is opened.
-const THEME = `try{var t=localStorage.getItem("theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark");if(localStorage.getItem("docs")==="off")document.documentElement.classList.add("docs-off");if(!localStorage.getItem("help-seen"))document.documentElement.classList.add("help-new")}catch(e){}`;
+// unless the visitor turned it off, and its buttons pulse until the first note is opened. With
+// help on, the help panel opens unless it was closed earlier in this session (help.tsx,
+// opensAtLaunch), and the page makes room for it now so nothing shifts when it appears.
+const THEME = `try{var t=localStorage.getItem("theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark");var h=document.documentElement;if(localStorage.getItem("docs")==="off")h.classList.add("docs-off");else if(sessionStorage.getItem("help-panel")!=="closed")h.classList.add("help-panel-open");if(!localStorage.getItem("help-seen"))document.documentElement.classList.add("help-new")}catch(e){}`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

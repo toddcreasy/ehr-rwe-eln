@@ -1,4 +1,4 @@
-import { Help } from "../help";
+import { Help, Term } from "../help";
 
 // Help notes for the trial emulation page. Facts come from docs/modules/trial_emulation.md,
 // docs/GLOSSARY.md, and src/ehr_rwe_eln/tte/; the numbers come from the run on screen, so the
@@ -21,11 +21,11 @@ const Head = ({ children }: { children: React.ReactNode }) => (
 
 export function PageHelp() {
   return (
-    <Help title="Target trial emulation">
+    <Help page title="Target trial emulation">
       <Head>Why run it</Head>
       <p>
-        Real world evidence (RWE) is what you learn from health data collected outside a clinical trial, such as
-        electronic health records. A common RWE question is causal: does starting drug A instead of drug B change the
+        <Term t="RWE">Real world evidence</Term> is what you learn from health data collected outside a clinical
+        trial, such as electronic health records. A common RWE question is causal: does starting drug A instead of drug B change the
         risk of some outcome? A trial would answer it, but trials are slow and costly, and the records already exist.
       </p>
       <p>
@@ -38,21 +38,22 @@ export function PageHelp() {
 
       <Head>Where the data comes from</Head>
       <p>
-        <strong>Synthea</strong> 3.3.0, an open-source simulator, generates the medical histories of 23,421 people
-        who never existed. No real patient data is used. This project converts them into the{" "}
-        <strong>OMOP</strong> (Observational Medical Outcomes Partnership) Common Data Model (CDM) v5.4, the shared
-        table layout of the OHDSI (Observational Health Data Sciences and Informatics) research network.
+        <Term t="Synthea" /> 3.3.0, an open-source simulator, generates the medical histories of 23,421 people
+        who never existed. No real patient data is used. This project converts them into the <Term t="OMOP" />{" "}
+        <Term t="CDM">Common Data Model</Term> v5.4, the shared table layout of the <Term t="OHDSI" /> research
+        network.
       </p>
       <p>
-        Each trial is a <strong>protocol</strong> file in YAML (YAML Ain&apos;t Markup Language) under{" "}
+        Each trial is a <strong>protocol</strong> file in <Term t="YAML" /> under{" "}
         <code>src/ehr_rwe_eln/tte/protocols/</code>: who is eligible, the two drugs, the outcome, how long to
         follow people, and the covariates to adjust for. There are four: lisinopril against amlodipine and metformin
         against insulin, each with chronic kidney disease stage 3 or worse and with myocardial infarction (heart
         attack) as the outcome.
       </p>
       <p>
-        <code>scripts/run_tte.py</code> reads the OMOP tables from the project&apos;s data lake, Apache Iceberg tables
-        in Amazon S3 (Simple Storage Service) queried through Amazon Redshift. It closes the billed Redshift session
+        <code>scripts/run_tte.py</code> reads the OMOP tables from the project&apos;s data lake,{" "}
+        <Term t="Iceberg">Apache Iceberg</Term> tables in Amazon <Term t="S3" /> queried through Amazon{" "}
+        <Term t="Redshift">Redshift</Term>. It closes the billed Redshift session
         before fitting any models. It stores each run in the <code>tte</code> schema of the app&apos;s PostgreSQL database, and this page
         reads it from there. A run on 2026-11-23 took 31 minutes.
       </p>
@@ -239,7 +240,7 @@ export function BalanceHelp({ balance }: { balance: { covariate: string; smd_bef
         &ldquo;missing&rdquo; row, since being unmeasured can itself carry information.
       </p>
       <p>
-        The <strong>standardized mean difference</strong> (SMD) is the gap between the arms&apos; averages, divided by
+        The <Term t="SMD">standardized mean difference</Term> (SMD) is the gap between the arms&apos; averages, divided by
         the covariate&apos;s spread. Below 0.1 in absolute value is the usual threshold for balanced. Positive means
         higher in the treatment arm.
       </p>
@@ -300,7 +301,7 @@ export function RisksHelp({
       )}
       <p>
         The <strong>difference</strong> is {treatment} minus {comparator}: positive means more outcomes on{" "}
-        {treatment}. Its 95% confidence interval (CI) comes from the bootstrap: the whole analysis rerun on resamples
+        {treatment}. Its 95% <Term t="CI">confidence interval</Term> comes from the bootstrap: the whole analysis rerun on resamples
         of the people, keeping the middle 95% of results.
       </p>
     </Help>
@@ -330,7 +331,7 @@ export function HazardHelp({
   return (
     <Help title="Hazard ratio">
       <p>
-        The <strong>hazard ratio</strong> (HR) summarizes the gap between the arms in one number: the rate of the
+        The <Term t="HR">hazard ratio</Term> (HR) summarizes the gap between the arms in one number: the rate of the
         outcome on {treatment} divided by the rate on {comparator}, from a weighted Cox model. Below 1 means a lower
         rate on {treatment}; 1 means no difference. The model assumes the ratio stays the same over time.
       </p>
@@ -341,7 +342,7 @@ export function HazardHelp({
           The weighted HR is {two(hr)}
           {robust && (
             <>
-              , with a robust 95% confidence interval (CI) of {two(robust[0])} to {two(robust[1])}.{" "}
+              , with a robust 95% <Term t="CI">confidence interval</Term> of {two(robust[0])} to {two(robust[1])}.{" "}
               {includesOne
                 ? "The interval includes 1, so these data are consistent with no difference between the drugs."
                 : "The interval excludes 1. Check the negative controls before reading anything into it."}
@@ -383,7 +384,7 @@ export function ControlsHelp({
         outcome), so the person counts differ from the main analysis.
       </p>
       <p>
-        Their hazard ratios (HR) should sit near 1. An interval that excludes 1 points to confounding the weights
+        Their <Term t="HR">hazard ratios</Term> should sit near 1. An interval that excludes 1 points to confounding the weights
         did not remove, or to chance, which grows with the number of controls.
       </p>
       <p>
@@ -392,7 +393,7 @@ export function ControlsHelp({
         {skipped > 0 && <>, and {fmt(skipped)} could not be estimated</>}.
       </p>
       <p>
-        These use the robust 95% confidence interval (CI) only, with no bootstrap. Each protocol file lists its
+        These use the robust 95% <Term t="CI">confidence interval</Term> only, with no bootstrap. Each protocol file lists its
         controls, with comments on the conditions left out because of a known or published link to either drug.
       </p>
     </Help>

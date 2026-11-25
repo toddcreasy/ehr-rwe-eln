@@ -1,4 +1,4 @@
-import { Help } from "../help";
+import { Help, Term } from "../help";
 import type { Status } from "./status";
 
 // Help notes for the data quality page. Facts come from docs/modules/data_quality.md; the counts
@@ -15,11 +15,11 @@ const Head = ({ children }: { children: React.ReactNode }) => (
 
 export function PageHelp() {
   return (
-    <Help title="Data quality">
+    <Help page title="Data quality">
       <Head>Why run it</Head>
       <p>
-        Real world evidence (RWE) is what you learn from health data collected outside a clinical trial, such as
-        electronic health records. Regulators, the FDA (Food and Drug Administration) among them, accept it for some decisions, but only when the
+        <Term t="RWE">Real world evidence</Term> is what you learn from health data collected outside a clinical trial, such as
+        electronic health records. Regulators, the <Term t="FDA" /> among them, accept it for some decisions, but only when the
         analysis is built carefully, and that starts with the data. An analysis run on broken dates or wrongly coded
         diagnoses gives a confident, wrong answer.
       </p>
@@ -34,16 +34,16 @@ export function PageHelp() {
         who never existed, with a fixed seed so the same people come out every time. No real patient data is used.
       </p>
       <p>
-        This project&apos;s ETL (extract, transform, load) converts those records into the <strong>OMOP</strong> (Observational
-        Medical Outcomes Partnership) <strong>Common Data Model</strong> (CDM) v5.4, mapping each code to a
-        standard concept from the Athena vocabularies of OHDSI (Observational Health Data Sciences and
-        Informatics), the open research network that maintains OMOP. OMOP is the network&apos;s shared table
+        This project&apos;s <Term t="ETL" /> converts those records into the <Term t="OMOP" />{" "}
+        <Term t="CDM">Common Data Model</Term> v5.4, mapping each code to a standard <Term t="concept" /> from the{" "}
+        <Term t="Athena" /> vocabularies of <Term t="OHDSI" />, the open research network that maintains OMOP. OMOP is the network&apos;s shared table
         layout, so analysis code written for it runs on any data in that form. The lab notebook section adds
         specimens and lab results to the same tables.
       </p>
       <p>
-        The OMOP tables live as Apache Iceberg tables in Amazon S3 (Simple Storage Service) and are queried through Amazon Redshift.
-        OHDSI&apos;s own <strong>DataQualityDashboard</strong> (DQD) 2.9.1, in R, runs against them, and its
+        The OMOP tables live as <Term t="Iceberg">Apache Iceberg</Term> tables in Amazon <Term t="S3" /> and are queried
+        through Amazon <Term t="Redshift">Redshift</Term>.
+        OHDSI&apos;s own <Term t="DQD">DataQualityDashboard</Term> (DQD) 2.9.1, in R, runs against them, and its
         results are loaded into the app&apos;s database and shown here.
       </p>
 
@@ -85,13 +85,13 @@ export function TilesHelp({ totals, strict, dqd }: { totals: Totals; strict: num
       </p>
       <p>
         <strong>Not applicable</strong>: {fmt(totals.na)}. There was nothing to test: an empty table, or a check
-        about a lab that never appears in this data. Synthea leaves several OMOP (Observational Medical Outcomes Partnership) tables empty, which is why this
+        about a lab that never appears in this data. Synthea leaves several <Term t="OMOP" /> tables empty, which is why this
         number is large. It says nothing bad about the data.
       </p>
       <p>
         <strong>Pass rate</strong> ({strict === null ? "n/a" : `${strict}%`}) counts only the {fmt(applicable)} checks that
         had something to test. <strong>DQD pass rate</strong> ({dqd}%) is
-        the figure the checking tool, DataQualityDashboard (DQD), reports itself, which counts not-applicable checks as passed. The first is stricter; the second is shown so this run can be compared with other DQD reports.
+        the figure the checking tool, <Term t="DQD" />, reports itself, which counts not-applicable checks as passed. The first is stricter; the second is shown so this run can be compared with other DQD reports.
       </p>
     </Help>
   );
@@ -106,11 +106,11 @@ export function ChartHelp({ counts }: { counts: Record<string, Totals> }) {
   return (
     <Help title="Checks by Kahn category">
       <p>
-        DataQualityDashboard (DQD) sorts every check into one of three categories from the <strong>Kahn framework</strong> (Kahn et al.,
+        <Term t="DQD" /> sorts every check into one of three categories from the <Term t="Kahn">Kahn framework</Term> (Kahn et al.,
         2016), the standard way to group data quality checks on health records:
       </p>
       <p>
-        <strong>Conformance</strong> ({line("Conformance")}): values follow the rules of the Common Data Model (CDM) the tables use. Right data types,
+        <strong>Conformance</strong> ({line("Conformance")}): values follow the rules of the <Term t="CDM">data model</Term> the tables use. Right data types,
         keys that point at real rows, codes that exist in the vocabulary.
       </p>
       <p>
@@ -136,10 +136,10 @@ export function TableHelp({ failed }: { failed: number }) {
     <Help title="The checks table">
       <p>
         One row per check. It opens on the {fmt(failed)} failed checks (and any errors); the first menu shows
-        passed or not-applicable checks too. Filter by category or OMOP (Observational Medical Outcomes Partnership) table, or search for a field or concept ID (identifier).
+        passed or not-applicable checks too. Filter by category or <Term t="OMOP" /> table, or search for a field or <Term t="concept" /> ID.
       </p>
       <p>
-        <strong>Check</strong>: the check&apos;s name in DataQualityDashboard (DQD), then the table and field it tests, and a concept ID when the
+        <strong>Check</strong>: the check&apos;s name in <Term t="DQD" />, then the table and field it tests, and a concept ID when the
         check is about one concept. The grey line under it says in words what was tested, or why it was not
         applicable.
       </p>

@@ -1,26 +1,119 @@
 "use client";
 
-import { createContext, useCallback, useContext, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { usePathname } from "next/navigation";
+import {
+  Children,
+  createContext,
+  isValidElement,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { createPortal } from "react-dom";
+import { type Entry, GLOSSARY, type TermKey } from "./glossary";
 
-// Help on the page: a switch in the header shows or hides every "?" button, and each button opens
-// a small scrollable note about one region of the page (the nearest element marked data-help).
-// The note sits beside that region, never on top of it.
+// Help on the page: a switch in the header shows or hides every "?" button. Each button shows a
+// note about one region of the page (the nearest element marked data-help) in a panel docked at
+// the right edge, which the page makes room for. The panel opens on the page's own note when a
+// visit starts with help on, follows to each new page's note, and closes only from its X or the
+// header switch. Terms marked with <Term> show their definition on hover, focus, or tap.
 
-const WIDTH = 320;
-const MAX_HEIGHT = 340;
-const GAP = 10;
+const PANEL_WIDTH = 380;
+const TIP_WIDTH = 288;
 const EDGE = 12;
-// The shortest note worth showing; below it, the note goes next to its button instead.
-const MIN_HEIGHT = 160;
+// The id of each page's own note (the one marked <Help page>).
+const PAGE = "page";
 
-const OpenContext = createContext<{ open: string | null; setOpen: (id: string | null) => void }>({
-  open: null,
-  setOpen: () => {},
-});
+type Tip = { key: TermKey; rect: DOMRect };
+// Which note the panel shows, and on which page it was picked. null: the panel is closed.
+type Active = { path: string; id: string } | null;
 
-export function HelpProvider({ children }: { children: React.ReactNode }) {
-  const [open, setOpen] = useState<string | null>(null);
-  return <OpenContext.Provider value={{ open, setOpen }}>{children}</OpenContext.Provider>;
+const HelpContext = createContext<{
+  shown: string | null;
+  show: (id: string) => void;
+  close: () => void;
+  panelEl: HTMLElement | null;
+  setTip: (tip: Tip | null) => void;
+}>({ shown: null, show: () => {}, close: () => {}, panelEl: null, setTip: () => {} });
+
+// The panel's launch state, also read by the script in layout.tsx before first paint: open when
+// help is on, unless the visitor closed it earlier in this browser session.
+const noChange = () => () => {};
+function opensAtLaunch() {
+  if (document.documentElement.classList.contains("docs-off")) return false;
+  try {
+    return sessionStorage.getItem("help-panel") !== "closed";
+  } catch {
+    return true;
+  }
+}
+function rememberClosed(closed: boolean) {
+  try {
+    if (closed) sessionStorage.setItem("help-panel", "closed");
+    else sessionStorage.removeItem("help-panel");
+  } catch {}
+}
+
+export function HelpProvider({ children }: { children: ReactNode }) {
+  const path = usePathname() ?? "/";
+  // undefined until the visitor opens or closes anything: the launch state decides.
+  const [active, setActive] = useState<Active | undefined>(undefined);
+  const launch = useSyncExternalStore(noChange, opensAtLaunch, () => false);
+  const [tip, setTip] = useState<Tip | null>(null);
+  const [panelEl, setPanelEl] = useState<HTMLElement | null>(null);
+
+  // A note picked on another page is gone; the panel shows this page's own note instead.
+  const open = active === undefined ? launch : active !== null;
+  const shown = !open ? null : active && active.path === path ? active.id : PAGE;
+
+  const show = (id: string) => {
+    setActive({ path, id });
+    rememberClosed(false);
+  };
+  const close = () => {
+    setActive(null);
+    rememberClosed(true);
+  };
+
+  // The page makes room for the panel (globals.css, .help-panel-open).
+  useEffect(() => {
+    if (!open) return;
+    const html = document.documentElement;
+    html.classList.add("help-panel-open");
+    return () => html.classList.remove("help-panel-open");
+  }, [open]);
+
+  // A definition is placed where its term was; any scroll would leave it behind, so it goes.
+  useEffect(() => {
+    if (!tip) return;
+    const hide = () => setTip(null);
+    window.addEventListener("scroll", hide, true);
+    window.addEventListener("resize", hide);
+    return () => {
+      window.removeEventListener("scroll", hide, true);
+      window.removeEventListener("resize", hide);
+    };
+  }, [tip]);
+
+  return (
+    <HelpContext.Provider value={{ shown, show, close, panelEl, setTip }}>
+      {children}
+      {open && (
+        <aside
+          ref={setPanelEl}
+          aria-label="Help"
+          style={{ width: PANEL_WIDTH }}
+          className="fixed top-0 right-0 z-40 flex h-dvh max-w-full flex-col border-l border-grid bg-card font-sans text-sm shadow-lg"
+        />
+      )}
+      {tip && <TermTip tip={tip} />}
+    </HelpContext.Provider>
+  );
 }
 
 // Same pattern as the theme: a class on <html>, saved in localStorage, set before first paint by
@@ -32,7 +125,7 @@ const watchHtmlClass = (change: () => void) => {
 };
 
 export function DocsToggle() {
-  const { setOpen } = useContext(OpenContext);
+  const { show, close } = useContext(HelpContext);
   const on = useSyncExternalStore(
     watchHtmlClass,
     () => !document.documentElement.classList.contains("docs-off"),
@@ -40,7 +133,8 @@ export function DocsToggle() {
   );
   function toggle() {
     const off = document.documentElement.classList.toggle("docs-off");
-    if (off) setOpen(null);
+    if (off) close();
+    else show(PAGE);
     try {
       localStorage.setItem("docs", off ? "off" : "on");
     } catch {}
@@ -73,105 +167,95 @@ export function DocsToggle() {
   );
 }
 
-type Place = { top: number; left: number; maxHeight: number };
+// "OMOP: Observational Medical Outcomes Partnership", but just "Apache Iceberg" when the name
+// already says the short form.
+const heading = (key: TermKey) => {
+  const entry: Entry = GLOSSARY[key];
+  if (!entry.name) return key;
+  return entry.name.includes(key) ? entry.name : `${key}: ${entry.name}`;
+};
 
-// Beside the region if it fits there (right, then left), else below or above it, shrinking to
-// the larger gap when neither has room for the whole note. A region taller than the screen
-// leaves no such gap (and the page cannot scroll while a note is open), so the note goes
-// below or above its button instead, over part of the region, rather than as a sliver.
-function place(region: DOMRect, button: DOMRect, height: number): Place {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const width = Math.min(WIDTH, vw - 2 * EDGE);
-  const h = Math.min(height, MAX_HEIGHT, vh - 2 * EDGE);
-  const clampTop = (t: number) => Math.min(Math.max(t, EDGE), vh - h - EDGE);
-  const clampLeft = (l: number) => Math.min(Math.max(l, EDGE), vw - width - EDGE);
-
-  if (vw - region.right - GAP - EDGE >= width)
-    return { top: clampTop(button.top), left: region.right + GAP, maxHeight: h };
-  if (region.left - GAP - EDGE >= width)
-    return { top: clampTop(button.top), left: region.left - GAP - width, maxHeight: h };
-
-  const below = vh - region.bottom - GAP - EDGE;
-  const above = region.top - GAP - EDGE;
-  const left = clampLeft(button.right - width);
-  if (below >= h) return { top: region.bottom + GAP, left, maxHeight: h };
-  if (above >= h) return { top: region.top - GAP - h, left, maxHeight: h };
-  if (Math.max(below, above) >= MIN_HEIGHT) {
-    if (below >= above) return { top: region.bottom + GAP, left, maxHeight: below };
-    return { top: region.top - GAP - above, left, maxHeight: above };
-  }
-  const under = vh - button.bottom - GAP - EDGE;
-  const over = button.top - GAP - EDGE;
-  if (under >= over) return { top: button.bottom + GAP, left, maxHeight: Math.min(h, Math.max(under, 0)) };
-  const fit = Math.min(h, Math.max(over, 0));
-  return { top: button.top - GAP - fit, left, maxHeight: fit };
+// The definition beside a hovered or focused term: below it, or above when it is near the bottom
+// of the screen. Fixed to the screen so a scrolling panel never clips it.
+function TermTip({ tip }: { tip: Tip }) {
+  const left = Math.min(Math.max(tip.rect.left, EDGE), window.innerWidth - TIP_WIDTH - EDGE);
+  const below = window.innerHeight - tip.rect.bottom > 160;
+  return (
+    <div
+      id="term-tip"
+      role="tooltip"
+      style={{
+        position: "fixed",
+        left,
+        width: TIP_WIDTH,
+        ...(below ? { top: tip.rect.bottom + 6 } : { bottom: window.innerHeight - tip.rect.top + 6 }),
+      }}
+      className="pointer-events-none z-[60] rounded-md bg-foreground px-3 py-2 font-sans text-xs leading-relaxed font-normal text-card shadow-lg"
+    >
+      <span className="block font-semibold">{heading(tip.key)}</span>
+      {GLOSSARY[tip.key].def}
+    </div>
+  );
 }
 
-export function Help({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
-  const id = useId();
-  const { open, setOpen } = useContext(OpenContext);
-  const shown = open === id;
+// A glossary term in a note: dotted underline, definition on hover, focus, or tap.
+export function Term({ t, children }: { t: TermKey; children?: ReactNode }) {
+  const { setTip } = useContext(HelpContext);
+  const show = (el: HTMLElement) => setTip({ key: t, rect: el.getBoundingClientRect() });
+  return (
+    <button
+      type="button"
+      aria-describedby="term-tip"
+      onPointerEnter={(e) => e.pointerType === "mouse" && show(e.currentTarget)}
+      onPointerLeave={(e) => e.pointerType === "mouse" && setTip(null)}
+      onFocus={(e) => show(e.currentTarget)}
+      onBlur={() => setTip(null)}
+      onClick={(e) => show(e.currentTarget)}
+      className="cursor-help underline decoration-dotted decoration-1 underline-offset-[3px] hover:text-foreground"
+    >
+      {children ?? t}
+    </button>
+  );
+}
+
+// Every <Term> in a note, in the order they appear, for the list at the foot of the panel.
+function termsIn(node: ReactNode, found: Set<TermKey> = new Set()): Set<TermKey> {
+  Children.forEach(node, (child) => {
+    if (!isValidElement<{ children?: ReactNode; t?: TermKey }>(child)) return;
+    if (child.type === Term && child.props.t) found.add(child.props.t);
+    termsIn(child.props.children, found);
+  });
+  return found;
+}
+
+// page: this is the page's own note, the one the panel opens on.
+export function Help({
+  title,
+  children,
+  page = false,
+  className = "",
+}: {
+  title: string;
+  children: ReactNode;
+  page?: boolean;
+  className?: string;
+}) {
+  const uid = useId();
+  const id = page ? PAGE : uid;
+  const { shown: current, show, close, panelEl } = useContext(HelpContext);
+  const shown = current === id;
   const button = useRef<HTMLButtonElement>(null);
   const note = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<Place | null>(null);
-  const [more, setMore] = useState(false);
 
-  // True while the note has text below what it shows.
-  const checkMore = useCallback(() => {
-    const n = note.current;
-    if (n) setMore(n.scrollTop + n.clientHeight < n.scrollHeight - 4);
-  }, []);
-
-  const region = useCallback(
-    () => (button.current?.closest("[data-help]") as HTMLElement | null) ?? button.current?.parentElement ?? null,
-    [],
-  );
-
-  const reposition = useCallback(() => {
-    const r = region();
-    if (!r || !button.current || !note.current) return;
-    setPos(place(r.getBoundingClientRect(), button.current.getBoundingClientRect(), note.current.scrollHeight));
-    requestAnimationFrame(checkMore);
-  }, [region, checkMore]);
-
+  // Outline the region this note is about while the panel shows it.
   useLayoutEffect(() => {
     if (!shown) return;
-    // Runs before paint, so a position left from an earlier opening is never seen.
-    reposition();
-    const r = region();
-    r?.setAttribute("data-help-active", "");
-    note.current?.focus({ preventScroll: true });
-    // The page holds still while a note is open; padding the width of the scrollbar it hides
-    // keeps the layout from shifting sideways.
-    const html = document.documentElement;
-    const before = { overflow: html.style.overflow, paddingRight: html.style.paddingRight };
-    html.style.paddingRight = `${window.innerWidth - html.clientWidth}px`;
-    html.style.overflow = "hidden";
-    const away = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (!note.current?.contains(t) && !button.current?.contains(t)) setOpen(null);
-    };
-    const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(null);
-        button.current?.focus();
-      }
-    };
-    window.addEventListener("scroll", reposition, true);
-    window.addEventListener("resize", reposition);
-    document.addEventListener("pointerdown", away);
-    document.addEventListener("keydown", key);
-    return () => {
-      r?.removeAttribute("data-help-active");
-      html.style.overflow = before.overflow;
-      html.style.paddingRight = before.paddingRight;
-      window.removeEventListener("scroll", reposition, true);
-      window.removeEventListener("resize", reposition);
-      document.removeEventListener("pointerdown", away);
-      document.removeEventListener("keydown", key);
-    };
-  }, [shown, reposition, region, setOpen]);
+    const region = (button.current?.closest("[data-help]") as HTMLElement | null) ?? button.current?.parentElement;
+    region?.setAttribute("data-help-active", "");
+    return () => region?.removeAttribute("data-help-active");
+  }, [shown]);
+
+  const terms = shown ? [...termsIn(children)] : [];
 
   return (
     <>
@@ -179,7 +263,9 @@ export function Help({ title, children, className = "" }: { title: string; child
         ref={button}
         type="button"
         onClick={() => {
-          setOpen(shown ? null : id);
+          // Clicking the "?" whose note is showing leaves it showing.
+          show(id);
+          requestAnimationFrame(() => note.current?.focus({ preventScroll: true }));
           // The first note opened stops the pulse on every "?" for good.
           document.documentElement.classList.remove("help-new");
           try {
@@ -187,7 +273,7 @@ export function Help({ title, children, className = "" }: { title: string; child
           } catch {}
         }}
         aria-expanded={shown}
-        aria-controls={shown ? id : undefined}
+        aria-controls={shown ? `${id}-note` : undefined}
         aria-label={`About: ${title}`}
         data-tip="What's this?"
         className={`help-button tip inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent align-middle text-sm font-bold text-card shadow-sm hover:opacity-85 ${
@@ -196,55 +282,52 @@ export function Help({ title, children, className = "" }: { title: string; child
       >
         ?
       </button>
-      {shown && (
-        <div
-          ref={note}
-          id={id}
-          role="dialog"
-          aria-label={title}
-          tabIndex={-1}
-          onScroll={checkMore}
-          style={{
-            position: "fixed",
-            width: `min(${WIDTH}px, calc(100vw - ${2 * EDGE}px))`,
-            top: pos?.top ?? 0,
-            left: pos?.left ?? 0,
-            maxHeight: pos?.maxHeight ?? MAX_HEIGHT,
-            visibility: pos ? "visible" : "hidden",
-          }}
-          className="help-note z-50 overflow-y-auto overscroll-contain rounded-lg border border-grid bg-card p-4 font-sans text-sm font-normal leading-relaxed tracking-normal normal-case text-foreground shadow-lg outline-none"
-        >
-          <div className="sticky -top-4 -mx-4 -mt-4 mb-2 flex items-start justify-between gap-2 bg-card px-4 pt-4 pb-1">
-            <div className="font-semibold">{title}</div>
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(null);
-                button.current?.focus();
-              }}
-              aria-label="Close"
-              className="-mt-1 -mr-2 rounded-full p-1 text-muted hover:bg-accent-soft hover:text-foreground"
-            >
-              <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex flex-col gap-2 text-muted [&_strong]:font-medium [&_strong]:text-foreground">{children}</div>
-          {more && (
-            <button
-              type="button"
-              onClick={() => note.current?.scrollBy({ top: note.current.clientHeight * 0.75, behavior: "smooth" })}
-              className="sticky -bottom-4 -mx-4 -mb-4 mt-2 flex w-[calc(100%+2rem)] items-center justify-center gap-1.5 border-t border-line bg-card px-4 py-2 text-xs font-medium text-muted hover:text-foreground"
-            >
-              Scroll for more
-              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          )}
-        </div>
-      )}
+      {shown &&
+        panelEl &&
+        createPortal(
+          <div
+            ref={note}
+            id={`${id}-note`}
+            role="region"
+            aria-label={title}
+            tabIndex={-1}
+            className="flex min-h-0 flex-1 flex-col font-normal tracking-normal normal-case outline-none"
+          >
+            <div className="flex items-start justify-between gap-2 border-b border-line px-5 py-4">
+              <div className="text-base font-semibold text-foreground">{title}</div>
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  button.current?.focus();
+                }}
+                aria-label="Close help"
+                className="-mt-1 -mr-2 rounded-full p-1 text-muted hover:bg-accent-soft hover:text-foreground"
+              >
+                <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 leading-relaxed">
+              <div className="flex flex-col gap-2 text-muted [&_strong]:font-medium [&_strong]:text-foreground">{children}</div>
+              {terms.length > 0 && (
+                <div className="mt-6 border-t border-line pt-4">
+                  <h3 className="text-xs font-semibold tracking-wide text-foreground uppercase">Terms in this note</h3>
+                  <dl className="mt-2 flex flex-col gap-2 text-muted">
+                    {terms.map((k) => (
+                      <div key={k}>
+                        <dt className="font-medium text-foreground">{heading(k)}</dt>
+                        <dd>{GLOSSARY[k].def}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              )}
+            </div>
+          </div>,
+          panelEl,
+        )}
     </>
   );
 }
