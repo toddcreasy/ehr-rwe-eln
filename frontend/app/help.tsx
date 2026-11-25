@@ -212,7 +212,7 @@ export function Help({ title, children, className = "" }: { title: string; child
             maxHeight: pos?.maxHeight ?? MAX_HEIGHT,
             visibility: pos ? "visible" : "hidden",
           }}
-          className="help-note z-50 overflow-y-auto overscroll-contain rounded-lg border border-grid bg-card p-4 text-sm leading-relaxed text-foreground shadow-lg outline-none"
+          className="help-note z-50 overflow-y-auto overscroll-contain rounded-lg border border-grid bg-card p-4 font-sans text-sm font-normal leading-relaxed tracking-normal normal-case text-foreground shadow-lg outline-none"
         >
           <div className="sticky -top-4 -mx-4 -mt-4 mb-2 flex items-start justify-between gap-2 bg-card px-4 pt-4 pb-1">
             <div className="font-semibold">{title}</div>
