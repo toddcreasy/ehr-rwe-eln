@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { type KeyboardEvent, useRef, useState } from "react";
+import HomeHelp from "./home-help";
 import { MODULES } from "./modules";
 import { useLive } from "./shell";
 
@@ -25,10 +26,11 @@ export default function Home() {
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6">
-      <section className="max-w-3xl">
+      <section data-help className="max-w-3xl">
         <p className="text-sm font-medium tracking-wide text-accent uppercase">Synthetic patients only</p>
         <h1 className="mt-2 font-serif text-3xl leading-tight font-semibold sm:text-4xl">
           One synthetic population, five ways to turn it into evidence.
+          <HomeHelp persons={live.tte ? n(live.tte.persons) : "thousands of"} />
         </h1>
         <p className="mt-4 text-lg leading-relaxed text-muted">
           RWE Workbench generates {live.tte ? n(live.tte.persons) : "thousands of"} patients with Synthea, loads them into
