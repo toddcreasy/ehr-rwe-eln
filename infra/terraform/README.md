@@ -60,16 +60,26 @@ A migration can also run through the RDS Data API, without the tunnel and withou
 
 ## Deploy the app
 
-The service runs the image tag in `app/terraform.tfvars`; tags are immutable, and each is the git commit it was built from. The image builds on AWS, never on the laptop: CodeBuild project `ehr-rwe-eln-app` (`app/app_build.tf`) builds the repository's `Dockerfile` on an x86 host. Every task here is x86, the app included (decided 2026-11-22; it ran on ARM until then).
+What goes to the public site is a release: a `vX.Y.Z` tag on `main` with a GitHub release that says what changed. The first was `v0.1.0` (2026-11-24). The service runs the image tag in `app/terraform.tfvars`. Image tags are immutable, and each is the git commit it was built from, so a release deploys as its commit and `git describe --tags <commit>` names the release a running image came from. The image builds on AWS, never on the laptop: CodeBuild project `ehr-rwe-eln-app` (`app/app_build.tf`) builds the repository's `Dockerfile` on an x86 host. Every task here is x86, the app included (decided 2026-11-22; it ran on ARM until then).
+
+Pick the version from what changed since the last tag (`git log --oneline $(git describe --tags --abbrev=0)..main`): the patch number for fixes only, the minor number for anything a visitor or a module gains. While the version starts with 0, nothing promises compatibility. Set it as `version` in `pyproject.toml` and `frontend/package.json`, run `uv lock` and `npm install --package-lock-only` (in `frontend/`), and merge that as its own pull request, so the tag and the files agree.
 
 ```sh
 git checkout main && git pull
 uv run pytest evals/test_workbench_agent.py   # the agent's golden set on Bedrock; about 45 s and $0.33
-uv run python scripts/build_app_image.py   # a few cents; prints the tag
+git tag -a vX.Y.Z -m "vX.Y.Z: <one line>" && git push origin vX.Y.Z
+gh release create vX.Y.Z --verify-tag --title "vX.Y.Z: <one line>" --notes-file <notes.md>
+git checkout vX.Y.Z
+uv run python scripts/build_app_image.py   # a few cents; prints the tag, the release's commit
 # set image_tag = "<TAG>" in infra/terraform/app/terraform.tfvars, then plan and apply app/
+git checkout main
 ```
 
-Run the golden set first. CI never runs it, so it is the only check before a deploy that a prompt or tool change still answers correctly. Fix any failing case before building. It needs `aws sso login`, the Compose Postgres up (`docker compose up -d --wait db`), the tte and dq runs loaded (`uv run python scripts/run_tte.py` and `uv run python scripts/load_dqd.py data/hades/dqd/<file>.json --target local`, see `docs/INSTALL.md`), and `omop_stats` built from the staging OMOP with `OMOP_SOURCE=staging uv run python scripts/build_omop_stats.py --target local` (without `OMOP_SOURCE=staging` it reads the lake through Redshift, which bills compute, and the eval's expected counts are the staging data's).
+The release notes say what a visitor or a module gains and what was fixed, and list the pull requests since the last tag. They are public on the repository, so they never name people or hold anything from `.env` or `data/`.
+
+To roll back, set `image_tag` to the previous release's commit (`git rev-parse --short vX.Y.Z^{commit}`) and plan and apply `app/`. ECR keeps the 10 newest app images (`app/ecr.tf`); if that one has expired, check out its tag and run `build_app_image.py` again, which builds it when ECR lacks the tag. A fix goes out as a new patch release, never by moving a tag.
+
+Run the golden set before tagging. CI never runs it, so it is the only check before a deploy that a prompt or tool change still answers correctly. Fix any failing case before building. It needs `aws sso login`, the Compose Postgres up (`docker compose up -d --wait db`), the tte and dq runs loaded (`uv run python scripts/run_tte.py` and `uv run python scripts/load_dqd.py data/hades/dqd/<file>.json --target local`, see `docs/INSTALL.md`), and `omop_stats` built from the staging OMOP with `OMOP_SOURCE=staging uv run python scripts/build_omop_stats.py --target local` (without `OMOP_SOURCE=staging` it reads the lake through Redshift, which bills compute, and the eval's expected counts are the staging data's).
 
 The eval runs the agent in-process with `MODEL` from `.env`, and through the guardrail only when `.env` sets `GUARDRAIL_ID` (empty in `.env.example`, so skipped by default; once it is set, `GUARDRAIL_VERSION` must be too). The deployed model and guardrail come from Terraform (`MODEL` and the `GUARDRAIL_*` values in the task's environment in `app/service.tf`, and `app/guardrail.tf`) and change with `terraform apply`, not with the image. Before trusting a pass, check that `MODEL` in `.env` (or the default in `agents/config.py` when it is empty) equals `model` in `app/terraform.tfvars`; otherwise the eval tested a different model from the one being deployed.
 
