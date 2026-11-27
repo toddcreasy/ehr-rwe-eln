@@ -8,6 +8,7 @@ What changed in each release of RWE Workbench, newest first. A release is a `vX.
 
 - The monthly budget now counts spend. Its tag filter was the literal string `user:project${local.name}`, which matched no resource, so it tracked $0 and never alerted.
 - The secret scan catches all-caps secrets, which used to pass as an environment variable's name, and usernames under prefixed, dotted, or hyphenated keys (`POSTGRES_USER`, `spring.datasource.username`, `db-user`) or left unquoted in config files.
+- The secret scan catches a username and password joined by a colon after a flag or key that takes credentials (`--proxy-user <name>:<password>`, `basic_auth: <name>:<password>`).
 
 ## v0.2.0 (2026-11-25)
 
