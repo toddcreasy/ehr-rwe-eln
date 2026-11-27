@@ -108,6 +108,11 @@ secretGroup = 1
 keywords = ["user", "login"]
 
   [[rules.allowlists]]
+  description = "chown's owner:group (chown -R ec2-user:ec2-user), not a key and value: no space after the colon"
+  regexTarget = "match"
+  regexes = ['''(?i)user:[a-z0-9_.-]+$''']
+
+  [[rules.allowlists]]
   description = "Settings, not usernames (auto_login: true), and system accounts that aren't credentials"
   regexTarget = "secret"
   regexes = ['''(?i)^(?:true|false|yes|no|on|off|null|none|root|nobody)$''']
@@ -129,6 +134,16 @@ description = "A username in a shell-style assignment inside Markdown or text: e
 # lines in docs still count: an all-caps key ending in USER, USERNAME, or LOGIN, then = with no
 # spaces. $VAR and ${{ }} are references, not values, so they're skipped.
 path = '''(?i)(?:^|/)[^/]*\.(?:md|txt)$'''
-regex = '''(?m)(?:^|[ \t;])(?:export[ \t]+)?[A-Z][A-Z0-9_]*(?:USER|USERNAME|LOGIN)=([^\s"'#$`|{]{3,})'''
+regex = '''(?m)(?:^|[ \t;])(?:export[ \t]+)?(?:[A-Z][A-Z0-9_]*)?(?:USER|USERNAME|LOGIN)=([^\s"'#$`|{]{3,})'''
 secretGroup = 1
 keywords = ["user=", "username=", "login="]
+
+  [[rules.allowlists]]
+  description = "A path, not a username (R_LIBS_USER=~/R/library)"
+  regexTarget = "secret"
+  regexes = ['''[/~]''']
+
+  [[rules.allowlists]]
+  description = "Postgres's built-in superuser name; app, the password-less IAM role migration 019 creates; rwe_admin, the Redshift admin, whose password AWS manages in Secrets Manager (foundation/redshift.tf)"
+  regexTarget = "secret"
+  regexes = ['''^(?:postgres|app|rwe_admin)$''']
