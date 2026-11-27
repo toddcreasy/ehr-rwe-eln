@@ -144,3 +144,23 @@ keywords = ["user=", "username=", "login="]
   description = "Postgres's built-in superuser name; app, the password-less IAM role migration 019 creates; rwe_admin, the Redshift admin, whose password AWS manages in Secrets Manager (foundation/redshift.tf)"
   regexTarget = "secret"
   regexes = ['''^(?:postgres|app|rwe_admin)$''']
+
+[[rules]]
+id = "username-props"
+description = "A username in a .properties, .ini, .cfg, or .conf file, where key:value needs no space: db.user:jsmith"
+# These formats allow a bare colon as well as =, unlike YAML. The key starts the line, so text
+# further along a line isn't read as a key.
+path = '''(?i)(?:^|/)[^/]*\.(?:ini|cfg|conf|properties)$'''
+regex = '''(?im)^[ \t]*[a-z0-9_.-]*(?:user(?:name)?|login)[ \t]*[:=][ \t]*([^\s"'#$`|{]{3,})'''
+secretGroup = 1
+keywords = ["user", "login"]
+
+  [[rules.allowlists]]
+  description = "Settings, not usernames (auto_login=true), and system accounts that aren't credentials"
+  regexTarget = "secret"
+  regexes = ['''(?i)^(?:true|false|yes|no|on|off|null|none|root|nobody)$''']
+
+  [[rules.allowlists]]
+  description = "Postgres's built-in superuser name; app, the password-less IAM role migration 019 creates; rwe_admin, the Redshift admin, whose password AWS manages in Secrets Manager (foundation/redshift.tf)"
+  regexTarget = "secret"
+  regexes = ['''^(?:postgres|app|rwe_admin)$''']
